@@ -1,6 +1,6 @@
-import Login from './pages/Login';
+import Home from './pages/Home';
 
 export default function App() {
-  // Por enquanto ele apenas renderiza a nossa página de login isolada
-  return <Login />;
+  // Alterado temporariamente para renderizar a Home para podermos testar o visual
+  return <Home />;
 }
