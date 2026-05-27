@@ -1,7 +1,8 @@
-// Importando os ícones do caminho correto
+import { useState, useEffect } from 'react';
+
+// Importação dos ícones
 import iconUserLogin from '../../assets/icones/icon-user-login.svg';
 import iconLogout from '../../assets/icones/icon-logout.svg';
-
 import iconUsuarios from '../../assets/icones/icon-usuarios.svg';
 import iconFornecedores from '../../assets/icones/icon-fornecedores.svg';
 import iconVendedores from '../../assets/icones/icon-vendedores.svg';
@@ -18,8 +19,17 @@ import iconConfCega from '../../assets/icones/icon-conf-cega.svg';
 import iconPermissoes from '../../assets/icones/icon-permissoes.svg';
 import iconCategorias from '../../assets/icones/icon-categorias.svg';
 
-export default function Home() {
-  // Lista de dados dos botões do painel para evitar repetição de código (DRY - Don't Repeat Yourself)
+interface HomeProps {
+  nomeUsuario: string;
+  perfilUsuario: string;
+  onLogout: () => void;
+}
+
+export default function Home({ nomeUsuario, perfilUsuario, onLogout }: HomeProps) {
+  // Estados para controlar a data/hora e a saudação dinamicamente
+  const [dataHora, setDataHora] = useState('');
+  const [saudacao, setSaudacao] = useState('Olá');
+
   const menuItems = [
     { label: 'Usuários', icon: iconUsuarios },
     { label: 'Fornecedores', icon: iconFornecedores },
@@ -38,32 +48,63 @@ export default function Home() {
     { label: 'Categorias', icon: iconCategorias },
   ];
 
+  // Efeito responsável por atualizar o relógio em tempo real
+  useEffect(() => {
+    const atualizarRelogio = () => {
+      const agora = new Date();
+
+      // 1. Formata a data e hora no padrão brasileiro (DD/MM/AAAA, HH:MM)
+      const formatador = new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      setDataHora(formatador.format(agora));
+
+      // 2. Define a saudação baseada na hora atual do dispositivo
+      const hora = agora.getHours();
+      if (hora >= 5 && hora < 12) {
+        setSaudacao('Bom dia');
+      } else if (hora >= 12 && hora < 18) {
+        setSaudacao('Boa tarde');
+      } else {
+        setSaudacao('Boa noite');
+      }
+    };
+
+    // Executa imediatamente ao abrir a tela
+    atualizarRelogio();
+
+    // Cria um intervalo para atualizar o relógio a cada 30 segundos (evitando lag de minutos)
+    const intervalo = setInterval(atualizarRelogio, 30000);
+
+    // Função de limpeza (Clean-up) que o React executa ao fechar a tela (Destrutor)
+    return () => clearInterval(intervalo);
+  }, []);
+
   const handleModuleClick = (label: string) => {
     alert(`Abrindo o módulo: ${label}`);
   };
 
-  const handleLogout = () => {
-    alert('Saindo do sistema...');
-  };
-
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      
-      {/* CARD DO CELULAR NA HOME */}
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col">
         
-        {/* CABEÇALHO (USUÁRIO E LOGOUT) */}
+        {/* CABEÇALHO DINÂMICO */}
         <div className="flex justify-between items-center w-full mb-6">
           <div className="flex items-center">
             <img src={iconUserLogin} alt="Usuário Logado" className="w-12 h-12 mr-3 select-none" />
             <div className="flex flex-col">
-              <span className="text-[#09797a] font-bold text-xl leading-tight">Aleff</span>
-              <span className="text-[#e07a5f] font-medium text-sm leading-tight">Administrador</span>
+              <span className="text-[#09797a] font-bold text-xl leading-tight">{nomeUsuario}</span>
+              <span className="text-[#e07a5f] font-medium text-sm leading-tight">{perfilUsuario}</span>
             </div>
           </div>
           
           <button 
-            onClick={handleLogout}
+            onClick={onLogout}
             className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all"
             title="Sair do Sistema"
           >
@@ -71,14 +112,13 @@ export default function Home() {
           </button>
         </div>
 
-        {/* SAUDAÇÃO E DATA/HORA */}
+        {/* SAUDAÇÃO E DATA/HORA DINÂMICAS */}
         <div className="flex justify-between items-center w-full text-[#545454] font-medium text-xs mb-6 px-1">
-          <span>Boa noite. O que vamos fazer agora?</span>
-          <span>26/05/2026, 22:50</span>
+          <span>{saudacao}. O que vamos fazer agora?</span>
+          <span>{dataHora}</span>
         </div>
 
         {/* GRADE DE BOTÕES (GRID LAUNCHPAD) */}
-        {/* 'grid-cols-3' cria exatamente as 3 colunas horizontais do design */}
         <div className="grid grid-cols-3 gap-3 w-full overflow-y-auto max-h-[calc(100vh-160px)] pr-0.5">
           {menuItems.map((item, index) => {
             const Icon = item.icon;
@@ -88,14 +128,7 @@ export default function Home() {
                 onClick={() => handleModuleClick(item.label)}
                 className="bg-[#09797a] rounded-3xl aspect-square flex flex-col justify-center items-center p-2 hover:bg-[#075f60] active:scale-95 transition-all shadow-sm"
               >
-                {/* ÍCONE DO MÓDULO */}
-                <img 
-                  src={Icon} 
-                  alt={item.label} 
-                  className="w-10 h-10 object-contain mb-2 filter-none" 
-                  style={{ color: '#f4f1de' }} 
-                />
-                {/* TEXTO DO MÓDULO */}
+                <img src={Icon} alt={item.label} className="w-10 h-10 object-contain mb-2 filter-none" />
                 <span className="text-white text-[11px] font-bold tracking-wide text-center leading-tight wrap-break-word max-w-full">
                   {item.label}
                 </span>
