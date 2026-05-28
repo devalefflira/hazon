@@ -23,9 +23,10 @@ interface HomeProps {
   nomeUsuario: string;
   perfilUsuario: string;
   onLogout: () => void;
+  onNavegarParaCategorias: () => void; // <--- Adicionado aqui!
 }
 
-export default function Home({ nomeUsuario, perfilUsuario, onLogout }: HomeProps) {
+export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarParaCategorias }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -86,7 +87,11 @@ export default function Home({ nomeUsuario, perfilUsuario, onLogout }: HomeProps
   }, []);
 
   const handleModuleClick = (label: string) => {
-    alert(`Abrindo o módulo: ${label}`);
+    if (label === 'Categorias') {
+      onNavegarParaCategorias(); // Executa a transição de tela
+    } else {
+      alert(`O módulo "${label}" está mapeado na nossa sequência e será construído em breve!`);
+    }
   };
 
   return (

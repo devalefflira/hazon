@@ -1,34 +1,50 @@
 import { useState } from 'react';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import CategoriasHub from './pages/Categorias';
 
-// Definição do tipo de dado do usuário que acabou de logar
 interface UsuarioLogado {
   id: string;
   nome: string;
   perfil: string;
 }
 
-export default function App() {
-  // Guarda as informações do usuário logado. Se estiver "null", o app mostra o Login.
-  const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
+// Tipos de telas globais do sistema
+type TelaAtiva = 'login' | 'home' | 'categorias';
 
-  // Função para limpar a sessão quando o usuário deslogar
-  const handleLogout = () => {
-    setUsuario(null);
+export default function App() {
+  const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
+  const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>('login');
+
+  const handleLoginSuccess = (usuarioLogado: UsuarioLogado) => {
+    setUsuario(usuarioLogado);
+    setTelaAtiva('home'); // Após logar, joga para a Home
   };
 
-  // Se existir um usuário na memória, renderiza a Home passando os dados e a função de sair
-  if (usuario) {
+  const handleLogout = () => {
+    setUsuario(null);
+    setTelaAtiva('login'); // Ao deslogar, limpa e joga para o Login
+  };
+
+  // RENDERIZAÇÃO CONDICIONAL BASEADA NA ARQUITETURA DE ESTADOS
+  if (usuario && telaAtiva === 'home') {
     return (
       <Home 
         nomeUsuario={usuario.nome} 
         perfilUsuario={usuario.perfil} 
-        onLogout={handleLogout} 
+        onLogout={handleLogout}
+        onNavegarParaCategorias={() => setTelaAtiva('categorias')} // Envia a rota para a Home
       />
     );
   }
 
-  // Se não estiver logado, mostra a tela de login e passa a função que salva o usuário logado
-  return <Login onLoginSuccess={setUsuario} />;
+  if (usuario && telaAtiva === 'categorias') {
+    return (
+      <CategoriasHub 
+        onVoltarParaHome={() => setTelaAtiva('home')} // Envia a rota de retorno para o Hub
+      />
+    );
+  }
+
+  return <Login onLoginSuccess={handleLoginSuccess} />;
 }
