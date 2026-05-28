@@ -2,6 +2,7 @@ import { useState } from 'react';
 import SetoresSubsetores from './components/SetoresSubsetores';
 import UnidadesMedida from './components/UnidadesMedida';
 import LocaisCaptura from './components/LocaisCaptura';
+import MotivosStatus from './components/MotivosStatus';
 
 // Tipos de sub-telas possíveis para o controle de estado
 type SubTela = 'menu' | 'setores' | 'unidades' | 'locais' | 'motivos';
@@ -104,10 +105,8 @@ export default function CategoriasHub({ onVoltarParaHome }: CategoriasHubProps) 
         {subTelaAtiva === 'unidades' && <UnidadesMedida />}
         
         {subTelaAtiva === 'locais' && <LocaisCaptura />}
-        
-        {subTelaAtiva === 'motivos' && (
-          <div className="text-center py-8 text-gray-400">Tela de Motivos em desenvolvimento...</div>
-        )}
+
+        {subTelaAtiva === 'motivos' && <MotivosStatus />}
 
       </div>
     </div>
