@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabaseClient';
 export const categoriasService = {
   // --- 1. SETORES E SUBSETORES ---
   async listarSetoresComSubsetores() {
-    // Traz os setores e, de forma aninhada, todos os seus subsetores
+    // Traz os setores ordenados e força a ordenação alfabética também nos subsetores
     const { data, error } = await supabase
       .from('categorias_setores')
       .select(`
@@ -14,7 +14,8 @@ export const categoriasService = {
           nome
         )
       `)
-      .order('nome', { ascending: true });
+      .order('nome', { ascending: true })
+      .order('nome', { foreignTable: 'categorias_subsetores', ascending: true });
 
     if (error) throw error;
     return data;
