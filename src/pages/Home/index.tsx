@@ -27,9 +27,18 @@ interface HomeProps {
   onNavegarParaCategorias: () => void;
   onNavegarParaUsuarios: () => void;
   onNavegarParaPermissoes: () => void;
+  onNavegarParaFornecedores: () => void;
 }
 
-export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarParaCategorias, onNavegarParaUsuarios, onNavegarParaPermissoes }: HomeProps) {
+export default function Home({ 
+  nomeUsuario, 
+  perfilUsuario, 
+  onLogout, 
+  onNavegarParaCategorias, 
+  onNavegarParaUsuarios, 
+  onNavegarParaPermissoes,
+  onNavegarParaFornecedores // <--- Adicionado com sucesso aqui!
+}: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -82,10 +91,10 @@ export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarPa
     // Executa imediatamente ao abrir a tela
     atualizarRelogio();
 
-    // Cria um intervalo para atualizar o relógio a cada 30 segundos (evitando lag de minutos)
+    // Cria um intervalo para atualizar o relógio a cada 30 segundos
     const intervalo = setInterval(atualizarRelogio, 30000);
 
-    // Função de limpeza (Clean-up) que o React executa ao fechar a tela (Destrutor)
+    // Função de limpeza (Clean-up)
     return () => clearInterval(intervalo);
   }, []);
 
@@ -112,26 +121,29 @@ export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarPa
     const moduloChave = mapaModulos[label];
     const modulosLiberados = MATRIZ_PERMISSOES[perfilUsuario] || [];
 
-    // SE NÃO TIVER PERMISSÃO: Trava o operador na hora com um feedback visual limpo
+    // SE NÃO TIVER PERMISSÃO: Trava o operador na hora
     if (moduloChave && !modulosLiberados.includes(moduloChave)) {
       alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissão para acessar o módulo de ${label}.`);
       return;
     }
 
-    // SE TIVER PERMISSÃO: Segue com os redirecionamentos normais das telas existentes
+    // SE TIVER PERMISSÃO: Direciona para as propriedades de navegação corretas
     if (label === 'Categorias') {
       onNavegarParaCategorias();
     } else if (label === 'Usuários') {
       onNavegarParaUsuarios();
     } else if (label === 'Permissões') {
       onNavegarParaPermissoes();
+    } else if (label === 'Fornecedores') {
+      onNavegarParaFornecedores();
     } else {
       alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
     }
   };
-
+  
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
+      {/* Ajustado tamanho max-w com colchetes para compatibilidade robusta */}
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col">
 
         {/* CABEÇALHO DINÂMICO */}

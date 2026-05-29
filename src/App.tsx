@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import CategoriasHub from './pages/Categorias';
 import Usuarios from './pages/Usuarios';
 import Permissoes from './pages/Permissoes';
+import Fornecedores from './pages/Fornecedores';
 
 interface UsuarioLogado {
   id: string;
@@ -11,10 +12,10 @@ interface UsuarioLogado {
   perfil: string;
 }
 
-// Tipos de telas globais do sistema
-type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes';
-
 // Matriz Oficial de Segurança do ERP Hazon
+// Tipos de telas globais do sistema (Mapeamento de Rotas)
+type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores';
+
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
     'Usuarios', 'Fornecedores', 'Vendedores', 'Produtos', 'Inventario',
@@ -43,6 +44,7 @@ export default function App() {
     setTelaAtiva('login');
   };
 
+  // 1. RENDERIZAÇÃO DA TELA HOME (COM TODAS AS ROTAS DE NAVEGAÇÃO MAPEADAS)
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -51,17 +53,29 @@ export default function App() {
         onLogout={handleLogout}
         onNavegarParaCategorias={() => setTelaAtiva('categorias')}
         onNavegarParaUsuarios={() => setTelaAtiva('usuarios')}
-        onNavegarParaPermissoes={() => setTelaAtiva('permissoes')} // <--- Injetado!
+        onNavegarParaPermissoes={() => setTelaAtiva('permissoes')}
+        onNavegarParaFornecedores={() => setTelaAtiva('fornecedores')}
       />
     );
   }
 
-  if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
-  if (usuario && telaAtiva === 'usuarios') return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />;
-
-  if (usuario && telaAtiva === 'permissoes') {
-    return <Permissoes onVoltarParaHome={() => setTelaAtiva('home')} />; // <--- Injetado!
+  // 2. DIRECIONAMENTO ISOLADO DOS MÓDULOS ATIVOS
+  if (usuario && telaAtiva === 'categorias') {
+    return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
+  if (usuario && telaAtiva === 'usuarios') {
+    return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  if (usuario && telaAtiva === 'permissoes') {
+    return <Permissoes onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  if (usuario && telaAtiva === 'fornecedores') {
+    return <Fornecedores onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  // FALLBACK: SE NÃO ESTIVER LOGADO, TRAVA NA TELA DE LOGIN
   return <Login onLoginSuccess={handleLoginSuccess} />;
 }
