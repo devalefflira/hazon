@@ -18,6 +18,7 @@ import iconTarefas from '../../assets/icones/icon-tarefas.svg';
 import iconConfCega from '../../assets/icones/icon-conf-cega.svg';
 import iconPermissoes from '../../assets/icones/icon-permissoes.svg';
 import iconCategorias from '../../assets/icones/icon-categorias.svg';
+import { MATRIZ_PERMISSOES } from '../../App';
 
 interface HomeProps {
   nomeUsuario: string;
@@ -25,9 +26,10 @@ interface HomeProps {
   onLogout: () => void;
   onNavegarParaCategorias: () => void;
   onNavegarParaUsuarios: () => void;
+  onNavegarParaPermissoes: () => void;
 }
 
-export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarParaCategorias, onNavegarParaUsuarios }: HomeProps) {
+export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarParaCategorias, onNavegarParaUsuarios, onNavegarParaPermissoes }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -88,12 +90,43 @@ export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarPa
   }, []);
 
   const handleModuleClick = (label: string) => {
+    // Mapeia o nome do botão da Home para a chave correspondente na nossa Matriz de Segurança
+    const mapaModulos: Record<string, string> = {
+      'Usuários': 'Usuarios',
+      'Categorias': 'Categorias',
+      'Permissões': 'Permissoes',
+      'Fornecedores': 'Fornecedores',
+      'Vendedores': 'Vendedores',
+      'Produtos': 'Produtos',
+      'Inventário': 'Inventario',
+      'Nota de Falta': 'Nota de Falta',
+      'Dashboard': 'Dashboard',
+      'Relatórios': 'Relatorios',
+      'Cotações': 'Cotacoes',
+      'Avarias': 'Avarias',
+      'Pedidos': 'Pedidos',
+      'Tarefas': 'Tarefas',
+      'Conf. Cega': 'Conf. Cega'
+    };
+
+    const moduloChave = mapaModulos[label];
+    const modulosLiberados = MATRIZ_PERMISSOES[perfilUsuario] || [];
+
+    // SE NÃO TIVER PERMISSÃO: Trava o operador na hora com um feedback visual limpo
+    if (moduloChave && !modulosLiberados.includes(moduloChave)) {
+      alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissão para acessar o módulo de ${label}.`);
+      return;
+    }
+
+    // SE TIVER PERMISSÃO: Segue com os redirecionamentos normais das telas existentes
     if (label === 'Categorias') {
       onNavegarParaCategorias();
     } else if (label === 'Usuários') {
-      onNavegarParaUsuarios(); // <--- Redireciona para o módulo de Usuários!
+      onNavegarParaUsuarios();
+    } else if (label === 'Permissões') {
+      onNavegarParaPermissoes();
     } else {
-      alert(`O módulo "${label}" está mapeado na nossa sequência e será construído em breve!`);
+      alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
     }
   };
 
