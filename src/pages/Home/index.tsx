@@ -23,10 +23,11 @@ interface HomeProps {
   nomeUsuario: string;
   perfilUsuario: string;
   onLogout: () => void;
-  onNavegarParaCategorias: () => void; // <--- Adicionado aqui!
+  onNavegarParaCategorias: () => void;
+  onNavegarParaUsuarios: () => void;
 }
 
-export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarParaCategorias }: HomeProps) {
+export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarParaCategorias, onNavegarParaUsuarios }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -88,7 +89,9 @@ export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarPa
 
   const handleModuleClick = (label: string) => {
     if (label === 'Categorias') {
-      onNavegarParaCategorias(); // Executa a transição de tela
+      onNavegarParaCategorias();
+    } else if (label === 'Usuários') {
+      onNavegarParaUsuarios(); // <--- Redireciona para o módulo de Usuários!
     } else {
       alert(`O módulo "${label}" está mapeado na nossa sequência e será construído em breve!`);
     }
@@ -97,7 +100,7 @@ export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarPa
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col">
-        
+
         {/* CABEÇALHO DINÂMICO */}
         <div className="flex justify-between items-center w-full mb-6">
           <div className="flex items-center">
@@ -107,8 +110,8 @@ export default function Home({ nomeUsuario, perfilUsuario, onLogout, onNavegarPa
               <span className="text-[#e07a5f] font-medium text-sm leading-tight">{perfilUsuario}</span>
             </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={onLogout}
             className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all"
             title="Sair do Sistema"

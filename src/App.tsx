@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import CategoriasHub from './pages/Categorias';
+import Usuarios from './pages/Usuarios';
 
 interface UsuarioLogado {
   id: string;
@@ -10,7 +11,7 @@ interface UsuarioLogado {
 }
 
 // Tipos de telas globais do sistema
-type TelaAtiva = 'login' | 'home' | 'categorias';
+type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios';
 
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -18,32 +19,33 @@ export default function App() {
 
   const handleLoginSuccess = (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);
-    setTelaAtiva('home'); // Após logar, joga para a Home
+    setTelaAtiva('home');
   };
 
   const handleLogout = () => {
     setUsuario(null);
-    setTelaAtiva('login'); // Ao deslogar, limpa e joga para o Login
+    setTelaAtiva('login');
   };
 
-  // RENDERIZAÇÃO CONDICIONAL BASEADA NA ARQUITETURA DE ESTADOS
+  // RENDERIZAÇÃO CONDICIONAL
   if (usuario && telaAtiva === 'home') {
     return (
       <Home 
         nomeUsuario={usuario.nome} 
         perfilUsuario={usuario.perfil} 
         onLogout={handleLogout}
-        onNavegarParaCategorias={() => setTelaAtiva('categorias')} // Envia a rota para a Home
+        onNavegarParaCategorias={() => setTelaAtiva('categorias')}
+        onNavegarParaUsuarios={() => setTelaAtiva('usuarios')} // <--- Injetado!
       />
     );
   }
 
   if (usuario && telaAtiva === 'categorias') {
-    return (
-      <CategoriasHub 
-        onVoltarParaHome={() => setTelaAtiva('home')} // Envia a rota de retorno para o Hub
-      />
-    );
+    return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  if (usuario && telaAtiva === 'usuarios') {
+    return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />; // <--- Injetado!
   }
 
   return <Login onLoginSuccess={handleLoginSuccess} />;
