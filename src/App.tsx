@@ -5,6 +5,7 @@ import CategoriasHub from './pages/Categorias';
 import Usuarios from './pages/Usuarios';
 import Permissoes from './pages/Permissoes';
 import Fornecedores from './pages/Fornecedores';
+import Vendedores from './pages/Vendedores';
 
 interface UsuarioLogado {
   id: string;
@@ -14,7 +15,7 @@ interface UsuarioLogado {
 
 // Matriz Oficial de Segurança do ERP Hazon
 // Tipos de telas globais do sistema (Mapeamento de Rotas)
-type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores';
+type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores';
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -55,6 +56,7 @@ export default function App() {
         onNavegarParaUsuarios={() => setTelaAtiva('usuarios')}
         onNavegarParaPermissoes={() => setTelaAtiva('permissoes')}
         onNavegarParaFornecedores={() => setTelaAtiva('fornecedores')}
+        onNavegarParaVendedores={() => setTelaAtiva('vendedores')}
       />
     );
   }
@@ -74,6 +76,10 @@ export default function App() {
 
   if (usuario && telaAtiva === 'fornecedores') {
     return <Fornecedores onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  if (usuario && telaAtiva === 'vendedores') {
+    return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
   // FALLBACK: SE NÃO ESTIVER LOGADO, TRAVA NA TELA DE LOGIN

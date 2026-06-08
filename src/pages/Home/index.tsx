@@ -28,16 +28,18 @@ interface HomeProps {
   onNavegarParaUsuarios: () => void;
   onNavegarParaPermissoes: () => void;
   onNavegarParaFornecedores: () => void;
+  onNavegarParaVendedores: () => void;
 }
 
-export default function Home({ 
-  nomeUsuario, 
-  perfilUsuario, 
-  onLogout, 
-  onNavegarParaCategorias, 
-  onNavegarParaUsuarios, 
+export default function Home({
+  nomeUsuario,
+  perfilUsuario,
+  onLogout,
+  onNavegarParaCategorias,
+  onNavegarParaUsuarios,
   onNavegarParaPermissoes,
-  onNavegarParaFornecedores // <--- Adicionado com sucesso aqui!
+  onNavegarParaFornecedores,
+  onNavegarParaVendedores
 }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
@@ -136,14 +138,16 @@ export default function Home({
       onNavegarParaPermissoes();
     } else if (label === 'Fornecedores') {
       onNavegarParaFornecedores();
+    } else if (label === 'Vendedores') {
+      onNavegarParaVendedores();
     } else {
       alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
     }
   };
-  
+
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      {/* Ajustado tamanho max-w com colchetes para compatibilidade robusta */}
+      {/* Ajustado tamanho max-w e rounded com colchetes para compatibilidade robusta com Tailwind */}
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col">
 
         {/* CABEÇALHO DINÂMICO */}
