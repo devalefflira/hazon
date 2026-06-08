@@ -6,6 +6,7 @@ import Usuarios from './pages/Usuarios';
 import Permissoes from './pages/Permissoes';
 import Fornecedores from './pages/Fornecedores';
 import Vendedores from './pages/Vendedores';
+import Produtos from './pages/Produtos';
 
 interface UsuarioLogado {
   id: string;
@@ -15,7 +16,7 @@ interface UsuarioLogado {
 
 // Matriz Oficial de Segurança do ERP Hazon
 // Tipos de telas globais do sistema (Mapeamento de Rotas)
-type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores';
+type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos';
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -57,6 +58,7 @@ export default function App() {
         onNavegarParaPermissoes={() => setTelaAtiva('permissoes')}
         onNavegarParaFornecedores={() => setTelaAtiva('fornecedores')}
         onNavegarParaVendedores={() => setTelaAtiva('vendedores')}
+        onNavegarParaProdutos={() => setTelaAtiva('produtos')}
       />
     );
   }
@@ -81,6 +83,10 @@ export default function App() {
   if (usuario && telaAtiva === 'vendedores') {
     return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
+
+  if (usuario && telaAtiva === 'produtos') {
+  return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
+}
 
   // FALLBACK: SE NÃO ESTIVER LOGADO, TRAVA NA TELA DE LOGIN
   return <Login onLoginSuccess={handleLoginSuccess} />;

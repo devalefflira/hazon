@@ -29,6 +29,7 @@ interface HomeProps {
   onNavegarParaPermissoes: () => void;
   onNavegarParaFornecedores: () => void;
   onNavegarParaVendedores: () => void;
+  onNavegarParaProdutos: () => void;
 }
 
 export default function Home({
@@ -39,7 +40,8 @@ export default function Home({
   onNavegarParaUsuarios,
   onNavegarParaPermissoes,
   onNavegarParaFornecedores,
-  onNavegarParaVendedores
+  onNavegarParaVendedores,
+  onNavegarParaProdutos
 }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
@@ -140,6 +142,8 @@ export default function Home({
       onNavegarParaFornecedores();
     } else if (label === 'Vendedores') {
       onNavegarParaVendedores();
+    } else if (label === 'Produtos') {
+      onNavegarParaProdutos();
     } else {
       alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
     }

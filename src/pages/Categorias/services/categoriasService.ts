@@ -3,22 +3,25 @@ import { supabase } from '../../../lib/supabaseClient';
 export const categoriasService = {
   // --- 1. SETORES E SUBSETORES ---
   async listarSetoresComSubsetores() {
-    // Traz os setores ordenados e força a ordenação alfabética também nos subsetores
-    const { data, error } = await supabase
+    // 1. Buscamos de forma absolutamente separada
+    const { data: setores, error: errSetores } = await supabase
       .from('categorias_setores')
-      .select(`
-        id,
-        nome,
-        categorias_subsetores (
-          id,
-          nome
-        )
-      `)
-      .order('nome', { ascending: true })
-      .order('nome', { foreignTable: 'categorias_subsetores', ascending: true });
+      .select('id, nome')
+      .order('nome');
 
-    if (error) throw error;
-    return data;
+    const { data: subsetores, error: errSub } = await supabase
+      .from('categorias_subsetores')
+      .select('id, setor_id, nome')
+      .order('nome');
+
+    if (errSetores) throw errSetores;
+    if (errSub) throw errSub;
+
+    // 2. Cruzamos em memória (Safe Merge)
+    return setores?.map(setor => ({
+      ...setor,
+      categorias_subsetores: subsetores?.filter(sub => sub.setor_id === setor.id) || []
+    })) || [];
   },
 
   async salvarSetor(nome: string) {
