@@ -124,8 +124,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
   // Formata strings de datas nativas do PostgreSQL
   const formatarData = (d: string) => d.split('-').reverse().join('/');
-  const formatarHora = (h: string) => h.slice(0, 5);
-
+  
   // Aplicação dos filtros em memória
   const inventariosFiltrados = listaInventarios.filter(inv => {
     const matchUser = filtroUsuario ? inv.usuarios?.nome.toLowerCase().includes(filtroUsuario.toLowerCase()) : true;
