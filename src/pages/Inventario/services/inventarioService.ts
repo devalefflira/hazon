@@ -12,20 +12,25 @@ export interface InventarioAtivo {
 }
 
 export const inventarioService = {
-  // 1. Busca ou Cria uma sessão de Inventário "Em Andamento" para o operador
+  // 1. Busca ou Cria uma sessão de Inventário "Em Andamento" de forma blindada
   async obterOuCriarInventarioAtivo(usuarioId: string): Promise<InventarioAtivo> {
-    // Tenta buscar um inventário que já esteja aberto por este usuário
-    const { data: existente, error: errBusca } = await supabase
+    // CORRIGIDO: Busca usando limit e ordenação para evitar estouro PGRST116 caso haja duplicatas
+    const { data: existentes, error: errBusca } = await supabase
       .from('inventarios')
       .select('id, codigo_customizado, status')
       .eq('usuario_id', usuarioId)
       .eq('status', 'Em Andamento')
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (errBusca) throw errBusca;
-    if (existente) return existente;
+    
+    // Se encontrou pelo menos um inventário em andamento, retorna o mais recente
+    if (existentes && existentes.length > 0) {
+      return existentes[0];
+    }
 
-    // Se não existir, gera um código customizado incremental baseado no timestamp
+    // Se não existir nenhum, gera um código customizado incremental baseado no timestamp
     const codigoGerado = `INV-${Date.now().toString().slice(-6)}`;
 
     const { data: novo, error: errInsercao } = await supabase
@@ -38,7 +43,7 @@ export const inventarioService = {
         }
       ])
       .select('id, codigo_customizado, status')
-      .single();
+      .single(); // Na inserção o single é seguro pois estamos inserindo apenas 1 registro
 
     if (errInsercao) throw errInsercao;
     return novo;
