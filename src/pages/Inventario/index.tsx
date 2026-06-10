@@ -4,7 +4,7 @@ import { inventarioService } from './services/inventarioService';
 import type { LocalCaptura, InventarioAtivo } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
 
-// CORRIGIDO: Removida a propriedade 'setor' para espelhar perfeitamente o tipo nativo do App.tsx
+// CORRIGIDO: Interface limpa e perfeitamente idêntica à raiz do App.tsx (Sem propriedades fantasmas)
 interface UsuarioLogado {
   id: string;
   nome: string;
@@ -13,7 +13,7 @@ interface UsuarioLogado {
 
 interface InventarioProps {
   onVoltarParaHome: () => void;
-  usuarioLogado: UsuarioLogado | null; // Permite união estável com null
+  usuarioLogado: UsuarioLogado | null; // Permite união estável com null para o roteador do App
 }
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
@@ -75,7 +75,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
+      <div className="w-full max-w-95[380px] bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
 
         {/* CABEÇALHO DA INTERFACE */}
         <div className="flex items-center w-full mb-5 border-b border-gray-100 pb-4 select-none">
@@ -143,6 +143,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
             /* TELA DE CONTAGEM ATIVA DE MERCADORIAS */
             <div className="flex flex-col flex-1 animate-fadeIn">
+              {/* Badge Informativo do Local Atual */}
               <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-3 mb-5 flex justify-between items-center select-none">
                 <div className="flex flex-col">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Local de Trabalho</span>
