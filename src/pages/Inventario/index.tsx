@@ -4,17 +4,16 @@ import { inventarioService } from './services/inventarioService';
 import type { LocalCaptura, InventarioAtivo } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
 
-// CORRIGIDO: Modificado 'perfil_id' para 'perfil' para bater idêntico com o core do App.tsx
+// CORRIGIDO: Removida a propriedade 'setor' para espelhar perfeitamente o tipo nativo do App.tsx
 interface UsuarioLogado {
   id: string;
   nome: string;
-  setor: string;
   perfil: string;
 }
 
 interface InventarioProps {
   onVoltarParaHome: () => void;
-  usuarioLogado: UsuarioLogado | null; // CORRIGIDO: Permite união com null para evitar quebra no App
+  usuarioLogado: UsuarioLogado | null; // Permite união estável com null
 }
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
