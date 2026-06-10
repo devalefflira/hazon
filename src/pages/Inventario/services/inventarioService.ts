@@ -9,31 +9,50 @@ export interface InventarioAtivo {
   id: string;
   codigo_customizado: string;
   status: string;
+  data_registro: string;
+  hora_registro: string;
+  usuario_id: string;
+  usuarios?: { nome: string };
+}
+
+export interface ItemInventariado {
+  id: string;
+  quantidade_contabilizada: number;
+  lote: string | null;
+  data_validade: string | null;
+  produtos: {
+    codigo_barras: string;
+    descricao: string;
+  };
+  locais_captura: {
+    nome: string;
+  };
 }
 
 export const inventarioService = {
-  // 1. Busca ou Cria uma sessão de Inventário "Em Andamento" de forma blindada
-  async obterOuCriarInventarioAtivo(usuarioId: string): Promise<InventarioAtivo> {
-    // CORRIGIDO: Busca usando limit e ordenação para evitar estouro PGRST116 caso haja duplicatas
-    const { data: existentes, error: errBusca } = await supabase
+  // 1. Lista todos os inventários com junção na tabela de usuários para o histórico
+  async listarInventarios(): Promise<InventarioAtivo[]> {
+    const { data, error } = await supabase
       .from('inventarios')
-      .select('id, codigo_customizado, status')
-      .eq('usuario_id', usuarioId)
-      .eq('status', 'Em Andamento')
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .select(`
+        id,
+        codigo_customizado,
+        status,
+        data_registro,
+        hora_registro,
+        usuario_id,
+        usuarios:usuario_id ( nome )
+      `)
+      .order('created_at', { ascending: false });
 
-    if (errBusca) throw errBusca;
-    
-    // Se encontrou pelo menos um inventário em andamento, retorna o mais recente
-    if (existentes && existentes.length > 0) {
-      return existentes[0];
-    }
+    if (error) throw error;
+    return (data || []) as unknown as InventarioAtivo[];
+  },
 
-    // Se não existir nenhum, gera um código customizado incremental baseado no timestamp
+  // 2. Cria uma nova sessão mestre zerada
+  async criarNovoInventario(usuarioId: string): Promise<InventarioAtivo> {
     const codigoGerado = `INV-${Date.now().toString().slice(-6)}`;
-
-    const { data: novo, error: errInsercao } = await supabase
+    const { data, error } = await supabase
       .from('inventarios')
       .insert([
         {
@@ -42,14 +61,34 @@ export const inventarioService = {
           status: 'Em Andamento'
         }
       ])
-      .select('id, codigo_customizado, status')
-      .single(); // Na inserção o single é seguro pois estamos inserindo apenas 1 registro
+      .select('id, codigo_customizado, status, data_registro, hora_registro, usuario_id')
+      .single();
 
-    if (errInsercao) throw errInsercao;
-    return novo;
+    if (error) throw error;
+    return data;
   },
 
-  // 2. Busca os locais de captura reais cadastrados no banco
+  // 3. Altera o status do mestre para 'Finalizado' travando edições
+  async finalizarInventario(inventarioId: string) {
+    const { error } = await supabase
+      .from('inventarios')
+      .update({ status: 'Finalizado' })
+      .eq('id', inventarioId);
+
+    if (error) throw error;
+  },
+
+  // 4. Deleta o inventário fisicamente do banco (Cancelar Coleta)
+  async deletarInventario(inventarioId: string) {
+    const { error } = await supabase
+      .from('inventarios')
+      .delete()
+      .eq('id', inventarioId);
+
+    if (error) throw error;
+  },
+
+  // 5. Lista os locais de captura
   async listarLocaisCaptura(): Promise<LocalCaptura[]> {
     const { data, error } = await supabase
       .from('locais_captura')
@@ -60,11 +99,11 @@ export const inventarioService = {
     return data || [];
   },
 
-  // 3. Busca o produto pelo EAN (Ajustado de 'nome' para 'descricao' conforme o Schema!)
+  // 6. Busca o produto por código de barras
   async buscarProdutoPorCodigo(codigo: string) {
     const { data, error } = await supabase
       .from('produtos')
-      .select('id, codigo_barras, descricao, unidade_medida_id')
+      .select('id, codigo_barras, descricao')
       .eq('codigo_barras', codigo)
       .maybeSingle();
 
@@ -72,12 +111,33 @@ export const inventarioService = {
     return data;
   },
 
-  // 4. Salva o item contabilizado vinculando as chaves estrangeiras corretas
+  // 7. Lista os itens de contagem injetados em um inventário específico
+  async listarItensDoInventario(inventarioId: string): Promise<ItemInventariado[]> {
+    const { data, error } = await supabase
+      .from('inventario_itens')
+      .select(`
+        id,
+        quantidade_contabilizada,
+        lote,
+        data_validade,
+        produtos:produto_id ( codigo_barras, descricao ),
+        locais_captura:local_captura_id ( nome )
+      `)
+      .eq('inventario_id', inventarioId)
+      .order('id', { ascending: false });
+
+    if (error) throw error;
+    return (data || []) as unknown as ItemInventariado[];
+  },
+
+  // 8. Salva a bipada física no banco computando as variáveis completas do chão de loja
   async salvarItemContabilizado(item: {
     inventario_id: string;
     produto_id: string;
-    quantidade: number;
+    quantidade_contabilizada: number;
     local_captura_id: string;
+    lote?: string;
+    data_validade?: string | null;
   }) {
     const { data, error } = await supabase
       .from('inventario_itens')
@@ -85,8 +145,10 @@ export const inventarioService = {
         {
           inventario_id: item.inventario_id,
           produto_id: item.produto_id,
-          quantidade_contabilizada: item.quantidade,
-          local_captura_id: item.local_captura_id
+          quantidade_contabilizada: item.quantidade_contabilizada,
+          local_captura_id: item.local_captura_id,
+          lote: item.lote || null,
+          data_validade: item.data_validade || null
         }
       ])
       .select();
