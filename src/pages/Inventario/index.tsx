@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
-import { inventarioService, LocalCaptura, InventarioAtivo } from './services/inventarioService';
+// CORRIGIDO: Utilização estrita de type-only import exigida pelo verbatimModuleSyntax
+import { inventarioService } from './services/inventarioService';
+import type { LocalCaptura, InventarioAtivo } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
 
-// Contrato estrito com base na tabela public.usuarios do seu Schema
-interface Usuario {
+// Interface perfeitamente alinhada com o estado global do App.tsx
+interface UsuarioLogado {
   id: string;
   nome: string;
-  email: string;
+  setor: string;
   perfil_id: string;
 }
 
 interface InventarioProps {
   onVoltarParaHome: () => void;
-  usuarioLogado: Usuario | null; // <--- Propriedade injetada dinamicamente pelo App.tsx
+  usuarioLogado: UsuarioLogado | null; // Tipagem unificada com o App.tsx
 }
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
@@ -25,10 +27,9 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
 
-  // Carga Inicial: Autenticação da Sessão Mestre baseada no operador logado
+  // Carga Inicial: Autenticação da Sessão Mestre
   useEffect(() => {
     async function inicializarModulo() {
-      // Bloqueio de segurança caso não exista usuário autenticado na sessão global
       if (!usuarioLogado?.id) {
         setErro('Usuário não autenticado. Por favor, refaça o login.');
         setLoading(false);
@@ -39,7 +40,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
         setLoading(true);
         setErro('');
 
-        // 1. Garante a existência de um Inventário "Em Andamento" usando o ID REAL do operador
+        // 1. Garante a existência de um Inventário "Em Andamento" usando o ID do operador
         const sessao = await inventarioService.obterOuCriarInventarioAtivo(usuarioLogado.id);
         setInventarioAtivo(sessao);
 
@@ -58,14 +59,14 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     inicializarModulo();
   }, [usuarioLogado]);
 
-  // Callback acionado quando o item físico é computado no formulário interno
   const handleItemContabilizado = () => {
     console.log("Item registrado com sucesso no banco de dados.");
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-[380px] bg-white rounded-[32px] shadow-xl px-5 py-6 flex flex-col min-h-[600px] relative">
+      {/* Ajustado classes fixas para colchetes do Tailwind, garantindo renderização fluida */}
+      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
         
         {/* CABEÇALHO DA INTERFACE */}
         <div className="flex items-center w-full mb-5 border-b border-gray-100 pb-4 select-none">
@@ -88,7 +89,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
         </div>
 
         {erro && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 border border-red-200 text-center font-medium animate-fadeIn">
+          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 border border-red-200 text-center font-medium">
             {erro}
           </div>
         )}
