@@ -11,9 +11,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
-    "html5-qrcode": "^2.3.8",
+    "@zxing/library": "^0.23.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "react-zxing": "^3.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
