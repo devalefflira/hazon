@@ -18,16 +18,16 @@ type SubTela = 'dashboard' | 'selecionar_local' | 'contagem';
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
   const [subTela, setSubTela] = useState<SubTela>('dashboard');
-  const [listaInventarios, setListaInventarios] = useState<InventarioAtivo[]>([]);
+  const [listaInventarios, setListaInventarios] = useState<any[]>([]);
   const [locais, setLocais] = useState<LocalCaptura[]>([]);
-  const [sessaoAtiva, setSessaoAtiva] = useState<InventarioAtivo | null>(null);
+  const [sessaoAtiva, setSessaoAtiva] = useState<any>(null);
   const [localSelecionado, setLocalSelecionado] = useState<string>('');
 
   // Estados dos inputs de Filtro
   const [inputUsuario, setInputUsuario] = useState('');
   const [inputLocal, setInputLocal] = useState('');
 
-  // Estados dos Filtros Aplicados de fato na listagem
+  // Filtros Aplicados de fato na listagem
   const [filtroUsuarioAplicado, setFiltroUsuarioAplicado] = useState('');
   const [filtroLocalAplicado, setFiltroLocalAplicado] = useState('');
 
@@ -81,9 +81,11 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     }
   };
 
-  const handleAbrirCard = (inventario: InventarioAtivo) => {
+  const handleAbrirCard = (inventario: any) => {
     setSessaoAtiva(inventario);
-    setLocalSelecionado('bypass');
+    // Recupera o primeiro local associado à sessão se houver, ou deixa pronto para escolha
+    const primeiroLocal = inventario.inventario_itens?.[0]?.local_captura_id || '';
+    setLocalSelecionado(primeiroLocal);
     setSubTela('contagem');
   };
 
@@ -113,7 +115,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
   const handleCancelarColeta = async () => {
     if (!sessaoAtiva) return;
-    const conf = window.confirm("Deseja realmente cancelar? Todos os dados colados nesta sessão serão perdidos.");
+    const conf = window.confirm("Deseja realmente cancelar? Todos os dados coletados nesta sessão serão perdidos.");
     if (!conf) return;
 
     try {
@@ -129,7 +131,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
   const formatarData = (d: string) => d.split('-').reverse().join('/');
 
-  // CORRIGIDO: Helper ajustado para compensar o fuso horário UTC do Supabase (-3 horas)
   const formatarHoraComAjuste = (timeStr: string) => {
     if (!timeStr) return '00:00';
     const [horas, minutos] = timeStr.split(':').map(Number);
@@ -138,25 +139,35 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     return `${String(horasAjustadas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
   };
 
-  // Aplicação dos filtros em memória controlada pelos botões de ação
+  // CORRIGIDO: Lógica de filtros cruzados funcional baseada nos botões de ação
   const inventariosFiltrados = listaInventarios.filter(inv => {
-    // 1. Filtro por Usuário Operador
-    const matchUser = filtroUsuarioAplicado
-      ? inv.usuarios?.nome.toLowerCase().includes(filtroUsuarioAplicado.toLowerCase())
+    const matchUser = filtroUsuarioAplicado 
+      ? inv.usuarios?.nome.toLowerCase().includes(filtroUsuarioAplicado.toLowerCase()) 
       : true;
 
-    // 2. CORRIGIDO: Adicionado o consumo real do filtro por Local de Coleta
+    // Varre os itens internos para validar se algum pertence ao local filtrado
     const matchLocal = filtroLocalAplicado
-      ? inv.id === filtroLocalAplicado // Ou a regra de ID vinculada ao seu mock/banco
+      ? inv.inventario_itens?.some((item: any) => item.local_captura_id === filtroLocalAplicado)
       : true;
 
     return matchUser && matchLocal;
   });
 
+  // Helper para obter os nomes dos locais mapeados na sessão
+  const obterNomesLocaisSessao = (inv: any) => {
+    if (!inv.inventario_itens || inv.inventario_itens.length === 0) return 'Não informado';
+    const nomes: string[] = [];
+    inv.inventario_itens.forEach((item: any) => {
+      const nome = item.locais_captura?.nome;
+      if (nome && !nomes.includes(nome)) nomes.push(nome);
+    });
+    return nomes.join(', ');
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
-
+        
         <div className="flex items-center w-full mb-4 border-b border-gray-100 pb-3 select-none">
           <button onClick={handleSetaVoltar} className="p-2 hover:bg-gray-100 rounded-full mr-1.5 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#09797a" className="w-5 h-5">
@@ -177,7 +188,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
           </div>
         ) : (
           <div className="flex flex-col flex-1">
-
+            
             {subTela === 'dashboard' && (
               <div className="flex flex-col flex-1 animate-fadeIn">
                 <button
@@ -187,35 +198,34 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                   🚀 Iniciar Nova Coleta
                 </button>
 
-                {/* Bloco de Filtros Operacionais com Botões Limpar e Filtrar */}
                 <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl flex flex-col gap-2 mb-4">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider pl-0.5">Filtros de Pesquisa</span>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="Filtrar Usuário..."
+                    <input 
+                      type="text" 
+                      placeholder="Filtrar Usuário..." 
                       value={inputUsuario}
                       onChange={(e) => setInputUsuario(e.target.value)}
                       className="bg-white border text-[11px] font-semibold rounded-lg px-2 h-8 outline-none focus:border-[#09797a]"
                     />
-                    <select
+                    <select 
                       value={inputLocal}
                       onChange={(e) => setInputLocal(e.target.value)}
-                      className="bg-white border text-[11px] font-semibold rounded-lg px-1 h-8 outline-none"
+                      className="bg-white border text-[11px] font-semibold rounded-lg px-1 h-8 outline-none text-gray-500"
                     >
                       <option value="">Todos Locais</option>
                       {locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    <button
-                      onClick={handleLimparFiltros}
+                    <button 
+                      onClick={handleLimparFiltros} 
                       className="h-7 bg-white border border-gray-300 text-gray-600 rounded-lg text-[10px] font-bold uppercase transition-all active:scale-95"
                     >
                       🧹 Limpar
                     </button>
-                    <button
-                      onClick={handleAplicarFiltros}
+                    <button 
+                      onClick={handleAplicarFiltros} 
                       className="h-7 bg-[#09797a] text-white rounded-lg text-[10px] font-bold uppercase transition-all active:scale-95 shadow-xs"
                     >
                       🔍 Filtrar
@@ -232,15 +242,17 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                       <div key={inv.id} className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-col gap-1.5 shadow-xs relative">
                         <div className="flex justify-between items-center">
                           <span className="font-mono text-xs font-bold text-gray-700">{inv.codigo_customizado}</span>
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${inv.status === 'Finalizado' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            }`}>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                            inv.status === 'Finalizado' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          }`}>
                             {inv.status}
                           </span>
                         </div>
-                        <div className="text-[11px] text-gray-400 font-medium">
-                          {/* CORRIGIDO: Aplicado helper com recuo de fuso horário de Brasília */}
+                        <div className="text-[11px] text-gray-400 font-medium flex flex-col gap-0.5">
                           <p>📅 {formatarData(inv.data_registro)} às {formatarHoraComAjuste(inv.hora_registro)}</p>
                           <p>👤 Operador: <span className="font-bold text-gray-600">{inv.usuarios?.nome || 'Hazon User'}</span></p>
+                          {/* CORRIGIDO: Exibe os locais de coleta reais obtidos de forma agregada */}
+                          <p>📍 Local: <span className="font-bold text-[#09797a]">{obterNomesLocaisSessao(inv)}</span></p>
                         </div>
                         <button
                           onClick={() => handleAbrirCard(inv)}
@@ -265,7 +277,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                 </div>
                 <h2 className="text-gray-700 font-extrabold text-base mb-1">Onde você está coletando?</h2>
                 <p className="text-xs text-gray-400 font-medium mb-4">Selecione o local atual para destravar a contagem física.</p>
-
+                
                 <select
                   value={localSelecionado}
                   onChange={(e) => {
@@ -287,7 +299,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                     <span>Responsável: <span className="text-gray-600">{usuarioLogado?.nome}</span></span>
                     <span className="font-mono">Nº {sessaoAtiva.codigo_customizado}</span>
                   </div>
-
+                  
                   {sessaoAtiva.status === 'Em Andamento' && (
                     <div className="grid grid-cols-2 gap-2 mt-1">
                       <button onClick={handleCancelarColeta} className="h-8 bg-red-50 border border-red-200 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all">
@@ -300,7 +312,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                   )}
                 </div>
 
-                <CapturaItem
+                <CapturaItem 
                   inventarioId={sessaoAtiva.id}
                   localCapturaId={localSelecionado}
                   somenteConsulta={sessaoAtiva.status === 'Finalizado'}

@@ -30,7 +30,7 @@ export interface ItemInventariado {
 }
 
 export const inventarioService = {
-  // 1. Lista todos os inventários com junção na tabela de usuários para o histórico
+  // 1. Lista todos os inventários trazendo dados do usuário e os locais dos itens vinculados
   async listarInventarios(): Promise<InventarioAtivo[]> {
     const { data, error } = await supabase
       .from('inventarios')
@@ -41,7 +41,11 @@ export const inventarioService = {
         data_registro,
         hora_registro,
         usuario_id,
-        usuarios:usuario_id ( nome )
+        usuarios:usuario_id ( nome ),
+        inventario_itens (
+          local_captura_id,
+          locais_captura:local_captura_id ( nome )
+        )
       `)
       .order('created_at', { ascending: false });
 
