@@ -1,30 +1,52 @@
 import { useState, useEffect } from 'react';
-import { inventarioService, type LocalCaptura, type InventarioAtivo } from './services/inventarioService';
+import { inventarioService, LocalCaptura, InventarioAtivo } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
+
+// Contrato estrito com base na tabela public.usuarios do seu Schema
+interface Usuario {
+  id: string;
+  nome: string;
+  email: string;
+  perfil_id: string;
+}
 
 interface InventarioProps {
   onVoltarParaHome: () => void;
+  usuarioLogado: Usuario | null; // <--- Propriedade injetada dinamicamente pelo App.tsx
 }
 
-export default function Inventario({ onVoltarParaHome }: InventarioProps) {
+export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
+  // Estados de Controle de Infraestrutura
   const [inventarioAtivo, setInventarioAtivo] = useState<InventarioAtivo | null>(null);
   const [locais, setLocais] = useState<LocalCaptura[]>([]);
   const [localSelecionado, setLocalSelecionado] = useState<string>('');
+  
+  // Estados de Fluxo e UX
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
 
+  // Carga Inicial: Autenticação da Sessão Mestre baseada no operador logado
   useEffect(() => {
     async function inicializarModulo() {
+      // Bloqueio de segurança caso não exista usuário autenticado na sessão global
+      if (!usuarioLogado?.id) {
+        setErro('Usuário não autenticado. Por favor, refaça o login.');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setErro('');
-        const usuarioIdTemporario = "00000000-0000-0000-0000-000000000000"; 
 
-        const sessao = await inventarioService.obterOuCriarInventarioAtivo(usuarioIdTemporario);
+        // 1. Garante a existência de um Inventário "Em Andamento" usando o ID REAL do operador
+        const sessao = await inventarioService.obterOuCriarInventarioAtivo(usuarioLogado.id);
         setInventarioAtivo(sessao);
 
+        // 2. Busca a lista de locais de captura reais do banco
         const dadosLocais = await inventarioService.listarLocaisCaptura();
         setLocais(dadosLocais);
+
       } catch (err: any) {
         console.error(err);
         setErro('Falha ao conectar com o motor de inventários do Supabase.');
@@ -32,18 +54,20 @@ export default function Inventario({ onVoltarParaHome }: InventarioProps) {
         setLoading(false);
       }
     }
-    inicializarModulo();
-  }, []);
 
+    inicializarModulo();
+  }, [usuarioLogado]);
+
+  // Callback acionado quando o item físico é computado no formulário interno
   const handleItemContabilizado = () => {
     console.log("Item registrado com sucesso no banco de dados.");
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
+      <div className="w-full max-w-[380px] bg-white rounded-[32px] shadow-xl px-5 py-6 flex flex-col min-h-[600px] relative">
         
-        {/* CABEÇALHO */}
+        {/* CABEÇALHO DA INTERFACE */}
         <div className="flex items-center w-full mb-5 border-b border-gray-100 pb-4 select-none">
           <button 
             onClick={onVoltarParaHome} 
@@ -64,11 +88,12 @@ export default function Inventario({ onVoltarParaHome }: InventarioProps) {
         </div>
 
         {erro && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 border border-red-200 text-center font-medium">
+          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 border border-red-200 text-center font-medium animate-fadeIn">
             {erro}
           </div>
         )}
 
+        {/* CONTAINER DINÂMICO DE RENDERIZAÇÃO */}
         <div className="flex flex-col flex-1">
           {loading ? (
             <div className="flex flex-col justify-center items-center flex-1 py-12 gap-2">
@@ -76,6 +101,8 @@ export default function Inventario({ onVoltarParaHome }: InventarioProps) {
               <span className="text-xs text-gray-400 font-medium italic">Autenticando sessão...</span>
             </div>
           ) : !localSelecionado ? (
+            
+            /* TELA DE SELEÇÃO MANDATÓRIA DO LOCAL DE TRABALHO */
             <div className="flex flex-col flex-1 justify-center items-center text-center px-2 animate-fadeIn">
               <div className="w-16 h-16 bg-[#09797a]/10 rounded-full flex justify-center items-center mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="#09797a" className="w-8 h-8">
@@ -103,7 +130,10 @@ export default function Inventario({ onVoltarParaHome }: InventarioProps) {
               </div>
             </div>
           ) : (
+            
+            /* TELA DE CONTAGEM ATIVA DE MERCADORIAS */
             <div className="flex flex-col flex-1 animate-fadeIn">
+              {/* Badge Informativo do Local Atual */}
               <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-3 mb-5 flex justify-between items-center select-none">
                 <div className="flex flex-col">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Local de Trabalho</span>
@@ -123,7 +153,7 @@ export default function Inventario({ onVoltarParaHome }: InventarioProps) {
                 <CapturaItem 
                   inventarioId={inventarioAtivo.id}
                   localCapturaId={localSelecionado}
-                  onItemSalvo={handleItemContabilizado} // Casamento perfeito de escopo
+                  onItemSalvo={handleItemContabilizado}
                 />
               )}
             </div>

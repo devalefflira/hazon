@@ -73,9 +73,14 @@ export default function App() {
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
   
   // Rota do Inventário passando o ID do usuário
-  if (usuario && telaAtiva === 'inventario') {
-    return <Inventario usuarioId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
-  }
+  if (telaAtiva === 'inventario') {
+  return (
+    <Inventario 
+      onVoltarParaHome={() => setTelaAtiva('home')} 
+      usuarioLogado={usuario} // <--- Passando o estado do usuário logado no ERP
+    />
+  );
+}
 
   return <Login onLoginSuccess={handleLoginSuccess} />;
 }
