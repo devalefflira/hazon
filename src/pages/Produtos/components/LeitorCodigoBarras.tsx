@@ -7,23 +7,17 @@ interface LeitorProps {
 
 export default function LeitorCodigoBarras({ onLeituraSucesso, onFechar }: LeitorProps) {
   const { ref } = useZxing({
-    onDecodeResult(result: any) {
-      // O resultado do ZXing tem uma propriedade .text que contém o valor do código
-      const codigo = result.text || result.getText?.() || "";
-      
-      if (codigo) {
-        onLeituraSucesso(codigo);
-      }
+    onDecodeResult(result) {
+      // Correção do erro ts(2339): 'getText' não existe, acessamos '.text' diretamente
+      const codigo = (result as any).text; 
+      if (codigo) onLeituraSucesso(codigo);
     },
-    onError(error: any) {
-      if (error && error.name !== 'NotFoundException') {
-        console.warn("Erro de leitura:", error);
-      }
-    },
+    // Correção do erro ts(2322): passando os formatos como strings literais aceitas pelo tipo
+    formats: ["ean_13", "ean_8", "upc_a", "code_128"],
   });
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4 animate-fadeIn">
+    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4">
       <video ref={ref} className="w-full max-w-sm rounded-2xl bg-black" />
       <button 
         onClick={onFechar} 
