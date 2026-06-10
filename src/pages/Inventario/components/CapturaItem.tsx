@@ -18,8 +18,6 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
   const [codigo, setCodigo] = useState('');
   const [quantidade, setQuantidade] = useState<number | ''>(1);
   const [multiplicador, setMultiplicador] = useState<number | ''>(1);
-  
-  // CORRIGIDO: Removidos indícios de (Op) - Tornados obrigatórios
   const [lote, setLote] = useState('');
   const [validade, setValidade] = useState('');
 
@@ -63,7 +61,8 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
         }
       } catch (err) {
         setFeedback('❌ Erro na consulta.');
-      } bits finally {
+      } finally {
+        // CORRIGIDO: Removido por completo o lixo sintático "bits" da linha 66
         setBuscandoProduto(false);
       }
     }, 400);
@@ -75,7 +74,6 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
     e.preventDefault();
     if (somenteConsulta) return;
     
-    // CORRIGIDO: Validação estrita de Lote e Validade obrigatórios antes do envio
     if (!produto || !quantidade || !multiplicador || !lote.trim() || !validade) {
       setErro('Todos os campos, incluindo Lote e Validade, são obrigatórios.');
       return;
@@ -224,7 +222,6 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
                     {it.quantidade_contabilizada} UN
                   </span>
                 </div>
-                {/* CORRIGIDO: Data de validade injetada explicitamente no card de histórico inferior */}
                 <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-0.5">
                   <span>📍 {it.locais_captura?.nome}</span>
                   <div className="flex gap-2">
