@@ -8,13 +8,15 @@ interface LeitorProps {
 export default function LeitorCodigoBarras({ onLeituraSucesso, onFechar }: LeitorProps) {
   const { ref } = useZxing({
     onDecodeResult(result: any) {
-      // Forçamos o acesso como 'any' para evitar que o TS verifique a existência de getText()
-      const codigo = (result as any).text || (result as any).getText?.() || result.toString();
-      onLeituraSucesso(codigo);
+      // O resultado do ZXing tem uma propriedade .text que contém o valor do código
+      const codigo = result.text || result.getText?.() || "";
+      
+      if (codigo) {
+        onLeituraSucesso(codigo);
+      }
     },
     onError(error: any) {
-      // Tratamento genérico para ignorar o erro de "NotFound" que é normal do scanner
-      if (error && (error as any).name !== 'NotFoundException') {
+      if (error && error.name !== 'NotFoundException') {
         console.warn("Erro de leitura:", error);
       }
     },
