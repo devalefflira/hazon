@@ -17,25 +17,23 @@ interface InventarioProps {
 type SubTela = 'dashboard' | 'selecionar_local' | 'contagem';
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
-  // Controle de Navegação Interna
   const [subTela, setSubTela] = useState<SubTela>('dashboard');
-  
-  // Repositórios de Dados
   const [listaInventarios, setListaInventarios] = useState<InventarioAtivo[]>([]);
   const [locais, setLocais] = useState<LocalCaptura[]>([]);
-  
-  // Estados Ativos da Sessão Corrente
   const [sessaoAtiva, setSessaoAtiva] = useState<InventarioAtivo | null>(null);
   const [localSelecionado, setLocalSelecionado] = useState<string>('');
 
-  // Filtros de Tela Principal
-  const [filtroUsuario, setFiltroUsuario] = useState('');
-  const [filtroLocal, setFiltroLocal] = useState('');
+  // Estados dos inputs de Filtro
+  const [inputUsuario, setInputUsuario] = useState('');
+  const [inputLocal, setInputLocal] = useState('');
+
+  // Estados dos Filtros Aplicados de fato na listagem
+  const [filtroUsuarioAplicado, setFiltroUsuarioAplicado] = useState('');
+  const [filtroLocalAplicado, setFiltroLocalAplicado] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
 
-  // Carga das informações do histórico
   const carregarDashboard = async () => {
     try {
       setLoading(true);
@@ -56,7 +54,18 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     }
   }, [usuarioLogado]);
 
-  // Ação: Iniciar Nova Coleta Física
+  const handleAplicarFiltros = () => {
+    setFiltroUsuarioAplicado(inputUsuario);
+    setFiltroLocalAplicado(inputLocal);
+  };
+
+  const handleLimparFiltros = () => {
+    setInputUsuario('');
+    setInputLocal('');
+    setFiltroUsuarioAplicado('');
+    setFiltroLocalAplicado('');
+  };
+
   const handleIniciarNovaColeta = async () => {
     if (!usuarioLogado) return;
     try {
@@ -72,14 +81,12 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     }
   };
 
-  // Ação: Abrir Card Existente (Pode ser Consulta ou Edição dependendo do status)
   const handleAbrirCard = (inventario: InventarioAtivo) => {
     setSessaoAtiva(inventario);
-    setLocalSelecionado('bypass'); // Ignora bloqueio de local na consulta
+    setLocalSelecionado('bypass');
     setSubTela('contagem');
   };
 
-  // Botão Seta Esquerda (Sair sem fechar lote) -> Preserva status 'Em Andamento'
   const handleSetaVoltar = () => {
     if (subTela === 'contagem' && sessaoAtiva?.status === 'Em Andamento') {
       carregarDashboard();
@@ -91,7 +98,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     }
   };
 
-  // Botão Salvar Coleta -> Altera status para 'Finalizado' definitivo
   const handleSalvarColeta = async () => {
     if (!sessaoAtiva) return;
     try {
@@ -105,7 +111,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     }
   };
 
-  // Botão Cancelar Coleta -> Aborta e apaga fisicamente os registros
   const handleCancelarColeta = async () => {
     if (!sessaoAtiva) return;
     const conf = window.confirm("Deseja realmente cancelar? Todos os dados colados nesta sessão serão perdidos.");
@@ -122,13 +127,20 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     }
   };
 
-  // Formata strings de datas nativas do PostgreSQL
   const formatarData = (d: string) => d.split('-').reverse().join('/');
-  
-  // Aplicação dos filtros em memória
+
+  // CORRIGIDO: Helper ajustado para compensar o fuso horário UTC do Supabase (-3 horas)
+  const formatarHoraComAjuste = (timeStr: string) => {
+    if (!timeStr) return '00:00';
+    const [horas, minutos] = timeStr.split(':').map(Number);
+    let horasAjustadas = horas - 3;
+    if (horasAjustadas < 0) horasAjustadas += 24;
+    return `${String(horasAjustadas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+  };
+
+  // Filtragem controlada pelos botões de ação
   const inventariosFiltrados = listaInventarios.filter(inv => {
-    const matchUser = filtroUsuario ? inv.usuarios?.nome.toLowerCase().includes(filtroUsuario.toLowerCase()) : true;
-    // Filtro simplificado por local cruzando com itens em produção
+    const matchUser = filtroUsuarioAplicado ? inv.usuarios?.nome.toLowerCase().includes(filtroUsuarioAplicado.toLowerCase()) : true;
     return matchUser;
   });
 
@@ -136,7 +148,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
         
-        {/* CABEÇALHO UNIFICADO */}
         <div className="flex items-center w-full mb-4 border-b border-gray-100 pb-3 select-none">
           <button onClick={handleSetaVoltar} className="p-2 hover:bg-gray-100 rounded-full mr-1.5 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#09797a" className="w-5 h-5">
@@ -145,9 +156,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
           </button>
           <div className="flex flex-col">
             <h1 className="text-[#09797a] font-black text-lg tracking-tight">Módulo Inventário</h1>
-            {subTela === 'contagem' && sessaoAtiva && (
-              <span className="text-[9px] font-mono font-bold text-gray-400 uppercase">SESSÃO: {sessaoAtiva.codigo_customizado}</span>
-            )}
           </div>
         </div>
 
@@ -161,7 +169,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
         ) : (
           <div className="flex flex-col flex-1">
             
-            {/* TELA A: DASHBOARD PRINCIPAL */}
             {subTela === 'dashboard' && (
               <div className="flex flex-col flex-1 animate-fadeIn">
                 <button
@@ -171,36 +178,49 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                   🚀 Iniciar Nova Coleta
                 </button>
 
-                {/* Bloco de Filtros Operacionais */}
+                {/* Bloco de Filtros Operacionais com Botões Limpar e Filtrar */}
                 <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl flex flex-col gap-2 mb-4">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider pl-0.5">Filtros de Pesquisa</span>
                   <div className="grid grid-cols-2 gap-1.5">
                     <input 
                       type="text" 
                       placeholder="Filtrar Usuário..." 
-                      value={filtroUsuario}
-                      onChange={(e) => setFiltroUsuario(e.target.value)}
+                      value={inputUsuario}
+                      onChange={(e) => setInputUsuario(e.target.value)}
                       className="bg-white border text-[11px] font-semibold rounded-lg px-2 h-8 outline-none focus:border-[#09797a]"
                     />
                     <select 
-                      value={filtroLocal}
-                      onChange={(e) => setFiltroLocal(e.target.value)}
+                      value={inputLocal}
+                      onChange={(e) => setInputLocal(e.target.value)}
                       className="bg-white border text-[11px] font-semibold rounded-lg px-1 h-8 outline-none"
                     >
                       <option value="">Todos Locais</option>
                       {locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                     </select>
                   </div>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <button 
+                      onClick={handleLimparFiltros} 
+                      className="h-7 bg-white border border-gray-300 text-gray-600 rounded-lg text-[10px] font-bold uppercase transition-all active:scale-95"
+                    >
+                      🧹 Limpar
+                    </button>
+                    <button 
+                      onClick={handleAplicarFiltros} 
+                      className="h-7 bg-[#09797a] text-white rounded-lg text-[10px] font-bold uppercase transition-all active:scale-95 shadow-xs"
+                    >
+                      🔍 Filtrar
+                    </button>
+                  </div>
                 </div>
 
-                {/* Grid Histórico de Cards */}
                 <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider pl-1 mb-2 block">Coletas Realizadas ({inventariosFiltrados.length})</span>
                 <div className="flex flex-col gap-2.5 max-h-75 overflow-y-auto pr-1">
                   {inventariosFiltrados.length === 0 ? (
                     <div className="text-center py-8 text-xs text-gray-400 italic">Nenhum inventário registrado.</div>
                   ) : (
                     inventariosFiltrados.map((inv) => (
-                      <div key={inv.id} className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-col gap-1.5 shadow-xs relative hover:border-[#09797a]/40 transition-all">
+                      <div key={inv.id} className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-col gap-1.5 shadow-xs relative">
                         <div className="flex justify-between items-center">
                           <span className="font-mono text-xs font-bold text-gray-700">{inv.codigo_customizado}</span>
                           <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
@@ -210,7 +230,8 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                           </span>
                         </div>
                         <div className="text-[11px] text-gray-400 font-medium">
-                          <p>📅 {formatarData(inv.data_registro)} às {formatarFormaTime(inv.hora_registro)}</p>
+                          {/* CORRIGIDO: Aplicado helper com recuo de fuso horário de Brasília */}
+                          <p>📅 {formatarData(inv.data_registro)} às {formatarHoraComAjuste(inv.hora_registro)}</p>
                           <p>👤 Operador: <span className="font-bold text-gray-600">{inv.usuarios?.nome || 'Hazon User'}</span></p>
                         </div>
                         <button
@@ -226,7 +247,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
               </div>
             )}
 
-            {/* TELA B: SELETOR MANDATÓRIO DE LOCAL DE CAPTURA */}
             {subTela === 'selecionar_local' && (
               <div className="flex flex-col flex-1 justify-center items-center text-center px-1 animate-fadeIn">
                 <div className="w-14 h-14 bg-[#09797a]/10 rounded-full flex justify-center items-center mb-3">
@@ -252,10 +272,8 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
               </div>
             )}
 
-            {/* TELA C: BANBADA DE LANÇAMENTO ATIVO */}
             {subTela === 'contagem' && sessaoAtiva && (
               <div className="flex flex-col flex-1 animate-fadeIn">
-                {/* Meta-dados do operador e ações superiores */}
                 <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 mb-4 flex flex-col gap-1.5 select-none">
                   <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase">
                     <span>Responsável: <span className="text-gray-600">{usuarioLogado?.nome}</span></span>
@@ -287,10 +305,4 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
       </div>
     </div>
   );
-}
-
-// Helper interno para tratamento de segundos no formato de horas
-function formatarFormaTime(timeStr: string) {
-  if (!timeStr) return '00:00';
-  return timeStr.slice(0, 5);
 }

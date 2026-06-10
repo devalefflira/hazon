@@ -15,14 +15,14 @@ interface ProdutoConsultado {
 }
 
 export default function CapturaItem({ inventarioId, localCapturaId, somenteConsulta }: CapturaItemProps) {
-  // Campos do Formulário
   const [codigo, setCodigo] = useState('');
   const [quantidade, setQuantidade] = useState<number | ''>(1);
   const [multiplicador, setMultiplicador] = useState<number | ''>(1);
+  
+  // CORRIGIDO: Removidos indícios de (Op) - Tornados obrigatórios
   const [lote, setLote] = useState('');
   const [validade, setValidade] = useState('');
 
-  // Estados Operacionais
   const [produto, setProduto] = useState<ProdutoConsultado | null>(null);
   const [buscandoProduto, setBuscandoProduto] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -30,7 +30,6 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
   const [erro, setErro] = useState('');
   const [itensContabilizados, setItensContabilizados] = useState<ItemInventariado[]>([]);
 
-  // Carrega o carrinho de itens salvos da sessão corrente
   const carregarItensSessao = async () => {
     try {
       const dados = await inventarioService.listarItensDoInventario(inventarioId);
@@ -44,7 +43,6 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
     carregarItensSessao();
   }, [inventarioId]);
 
-  // Busca reativa com Debounce do Produto por EAN
   useEffect(() => {
     if (codigo.trim().length < 3) {
       setProduto(null);
@@ -65,7 +63,7 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
         }
       } catch (err) {
         setFeedback('❌ Erro na consulta.');
-      } finally {
+      } bits finally {
         setBuscandoProduto(false);
       }
     }, 400);
@@ -76,13 +74,17 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (somenteConsulta) return;
-    if (!produto || !quantidade || !multiplicador) return;
+    
+    // CORRIGIDO: Validação estrita de Lote e Validade obrigatórios antes do envio
+    if (!produto || !quantidade || !multiplicador || !lote.trim() || !validade) {
+      setErro('Todos os campos, incluindo Lote e Validade, são obrigatórios.');
+      return;
+    }
 
     try {
       setSalvando(true);
       setErro('');
 
-      // Regra de Negócio: Fardos/Pacotes convertidos para Unidades brutas
       const totalUnidades = Number(quantidade) * Number(multiplicador);
 
       await inventarioService.salvarItemContabilizado({
@@ -91,10 +93,9 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
         quantidade_contabilizada: totalUnidades,
         local_captura_id: localCapturaId,
         lote: lote.trim(),
-        data_validade: validade || null
+        data_validade: validade
       });
 
-      // Limpeza dos campos operacionais (Preservando o Local de Coleta conforme solicitado)
       setCodigo('');
       setQuantidade(1);
       setMultiplicador(1);
@@ -103,7 +104,6 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
       setProduto(null);
       setFeedback('🎉 Item lançado!');
 
-      // Atualiza o grid de contagem em tempo real
       carregarItensSessao();
       setTimeout(() => setFeedback(''), 2000);
 
@@ -114,9 +114,13 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
     }
   };
 
+  const formatarDataBR = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    return dateStr.split('-').reverse().join('/');
+  };
+
   return (
     <div className="flex flex-col gap-5 w-full">
-      {/* FORMULÁRIO DE CAPTURA (OCULTO CASO SEJA APENAS CONSULTA) */}
       {!somenteConsulta ? (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 bg-gray-50 p-4 rounded-2xl border border-gray-200">
           {erro && <div className="bg-red-50 text-red-600 text-xs p-2.5 rounded-xl text-center font-bold">{erro}</div>}
@@ -166,23 +170,25 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
 
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-gray-500 pl-1">Lote (Op)</label>
+              <label className="text-[11px] font-bold text-gray-500 pl-1">Lote</label>
               <input
                 type="text"
                 placeholder="Ex: L12"
                 value={lote}
                 onChange={(e) => setLote(e.target.value)}
-                className="bg-white border border-gray-300 rounded-xl px-3 h-10 text-xs outline-none focus:border-[#09797a]"
+                className="bg-white border border-gray-300 rounded-xl px-3 h-10 text-xs outline-none focus:border-[#09797a] font-bold"
+                required
                 disabled={!produto}
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-gray-500 pl-1">Validade (Op)</label>
+              <label className="text-[11px] font-bold text-gray-500 pl-1">Vencimento</label>
               <input
                 type="date"
                 value={validade}
                 onChange={(e) => setValidade(e.target.value)}
-                className="bg-white border border-gray-300 rounded-xl px-2 h-10 text-xs outline-none focus:border-[#09797a]"
+                className="bg-white border border-gray-300 rounded-xl px-2 h-10 text-xs outline-none focus:border-[#09797a] font-bold"
+                required
                 disabled={!produto}
               />
             </div>
@@ -198,7 +204,6 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
         </form>
       ) : null}
 
-      {/* GRID DE ITENS CONTABILIZADOS EM TEMPO REAL */}
       <div className="flex flex-col flex-1 select-none">
         <h3 className="text-xs font-black text-gray-700 mb-2 pl-1 uppercase tracking-wider">
           Itens Coletados ({itensContabilizados.length})
@@ -215,13 +220,17 @@ export default function CapturaItem({ inventarioId, localCapturaId, somenteConsu
                   <span className="font-extrabold text-gray-800 text-xs truncate max-w-50">
                     {it.produtos?.descricao}
                   </span>
-                  <span className="bg-[#09797a]/10 text-[#09797a] font-mono font-black text-xs px-2 py-0.5 rounded-md">
+                  <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-black text-xs px-2 py-0.5 rounded-md">
                     {it.quantidade_contabilizada} UN
                   </span>
                 </div>
-                <div className="flex justify-between text-[10px] text-gray-400 font-medium">
+                {/* CORRIGIDO: Data de validade injetada explicitamente no card de histórico inferior */}
+                <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-0.5">
                   <span>📍 {it.locais_captura?.nome}</span>
-                  {it.lote && <span>Lote: {it.lote}</span>}
+                  <div className="flex gap-2">
+                    {it.lote && <span>Lote: {it.lote}</span>}
+                    {it.data_validade && <span className="text-amber-600">Venc: {formatarDataBR(it.data_validade)}</span>}
+                  </div>
                 </div>
               </div>
             ))
