@@ -7,6 +7,7 @@ import Permissoes from './pages/Permissoes';
 import Fornecedores from './pages/Fornecedores';
 import Vendedores from './pages/Vendedores';
 import Produtos from './pages/Produtos';
+import Inventario from './pages/Inventario'; // Importação do novo módulo
 
 interface UsuarioLogado {
   id: string;
@@ -14,9 +15,8 @@ interface UsuarioLogado {
   perfil: string;
 }
 
-// Matriz Oficial de Segurança do ERP Hazon
-// Tipos de telas globais do sistema (Mapeamento de Rotas)
-type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos';
+// Tipos de telas globais do sistema
+type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos' | 'inventario';
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -46,7 +46,7 @@ export default function App() {
     setTelaAtiva('login');
   };
 
-  // 1. RENDERIZAÇÃO DA TELA HOME (COM TODAS AS ROTAS DE NAVEGAÇÃO MAPEADAS)
+  // 1. RENDERIZAÇÃO DA TELA HOME
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -59,35 +59,23 @@ export default function App() {
         onNavegarParaFornecedores={() => setTelaAtiva('fornecedores')}
         onNavegarParaVendedores={() => setTelaAtiva('vendedores')}
         onNavegarParaProdutos={() => setTelaAtiva('produtos')}
+        onNavegarParaInventario={() => setTelaAtiva('inventario')}
       />
     );
   }
 
   // 2. DIRECIONAMENTO ISOLADO DOS MÓDULOS ATIVOS
-  if (usuario && telaAtiva === 'categorias') {
-    return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
+  if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
+  if (usuario && telaAtiva === 'usuarios') return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />;
+  if (usuario && telaAtiva === 'permissoes') return <Permissoes onVoltarParaHome={() => setTelaAtiva('home')} />;
+  if (usuario && telaAtiva === 'fornecedores') return <Fornecedores onVoltarParaHome={() => setTelaAtiva('home')} />;
+  if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
+  if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
+  
+  // Rota do Inventário passando o ID do usuário
+  if (usuario && telaAtiva === 'inventario') {
+    return <Inventario usuarioId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  if (usuario && telaAtiva === 'usuarios') {
-    return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />;
-  }
-
-  if (usuario && telaAtiva === 'permissoes') {
-    return <Permissoes onVoltarParaHome={() => setTelaAtiva('home')} />;
-  }
-
-  if (usuario && telaAtiva === 'fornecedores') {
-    return <Fornecedores onVoltarParaHome={() => setTelaAtiva('home')} />;
-  }
-
-  if (usuario && telaAtiva === 'vendedores') {
-    return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
-  }
-
-  if (usuario && telaAtiva === 'produtos') {
-  return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
-}
-
-  // FALLBACK: SE NÃO ESTIVER LOGADO, TRAVA NA TELA DE LOGIN
   return <Login onLoginSuccess={handleLoginSuccess} />;
 }

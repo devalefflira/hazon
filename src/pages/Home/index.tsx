@@ -30,6 +30,7 @@ interface HomeProps {
   onNavegarParaFornecedores: () => void;
   onNavegarParaVendedores: () => void;
   onNavegarParaProdutos: () => void;
+  onNavegarParaInventario: () => void;
 }
 
 export default function Home({
@@ -41,7 +42,8 @@ export default function Home({
   onNavegarParaPermissoes,
   onNavegarParaFornecedores,
   onNavegarParaVendedores,
-  onNavegarParaProdutos
+  onNavegarParaProdutos,
+  onNavegarParaInventario
 }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
@@ -144,6 +146,8 @@ export default function Home({
       onNavegarParaVendedores();
     } else if (label === 'Produtos') {
       onNavegarParaProdutos();
+    } else if (label === 'Inventário') { // <--- Verifique se o label aqui tem acento e espaço exatamente como no menuItems
+      onNavegarParaInventario();
     } else {
       alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
     }
