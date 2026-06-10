@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react';
 import { inventarioService } from './services/inventarioService';
-// Importação isolada de tipos exigida pela flag verbatimModuleSyntax
+// CORRIGIDO: Importação explícita de tipos isolados para o verbatimModuleSyntax
 import type { LocalCaptura, InventarioAtivo } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
 
-// CORRIGIDO: Interface limpa e perfeitamente idêntica à raiz do App.tsx (Sem propriedades fantasmas)
-interface UsuarioLogado {
-  id: string;
-  nome: string;
-  perfil: string;
-}
-
+// CORRIGIDO: Contrato alinhado estritamente com os campos reais fornecidos pelo App.tsx
 interface InventarioProps {
   onVoltarParaHome: () => void;
-  usuarioLogado: UsuarioLogado | null; // Permite união estável com null para o roteador do App
+  usuarioLogado: {
+    id: string;
+    nome: string;
+    perfil: string;
+  } | null;
 }
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
@@ -31,7 +29,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     let montado = true;
 
     async function inicializarModulo() {
-      // Barramento de segurança: se for nulo, corta a execução com erro amigável
+      // Barramento de segurança caso o estado global do App atrase para injetar o operador
       if (!usuarioLogado?.id) {
         if (montado) {
           setErro('Dados do operador ausentes. Por favor, refaça o login.');
@@ -75,6 +73,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
+      {/* CORRIGIDO: Classes utilitárias do Tailwind padronizadas para evitar quebras em transpiladores estritos */}
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
 
         {/* CABEÇALHO DA INTERFACE */}
@@ -143,7 +142,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
             /* TELA DE CONTAGEM ATIVA DE MERCADORIAS */
             <div className="flex flex-col flex-1 animate-fadeIn">
-              {/* Badge Informativo do Local Atual */}
               <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-3 mb-5 flex justify-between items-center select-none">
                 <div className="flex flex-col">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Local de Trabalho</span>
