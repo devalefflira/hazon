@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 import { inventarioService } from './services/inventarioService';
-// CORRIGIDO: Importação isolada de tipos exigida pela flag verbatimModuleSyntax
+// Importação isolada de tipos exigida pela flag verbatimModuleSyntax
 import type { LocalCaptura, InventarioAtivo } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
 
+// CORRIGIDO: Modificado 'perfil_id' para 'perfil' para bater idêntico com o core do App.tsx
 interface UsuarioLogado {
   id: string;
   nome: string;
   setor: string;
-  perfil_id: string;
+  perfil: string;
 }
 
 interface InventarioProps {
   onVoltarParaHome: () => void;
-  usuarioLogado: UsuarioLogado; // Propriedade mandatória e tipada de forma idêntica ao App.tsx
+  usuarioLogado: UsuarioLogado | null; // CORRIGIDO: Permite união com null para evitar quebra no App
 }
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
@@ -21,7 +22,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
   const [inventarioAtivo, setInventarioAtivo] = useState<InventarioAtivo | null>(null);
   const [locais, setLocais] = useState<LocalCaptura[]>([]);
   const [localSelecionado, setLocalSelecionado] = useState<string>('');
-  
+
   // Estados de Fluxo e UX
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
@@ -31,6 +32,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     let montado = true;
 
     async function inicializarModulo() {
+      // Barramento de segurança: se for nulo, corta a execução com erro amigável
       if (!usuarioLogado?.id) {
         if (montado) {
           setErro('Dados do operador ausentes. Por favor, refaça o login.');
@@ -45,7 +47,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
         // 1. Garante a existência de um Inventário "Em Andamento" usando o ID real do operador
         const sessao = await inventarioService.obterOuCriarInventarioAtivo(usuarioLogado.id);
-        
+
         // 2. Busca os locais de captura do banco
         const dadosLocais = await inventarioService.listarLocaisCaptura();
 
@@ -75,11 +77,11 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
-        
+
         {/* CABEÇALHO DA INTERFACE */}
         <div className="flex items-center w-full mb-5 border-b border-gray-100 pb-4 select-none">
-          <button 
-            onClick={onVoltarParaHome} 
+          <button
+            onClick={onVoltarParaHome}
             className="p-2 hover:bg-gray-100 rounded-full active:scale-90 transition-all mr-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#09797a" className="w-6 h-6">
@@ -110,7 +112,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
               <span className="text-xs text-gray-400 font-medium italic">Autenticando sessão...</span>
             </div>
           ) : !localSelecionado ? (
-            
+
             /* TELA DE SELEÇÃO MANDATÓRIA DO LOCAL DE TRABALHO */
             <div className="flex flex-col flex-1 justify-center items-center text-center px-2 animate-fadeIn">
               <div className="w-16 h-16 bg-[#09797a]/10 rounded-full flex justify-center items-center mb-4">
@@ -139,7 +141,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
               </div>
             </div>
           ) : (
-            
+
             /* TELA DE CONTAGEM ATIVA DE MERCADORIAS */
             <div className="flex flex-col flex-1 animate-fadeIn">
               <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-3 mb-5 flex justify-between items-center select-none">
@@ -149,7 +151,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                     📍 {locais.find(l => l.id === localSelecionado)?.nome}
                   </span>
                 </div>
-                <button 
+                <button
                   onClick={() => setLocalSelecionado('')}
                   className="text-xs text-[#e07a5f] font-black hover:bg-red-50 px-2.5 py-1.5 rounded-xl transition-all active:scale-95 border border-dashed border-red-200"
                 >
@@ -158,7 +160,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
               </div>
 
               {inventarioAtivo && (
-                <CapturaItem 
+                <CapturaItem
                   inventarioId={inventarioAtivo.id}
                   localCapturaId={localSelecionado}
                   onItemSalvo={handleItemContabilizado}
