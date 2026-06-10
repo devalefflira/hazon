@@ -13,6 +13,7 @@ interface UsuarioLogado {
   id: string;
   nome: string;
   perfil: string;
+  setor?: string; // Colocado como opcional com '?' para não quebrar caso o banco não retorne em algum teste
 }
 
 // Tipos de telas globais do sistema
