@@ -1,100 +1,92 @@
 import { supabase } from '../../../lib/supabaseClient';
 
+export interface LocalCaptura {
+  id: string;
+  nome: string;
+}
+
+export interface InventarioAtivo {
+  id: string;
+  codigo_customizado: string;
+  status: string;
+}
+
 export const inventarioService = {
-  async buscarProdutoPorEan(ean: string) {
+  // 1. Busca ou Cria uma sessão de Inventário "Em Andamento" para o operador
+  async obterOuCriarInventarioAtivo(usuarioId: string): Promise<InventarioAtivo> {
+    // Tenta buscar um inventário que já esteja aberto por este usuário
+    const { data: existente, error: errBusca } = await supabase
+      .from('inventarios')
+      .select('id, codigo_customizado, status')
+      .eq('usuario_id', usuarioId)
+      .eq('status', 'Em Andamento')
+      .maybeSingle();
+
+    if (errBusca) throw errBusca;
+    if (existente) return existente;
+
+    // Se não existir, gera um código customizado incremental baseado no timestamp
+    const codigoGerado = `INV-${Date.now().toString().slice(-6)}`;
+
+    const { data: novo, error: errInsercao } = await supabase
+      .from('inventarios')
+      .insert([
+        {
+          codigo_customizado: codigoGerado,
+          usuario_id: usuarioId,
+          status: 'Em Andamento'
+        }
+      ])
+      .select('id, codigo_customizado, status')
+      .single();
+
+    if (errInsercao) throw errInsercao;
+    return novo;
+  },
+
+  // 2. Busca os locais de captura reais cadastrados no banco
+  async listarLocaisCaptura(): Promise<LocalCaptura[]> {
+    const { data, error } = await supabase
+      .from('locais_captura')
+      .select('id, nome')
+      .order('nome', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // 3. Busca o produto pelo EAN (Ajustado de 'nome' para 'descricao' conforme o Schema!)
+  async buscarProdutoPorCodigo(codigo: string) {
     const { data, error } = await supabase
       .from('produtos')
-      .select('id, descricao, unidade_medida_id')
-      .eq('codigo_barras', ean)
-      .single();
-    if (error) return null;
+      .select('id, codigo_barras, descricao, unidade_medida_id')
+      .eq('codigo_barras', codigo)
+      .maybeSingle();
+
+    if (error) throw error;
     return data;
   },
 
-  async salvarItemInventario(dados: {
+  // 4. Salva o item contabilizado vinculando as chaves estrangeiras corretas
+  async salvarItemContabilizado(item: {
     inventario_id: string;
     produto_id: string;
     quantidade: number;
-    multiplicador: number;
     local_captura_id: string;
-    lote: string;
-    validade: string;
   }) {
-    const total = dados.quantidade * dados.multiplicador;
     const { data, error } = await supabase
       .from('inventario_itens')
-      .insert({
-        inventario_id: dados.inventario_id,
-        produto_id: dados.produto_id,
-        quantidade_contabilizada: total,
-        local_captura_id: dados.local_captura_id,
-        lote: dados.lote,
-        data_validade: dados.validade
-      });
+      .insert([
+        {
+          inventario_id: item.inventario_id,
+          produto_id: item.produto_id,
+          quantidade_contabilizada: item.quantidade,
+          local_captura_id: item.local_captura_id
+        }
+      ])
+      .select();
+
     if (error) throw error;
     return data;
-  },
-
-  async listarLocais() {
-    const { data, error } = await supabase.from('locais_captura').select('id, nome');
-    if (error) throw error;
-    return data || [];
-  },
-
-  async listarInventarios() {
-  const { data, error } = await supabase
-    .from('inventarios')
-    .select('id, codigo_customizado, data_registro, hora_registro, usuarios(nome), status')
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  
-  return data || [];
-},
-
-  async criarNovoInventario(codigo: string, usuarioId: string) {
-    const { data, error } = await supabase
-      .from('inventarios')
-      .insert({
-        codigo_customizado: codigo,
-        usuario_id: usuarioId
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  async buscarProduto(termo: string) {
-    const { data, error } = await supabase
-      .from('produtos')
-      .select('id, descricao, unidade_medida_id')
-      .or(`codigo_barras.eq.${termo},descricao.ilike.%${termo}%`)
-      .limit(1)
-      .single();
-
-    if (error) return null;
-    return data;
-  },
-
-  async listarItensDoInventario(inventarioId: string) {
-    const { data, error } = await supabase
-      .from('inventario_itens')
-      .select('id, quantidade_contabilizada, lote, data_validade, produtos(descricao)')
-      .eq('inventario_id', inventarioId);
-    if (error) throw error;
-    return data || [];
-  },
-
-  async atualizarStatusInventario(id: string, status: string) {
-    const { data, error } = await supabase.from('inventarios').update({ status }).eq('id', id);
-    if (error) throw error;
-    return data;
-  },
-
-  async deletarItem(id: string) {
-    const { error } = await supabase.from('inventario_itens').delete().eq('id', id);
-    if (error) throw error;
   }
-
 };

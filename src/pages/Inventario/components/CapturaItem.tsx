@@ -3,95 +3,153 @@ import { inventarioService } from '../services/inventarioService';
 
 interface CapturaItemProps {
   inventarioId: string;
-  usuarioId: string;
-  onFinalizar: () => void;
-  onCancelar: () => void;
+  localCapturaId: string;
+  onItemSalvo: () => void; // Alinhado como onItemSalvo
 }
 
-export default function CapturaItem({ inventarioId, usuarioId, onFinalizar, onCancelar }: CapturaItemProps) {
-  const [locais, setLocais] = useState<any[]>([]);
-  const [itens, setItens] = useState<any[]>([]);
-  const [produto, setProduto] = useState<any>(null);
-  const [busca, setBusca] = useState('');
-  const [currentId, setCurrentId] = useState(inventarioId);
-  const [formData, setFormData] = useState({ qtd: 1, mult: 1, lote: '', validade: '', local_id: '' });
+interface ProdutoConsultado {
+  id: string;
+  codigo_barras: string;
+  descricao: string;
+  unidade_medida_id: string;
+}
+
+export default function CapturaItem({ inventarioId, localCapturaId, onItemSalvo }: CapturaItemProps) {
+  const [codigo, setCodigo] = useState('');
+  const [quantidade, setQuantidade] = useState<number | ''>(1);
+  const [produto, setProduto] = useState<ProdutoConsultado | null>(null);
+  const [buscandoProduto, setBuscandoProduto] = useState(false);
+  const [mensagemFeedback, setMensagemFeedback] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
 
   useEffect(() => {
-    inventarioService.listarLocais().then(setLocais);
-    if (currentId !== 'TEMPORARIO') carregarItens();
-  }, [currentId]);
-
-  const carregarItens = async () => {
-    const dados = await inventarioService.listarItensDoInventario(currentId);
-    setItens(dados);
-  };
-
-  const handleBusca = async (termo: string) => {
-    setBusca(termo);
-    if (termo.length > 2) {
-      const prod = await inventarioService.buscarProduto(termo);
-      setProduto(prod);
-    } else {
+    if (codigo.trim().length < 3) {
       setProduto(null);
-    }
-  };
-
-  const handleSalvarItem = async () => {
-    if (!produto || !formData.local_id) return alert("Selecione local e produto!");
-    
-    let targetId = currentId;
-    if (targetId === 'TEMPORARIO') {
-        const codigo = `INV-${new Date().getTime().toString().slice(-6)}`;
-        const novo = await inventarioService.criarNovoInventario(codigo, usuarioId);
-        targetId = novo.id;
-        setCurrentId(targetId);
+      setMensagemFeedback('');
+      return;
     }
 
-    await inventarioService.salvarItemInventario({
-      inventario_id: targetId, produto_id: produto.id,
-      quantidade: formData.qtd, multiplicador: formData.mult,
-      local_captura_id: formData.local_id, lote: formData.lote, validade: formData.validade
-    });
+    const consultarBanco = setTimeout(async () => {
+      try {
+        setBuscandoProduto(true);
+        setErro('');
+        
+        const prod = await inventarioService.buscarProdutoPorCodigo(codigo.trim());
+        
+        if (prod) {
+          setProduto(prod as unknown as ProdutoConsultado);
+          setMensagemFeedback(`✅ ${prod.descricao}`);
+        } else {
+          setProduto(null);
+          setMensagemFeedback('⚠️ Produto não localizado no sistema.');
+        }
+      } catch (err) {
+        console.error(err);
+        setMensagemFeedback('❌ Erro ao consultar produto.');
+      } finally {
+        setBuscandoProduto(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(consultarBanco);
+  }, [codigo]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    setBusca(''); setProduto(null); 
-    setFormData(prev => ({ ...prev, qtd: 1, mult: 1, lote: '', validade: '' })); // Local_id preservado
-    carregarItens();
+    if (!produto || !quantidade || quantidade <= 0) {
+      setErro('Verifique o produto e insira uma quantidade válida.');
+      return;
+    }
+
+    try {
+      setSalvando(true);
+      setErro('');
+
+      await inventarioService.salvarItemContabilizado({
+        inventario_id: inventarioId,
+        produto_id: produto.id,
+        quantidade: Number(quantidade),
+        local_captura_id: localCapturaId
+      });
+
+      onItemSalvo(); // Dispara o callback correto
+      setCodigo('');
+      setQuantidade(1);
+      setProduto(null);
+      setMensagemFeedback('🎉 Item adicionado com sucesso!');
+      
+      setTimeout(() => setMensagemFeedback(''), 2000);
+
+    } catch (err: any) {
+      console.error(err);
+      setErro('Erro ao salvar a contagem no Supabase.');
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        <button onClick={onCancelar} className="flex-1 bg-gray-200 py-3 rounded-xl font-bold">Voltar</button>
-        <button onClick={onFinalizar} className="flex-1 bg-[#e07a5f] text-white py-3 rounded-xl font-bold">Salvar Inventário</button>
-      </div>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full animate-fadeIn select-none">
+      {erro && (
+        <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200 text-center font-medium">
+          {erro}
+        </div>
+      )}
 
-      <select className="w-full bg-gray-50 p-3 rounded-xl border" value={formData.local_id} onChange={(e) => setFormData({...formData, local_id: e.target.value})}>
-        <option value="">Selecione o Local...</option>
-        {locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-      </select>
-
-      <input type="text" placeholder="Buscar produto..." value={busca} onChange={(e) => handleBusca(e.target.value)} className="border p-3 rounded-xl" />
-      {produto && <div className="bg-emerald-50 p-3 rounded-xl font-bold text-emerald-800">{produto.descricao}</div>}
-
-      <div className="grid grid-cols-2 gap-2">
-        <input type="number" placeholder="Qtd" value={formData.qtd} onChange={(e) => setFormData({...formData, qtd: Number(e.target.value)})} className="border p-3 rounded-xl" />
-        <input type="number" placeholder="Mult" value={formData.mult} onChange={(e) => setFormData({...formData, mult: Number(e.target.value)})} className="border p-3 rounded-xl" />
-      </div>
-
-      <input type="text" placeholder="Lote (ex: LOTE123)" value={formData.lote} onChange={(e) => setFormData({...formData, lote: e.target.value})} className="border p-3 rounded-xl" />
-      <input type="date" value={formData.validade} onChange={(e) => setFormData({...formData, validade: e.target.value})} className="border p-3 rounded-xl" />
-
-      <button onClick={handleSalvarItem} className="w-full bg-[#09797a] text-white py-4 rounded-xl font-bold">Confirmar Item</button>
-
-      <div className="mt-4 border-t pt-4">
-        <h3 className="font-bold mb-2">Itens contados:</h3>
-        {itens.map(item => (
-          <div key={item.id} className="flex justify-between p-2 border-b text-sm">
-            <span>{item.produtos?.descricao} - {item.quantidade_contabilizada} UN</span>
-            <button onClick={() => inventarioService.deletarItem(item.id).then(carregarItens)} className="text-red-500">Apagar</button>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-bold text-gray-500 pl-1">Código de Barras</label>
+        <div className="relative w-full">
+          <input
+            type="text"
+            placeholder="Digite ou bipe o código..."
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+            disabled={salvando}
+            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 h-12 text-sm outline-none focus:border-[#09797a] focus:bg-white transition-all font-semibold pr-10"
+            autoFocus
+          />
+          {buscandoProduto && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#09797a]"></div>
+            </div>
+          )}
+        </div>
+        
+        {mensagemFeedback && (
+          <div className={`text-xs font-bold mt-1 px-2 py-1.5 rounded-lg border ${
+            produto 
+              ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+              : 'bg-amber-50 border-amber-100 text-amber-700'
+          }`}>
+            {mensagemFeedback}
           </div>
-        ))}
+        )}
       </div>
-    </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-bold text-gray-500 pl-1">Quantidade Contada</label>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="1"
+          placeholder="Ex: 12"
+          value={quantidade}
+          onChange={(e) => setQuantidade(e.target.value === '' ? '' : Number(e.target.value))}
+          disabled={salvando || !produto}
+          className="bg-gray-50 border border-gray-300 rounded-xl px-3 h-12 text-sm outline-none focus:border-[#09797a] focus:bg-white transition-all font-bold disabled:opacity-50"
+          required
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={salvando || buscandoProduto || !produto}
+        className="w-full h-12 bg-[#09797a] text-white rounded-xl text-sm font-bold active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-md mt-2 flex justify-center items-center"
+      >
+        {salvando ? 'Processando contagem...' : 'Confirmar & Lançar'}
+      </button>
+    </form>
   );
 }
