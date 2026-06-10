@@ -75,7 +75,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-95[380px] bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
+      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
 
         {/* CABEÇALHO DA INTERFACE */}
         <div className="flex items-center w-full mb-5 border-b border-gray-100 pb-4 select-none">
