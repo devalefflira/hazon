@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { inventarioService } from './services/inventarioService';
-import type { LocalCaptura, InventarioAtivo } from './services/inventarioService';
+import type { LocalCaptura } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
 
 interface UsuarioLogado {
