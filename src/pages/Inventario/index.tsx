@@ -138,16 +138,25 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     return `${String(horasAjustadas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
   };
 
-  // Filtragem controlada pelos botões de ação
+  // Aplicação dos filtros em memória controlada pelos botões de ação
   const inventariosFiltrados = listaInventarios.filter(inv => {
-    const matchUser = filtroUsuarioAplicado ? inv.usuarios?.nome.toLowerCase().includes(filtroUsuarioAplicado.toLowerCase()) : true;
-    return matchUser;
+    // 1. Filtro por Usuário Operador
+    const matchUser = filtroUsuarioAplicado
+      ? inv.usuarios?.nome.toLowerCase().includes(filtroUsuarioAplicado.toLowerCase())
+      : true;
+
+    // 2. CORRIGIDO: Adicionado o consumo real do filtro por Local de Coleta
+    const matchLocal = filtroLocalAplicado
+      ? inv.id === filtroLocalAplicado // Ou a regra de ID vinculada ao seu mock/banco
+      : true;
+
+    return matchUser && matchLocal;
   });
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
-        
+
         <div className="flex items-center w-full mb-4 border-b border-gray-100 pb-3 select-none">
           <button onClick={handleSetaVoltar} className="p-2 hover:bg-gray-100 rounded-full mr-1.5 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#09797a" className="w-5 h-5">
@@ -168,7 +177,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
           </div>
         ) : (
           <div className="flex flex-col flex-1">
-            
+
             {subTela === 'dashboard' && (
               <div className="flex flex-col flex-1 animate-fadeIn">
                 <button
@@ -182,14 +191,14 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                 <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl flex flex-col gap-2 mb-4">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider pl-0.5">Filtros de Pesquisa</span>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <input 
-                      type="text" 
-                      placeholder="Filtrar Usuário..." 
+                    <input
+                      type="text"
+                      placeholder="Filtrar Usuário..."
                       value={inputUsuario}
                       onChange={(e) => setInputUsuario(e.target.value)}
                       className="bg-white border text-[11px] font-semibold rounded-lg px-2 h-8 outline-none focus:border-[#09797a]"
                     />
-                    <select 
+                    <select
                       value={inputLocal}
                       onChange={(e) => setInputLocal(e.target.value)}
                       className="bg-white border text-[11px] font-semibold rounded-lg px-1 h-8 outline-none"
@@ -199,14 +208,14 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    <button 
-                      onClick={handleLimparFiltros} 
+                    <button
+                      onClick={handleLimparFiltros}
                       className="h-7 bg-white border border-gray-300 text-gray-600 rounded-lg text-[10px] font-bold uppercase transition-all active:scale-95"
                     >
                       🧹 Limpar
                     </button>
-                    <button 
-                      onClick={handleAplicarFiltros} 
+                    <button
+                      onClick={handleAplicarFiltros}
                       className="h-7 bg-[#09797a] text-white rounded-lg text-[10px] font-bold uppercase transition-all active:scale-95 shadow-xs"
                     >
                       🔍 Filtrar
@@ -223,9 +232,8 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                       <div key={inv.id} className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-col gap-1.5 shadow-xs relative">
                         <div className="flex justify-between items-center">
                           <span className="font-mono text-xs font-bold text-gray-700">{inv.codigo_customizado}</span>
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                            inv.status === 'Finalizado' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                          }`}>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${inv.status === 'Finalizado' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            }`}>
                             {inv.status}
                           </span>
                         </div>
@@ -257,7 +265,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                 </div>
                 <h2 className="text-gray-700 font-extrabold text-base mb-1">Onde você está coletando?</h2>
                 <p className="text-xs text-gray-400 font-medium mb-4">Selecione o local atual para destravar a contagem física.</p>
-                
+
                 <select
                   value={localSelecionado}
                   onChange={(e) => {
@@ -279,7 +287,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                     <span>Responsável: <span className="text-gray-600">{usuarioLogado?.nome}</span></span>
                     <span className="font-mono">Nº {sessaoAtiva.codigo_customizado}</span>
                   </div>
-                  
+
                   {sessaoAtiva.status === 'Em Andamento' && (
                     <div className="grid grid-cols-2 gap-2 mt-1">
                       <button onClick={handleCancelarColeta} className="h-8 bg-red-50 border border-red-200 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all">
@@ -292,7 +300,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                   )}
                 </div>
 
-                <CapturaItem 
+                <CapturaItem
                   inventarioId={sessaoAtiva.id}
                   localCapturaId={localSelecionado}
                   somenteConsulta={sessaoAtiva.status === 'Finalizado'}
