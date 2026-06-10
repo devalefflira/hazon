@@ -72,8 +72,24 @@ export default function App() {
   if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
   
-  // Rota do Inventário passando o ID do usuário
+  // Rota do Inventário blindada contra concorrência de estado nulo
   if (telaAtiva === 'inventario') {
+    if (!usuario) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+            <button 
+              onClick={() => setTelaAtiva('login')} 
+              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
+            >
+              Fazer Login
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <Inventario
         onVoltarParaHome={() => setTelaAtiva('home')}

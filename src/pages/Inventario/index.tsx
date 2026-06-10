@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-// CORRIGIDO: Utilização estrita de type-only import exigida pelo verbatimModuleSyntax
 import { inventarioService } from './services/inventarioService';
+// CORRIGIDO: Importação isolada de tipos exigida pela flag verbatimModuleSyntax
 import type { LocalCaptura, InventarioAtivo } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
 
-// Interface perfeitamente alinhada com o estado global do App.tsx
 interface UsuarioLogado {
   id: string;
   nome: string;
@@ -14,7 +13,7 @@ interface UsuarioLogado {
 
 interface InventarioProps {
   onVoltarParaHome: () => void;
-  usuarioLogado: UsuarioLogado | null; // Tipagem unificada com o App.tsx
+  usuarioLogado: UsuarioLogado; // Propriedade mandatória e tipada de forma idêntica ao App.tsx
 }
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
@@ -27,36 +26,46 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
 
-  // Carga Inicial: Autenticação da Sessão Mestre
+  // Carga Inicial: Autenticação da Sessão Mestre baseada no operador ativo
   useEffect(() => {
+    let montado = true;
+
     async function inicializarModulo() {
       if (!usuarioLogado?.id) {
-        setErro('Usuário não autenticado. Por favor, refaça o login.');
-        setLoading(false);
+        if (montado) {
+          setErro('Dados do operador ausentes. Por favor, refaça o login.');
+          setLoading(false);
+        }
         return;
       }
 
       try {
-        setLoading(true);
-        setErro('');
+        if (montado) setLoading(true);
+        if (montado) setErro('');
 
-        // 1. Garante a existência de um Inventário "Em Andamento" usando o ID do operador
+        // 1. Garante a existência de um Inventário "Em Andamento" usando o ID real do operador
         const sessao = await inventarioService.obterOuCriarInventarioAtivo(usuarioLogado.id);
-        setInventarioAtivo(sessao);
-
-        // 2. Busca a lista de locais de captura reais do banco
+        
+        // 2. Busca os locais de captura do banco
         const dadosLocais = await inventarioService.listarLocaisCaptura();
-        setLocais(dadosLocais);
 
+        if (montado) {
+          setInventarioAtivo(sessao);
+          setLocais(dadosLocais);
+        }
       } catch (err: any) {
-        console.error(err);
-        setErro('Falha ao conectar com o motor de inventários do Supabase.');
+        console.error("Erro no módulo de inventário:", err);
+        if (montado) setErro('Falha ao conectar com o motor de inventários do Supabase.');
       } finally {
-        setLoading(false);
+        if (montado) setLoading(false);
       }
     }
 
     inicializarModulo();
+
+    return () => {
+      montado = false;
+    };
   }, [usuarioLogado]);
 
   const handleItemContabilizado = () => {
@@ -65,7 +74,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      {/* Ajustado classes fixas para colchetes do Tailwind, garantindo renderização fluida */}
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
         
         {/* CABEÇALHO DA INTERFACE */}
@@ -89,7 +97,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
         </div>
 
         {erro && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 border border-red-200 text-center font-medium">
+          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 border border-red-200 text-center font-medium animate-fadeIn">
             {erro}
           </div>
         )}
@@ -134,7 +142,6 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
             
             /* TELA DE CONTAGEM ATIVA DE MERCADORIAS */
             <div className="flex flex-col flex-1 animate-fadeIn">
-              {/* Badge Informativo do Local Atual */}
               <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-3 mb-5 flex justify-between items-center select-none">
                 <div className="flex flex-col">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Local de Trabalho</span>
