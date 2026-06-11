@@ -84,7 +84,7 @@ export const notaFaltaService = {
     return (data || []) as unknown as ProdutoFalta[];
   },
 
-  // 3. Cadastra a Nota de Falta em gôndola garantindo a integridade dos campos físicos
+  // 3. Cadastra a Nota de Falta em gôndola de forma direta e otimizada
   async registrarNotaFalta(item: {
     usuario_id: string;
     produto_id: string;
@@ -92,44 +92,23 @@ export const notaFaltaService = {
     subsetor_id: string;
     motivo_falta_id: string;
   }): Promise<void> {
-    // Gera o código customizado exigido como NOT NULL
+    // Código customizado obrigatório (NOT NULL)
     const codigoGerado = `FLT-${Date.now().toString().slice(-6)}`;
 
-    // Busca um ID de usuário válido direto do banco para evitar violação de FK se o ID da sessão for mockado
-    let idValido = item.usuario_id;
-    
-    const { data: checaUser } = await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('id', item.usuario_id)
-      .maybeSingle();
+    // Monta o payload exatamente com as chaves correspondentes ao DDL do Postgres
+    const payload = {
+      codigo_customizado: codigoGerado,
+      usuario_id: item.usuario_id,
+      produto_id: item.produto_id,
+      setor_id: item.setor_id,
+      subsetor_id: item.subsetor_id,
+      motivo_falta_id: item.motivo_falta_id,
+      status_cotacao: 'Pendente'
+    };
 
-    if (!checaUser) {
-      const { data: primeiroUser } = await supabase
-        .from('usuarios')
-        .select('id')
-        .limit(1)
-        .maybeSingle();
-        
-      if (primeiroUser) {
-        idValido = primeiroUser.id;
-      }
-    }
-
-    // Executa o insert com a estrutura limpa aceita pelo PostgREST
     const { error } = await supabase
       .from('notas_falta')
-      .insert([
-        {
-          codigo_customizado: codigoGerado,
-          usuario_id: idValido,
-          produto_id: item.produto_id,
-          setor_id: item.setor_id,
-          subsetor_id: item.subsetor_id,
-          motivo_falta_id: item.motivo_falta_id,
-          status_cotacao: 'Pendente'
-        }
-      ]);
+      .insert([payload]);
 
     if (error) {
       console.error("Erro detalhado no insert da Nota de Falta:", error);
