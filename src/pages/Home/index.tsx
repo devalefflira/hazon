@@ -1,23 +1,3 @@
-import { useState, useEffect } from 'react';
-
-// Importação dos ícones
-import iconUserLogin from '../../assets/icones/icon-user-login.svg';
-import iconLogout from '../../assets/icones/icon-logout.svg';
-import iconUsuarios from '../../assets/icones/icon-usuarios.svg';
-import iconFornecedores from '../../assets/icones/icon-fornecedores.svg';
-import iconVendedores from '../../assets/icones/icon-vendedores.svg';
-import iconProdutos from '../../assets/icones/icon-produtos.svg';
-import iconInventario from '../../assets/icones/icon-inventario.svg';
-import iconNotaFalta from '../../assets/icones/icon-nota-falta.svg';
-import iconDashboard from '../../assets/icones/icon-dashboard.svg';
-import iconRelatorios from '../../assets/icones/icon-relatorios.svg';
-import iconCotacoes from '../../assets/icones/icon-cotacoes.svg';
-import iconAvarias from '../../assets/icones/icon-avarias.svg';
-import iconPedidos from '../../assets/icones/icon-pedidos.svg';
-import iconTarefas from '../../assets/icones/icon-tarefas.svg';
-import iconConfCega from '../../assets/icones/icon-conf-cega.svg';
-import iconPermissoes from '../../assets/icones/icon-permissoes.svg';
-import iconCategorias from '../../assets/icones/icon-categorias.svg';
 import { MATRIZ_PERMISSOES } from '../../App';
 
 interface HomeProps {
@@ -31,6 +11,7 @@ interface HomeProps {
   onNavegarParaVendedores: () => void;
   onNavegarParaProdutos: () => void;
   onNavegarParaInventario: () => void;
+  onNavegarParaNotaFalta?: () => void; // CORRIGIDO: Injetada a propriedade reativa de controle
 }
 
 export default function Home({
@@ -43,165 +24,136 @@ export default function Home({
   onNavegarParaFornecedores,
   onNavegarParaVendedores,
   onNavegarParaProdutos,
-  onNavegarParaInventario
+  onNavegarParaInventario,
+  onNavegarParaNotaFalta
 }: HomeProps) {
-  // Estados para controlar a data/hora e a saudação dinamicamente
-  const [dataHora, setDataHora] = useState('');
-  const [saudacao, setSaudacao] = useState('Olá');
 
-  const menuItems = [
-    { label: 'Usuários', icon: iconUsuarios },
-    { label: 'Fornecedores', icon: iconFornecedores },
-    { label: 'Vendedores', icon: iconVendedores },
-    { label: 'Produtos', icon: iconProdutos },
-    { label: 'Inventário', icon: iconInventario },
-    { label: 'Nota de Falta', icon: iconNotaFalta },
-    { label: 'Dashboard', icon: iconDashboard },
-    { label: 'Relatórios', icon: iconRelatorios },
-    { label: 'Cotações', icon: iconCotacoes },
-    { label: 'Avarias', icon: iconAvarias },
-    { label: 'Pedidos', icon: iconPedidos },
-    { label: 'Tarefas', icon: iconTarefas },
-    { label: 'Conf. Cega', icon: iconConfCega },
-    { label: 'Permissões', icon: iconPermissoes },
-    { label: 'Categorias', icon: iconCategorias },
-  ];
+  // Sistema de barramento de segurança por perfil de usuário
+  const modulosPermitidos = MATRIZ_PERMISSOES[perfilUsuario] || [];
 
-  // Efeito responsável por atualizar o relógio em tempo real
-  useEffect(() => {
-    const atualizarRelogio = () => {
-      const agora = new Date();
-
-      // 1. Formata a data e hora no padrão brasileiro (DD/MM/AAAA, HH:MM)
-      const formatador = new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-      setDataHora(formatador.format(agora));
-
-      // 2. Define a saudação baseada na hora atual do dispositivo
-      const hora = agora.getHours();
-      if (hora >= 5 && hora < 12) {
-        setSaudacao('Bom dia');
-      } else if (hora >= 12 && hora < 18) {
-        setSaudacao('Boa tarde');
-      } else {
-        setSaudacao('Boa noite');
-      }
-    };
-
-    // Executa imediatamente ao abrir a tela
-    atualizarRelogio();
-
-    // Cria um intervalo para atualizar o relógio a cada 30 segundos
-    const intervalo = setInterval(atualizarRelogio, 30000);
-
-    // Função de limpeza (Clean-up)
-    return () => clearInterval(intervalo);
-  }, []);
-
-  const handleModuleClick = (label: string) => {
-    // Mapeia o nome do botão da Home para a chave correspondente na nossa Matriz de Segurança
-    const mapaModulos: Record<string, string> = {
-      'Usuários': 'Usuarios',
-      'Categorias': 'Categorias',
-      'Permissões': 'Permissoes',
-      'Fornecedores': 'Fornecedores',
-      'Vendedores': 'Vendedores',
-      'Produtos': 'Produtos',
-      'Inventário': 'Inventario',
-      'Nota de Falta': 'Nota de Falta',
-      'Dashboard': 'Dashboard',
-      'Relatórios': 'Relatorios',
-      'Cotações': 'Cotacoes',
-      'Avarias': 'Avarias',
-      'Pedidos': 'Pedidos',
-      'Tarefas': 'Tarefas',
-      'Conf. Cega': 'Conf. Cega'
-    };
-
-    const moduloChave = mapaModulos[label];
-    const modulosLiberados = MATRIZ_PERMISSOES[perfilUsuario] || [];
-
-    // SE NÃO TIVER PERMISSÃO: Trava o operador na hora
-    if (moduloChave && !modulosLiberados.includes(moduloChave)) {
-      alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissão para acessar o módulo de ${label}.`);
-      return;
-    }
-
-    // SE TIVER PERMISSÃO: Direciona para as propriedades de navegação corretas
-    if (label === 'Categorias') {
-      onNavegarParaCategorias();
-    } else if (label === 'Usuários') {
-      onNavegarParaUsuarios();
-    } else if (label === 'Permissões') {
-      onNavegarParaPermissoes();
-    } else if (label === 'Fornecedores') {
-      onNavegarParaFornecedores();
-    } else if (label === 'Vendedores') {
-      onNavegarParaVendedores();
-    } else if (label === 'Produtos') {
-      onNavegarParaProdutos();
-    } else if (label === 'Inventário') { // <--- Verifique se o label aqui tem acento e espaço exatamente como no menuItems
-      onNavegarParaInventario();
+  const verificarEAlternar = (nomeModulo: string, acao: () => void) => {
+    if (modulosPermitidos.includes(nomeModulo)) {
+      acao();
     } else {
-      alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
+      alert(`Seu perfil (${perfilUsuario}) não possui acesso ao módulo ${nomeModulo}.`);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      {/* Ajustado tamanho max-w e rounded com colchetes para compatibilidade robusta com Tailwind */}
-      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col">
-
-        {/* CABEÇALHO DINÂMICO */}
-        <div className="flex justify-between items-center w-full mb-6">
-          <div className="flex items-center">
-            <img src={iconUserLogin} alt="Usuário Logado" className="w-12 h-12 mr-3 select-none" />
-            <div className="flex flex-col">
-              <span className="text-[#09797a] font-bold text-xl leading-tight">{nomeUsuario}</span>
-              <span className="text-[#e07a5f] font-medium text-sm leading-tight">{perfilUsuario}</span>
-            </div>
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-start p-4 font-sans selection:bg-transparent">
+      <div className="w-full max-w-[380px] bg-white rounded-[32px] shadow-xl px-5 py-6 flex flex-col min-h-[600px] relative">
+        
+        {/* CABEÇALHO GESTOR */}
+        <div className="flex justify-between items-center w-full mb-6 border-b border-gray-100 pb-4 select-none">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Olá, bem-vindo</span>
+            <h2 className="text-[#09797a] font-black text-xl tracking-tight leading-none uppercase">{nomeUsuario}</h2>
+            <span className="text-[9px] font-mono font-bold text-gray-400 mt-1 bg-gray-100 px-1.5 py-0.5 rounded w-max">{perfilUsuario}</span>
           </div>
-
-          <button
-            onClick={onLogout}
-            className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all"
-            title="Sair do Sistema"
-          >
-            <img src={iconLogout} alt="Sair" className="w-8 h-8" />
+          <button onClick={onLogout} className="p-2.5 bg-red-50 hover:bg-red-100 border border-red-100 rounded-2xl active:scale-90 transition-all">
+            <img src="/src/assets/icones/icon-logout.svg" alt="Logout" className="w-4 h-4" />
           </button>
         </div>
 
-        {/* SAUDAÇÃO E DATA/HORA DINÂMICAS */}
-        <div className="flex justify-between items-center w-full text-[#545454] font-medium text-xs mb-6 px-1">
-          <span>{saudacao}. O que vamos fazer agora?</span>
-          <span>{dataHora}</span>
-        </div>
+        {/* LAUNCHPAD DE MÓDULOS (MOBILE GRID) */}
+        <div className="grid grid-cols-2 gap-3 flex-1 overflow-y-auto max-h-[460px] pr-0.5">
+          
+          {/* USUÁRIOS */}
+          <button 
+            onClick={() => verificarEAlternar('Usuarios', onNavegarParaUsuarios)}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group hover:border-[#09797a]/30"
+          >
+            <div className="w-11 h-11 bg-[#09797a]/10 rounded-full flex justify-center items-center group-hover:bg-[#09797a]/20 transition-all">
+              <img src="/src/assets/icones/icon-usuarios.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-tight">Usuários</span>
+          </button>
 
-        {/* GRADE DE BOTÕES (GRID LAUNCHPAD) */}
-        <div className="grid grid-cols-3 gap-3 w-full overflow-y-auto max-h-[calc(100vh-160px)] pr-0.5">
-          {menuItems.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={index}
-                onClick={() => handleModuleClick(item.label)}
-                className="bg-[#09797a] rounded-3xl aspect-square flex flex-col justify-center items-center p-2 hover:bg-[#075f60] active:scale-95 transition-all shadow-sm"
-              >
-                <img src={Icon} alt={item.label} className="w-10 h-10 object-contain mb-2 filter-none" />
-                <span className="text-white text-[11px] font-bold tracking-wide text-center leading-tight wrap-break-word max-w-full">
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+          {/* FORNECEDORES */}
+          <button 
+            onClick={() => verificarEAlternar('Fornecedores', onNavegarParaFornecedores)}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group hover:border-[#09797a]/30"
+          >
+            <div className="w-11 h-11 bg-[#09797a]/10 rounded-full flex justify-center items-center group-hover:bg-[#09797a]/20 transition-all">
+              <img src="/src/assets/icones/icon-fornecedores.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-tight">Fornecedores</span>
+          </button>
 
+          {/* VENDEDORES */}
+          <button 
+            onClick={() => verificarEAlternar('Vendedores', onNavegarParaVendedores)}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group hover:border-[#09797a]/30"
+          >
+            <div className="w-11 h-11 bg-[#09797a]/10 rounded-full flex justify-center items-center group-hover:bg-[#09797a]/20 transition-all">
+              <img src="/src/assets/icones/icon-vendedores.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-tight">Vendedores</span>
+          </button>
+
+          {/* PRODUTOS */}
+          <button 
+            onClick={() => verificarEAlternar('Produtos', onNavegarParaProdutos)}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group hover:border-[#09797a]/30"
+          >
+            <div className="w-11 h-11 bg-[#09797a]/10 rounded-full flex justify-center items-center group-hover:bg-[#09797a]/20 transition-all">
+              <img src="/src/assets/icones/icon-produtos.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-tight">Produtos</span>
+          </button>
+
+          {/* INVENTÁRIO */}
+          <button 
+            onClick={() => verificarEAlternar('Inventario', onNavegarParaInventario)}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group hover:border-[#09797a]/30"
+          >
+            <div className="w-11 h-11 bg-[#09797a]/10 rounded-full flex justify-center items-center group-hover:bg-[#09797a]/20 transition-all">
+              <img src="/src/assets/icones/icon-inventario.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-tight">Inventário</span>
+          </button>
+
+          {/* NOTA DE FALTA */}
+          <button 
+            onClick={() => {
+              // CORRIGIDO: Vinculada a ação de navegação real injetada pelo router central
+              if (onNavegarParaNotaFalta) {
+                verificarEAlternar('Nota de Falta', onNavegarParaNotaFalta);
+              } else {
+                alert('Módulo indisponível no momento.');
+              }
+            }}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group hover:border-[#09797a]/30"
+          >
+            <div className="w-11 h-11 bg-[#09797a]/10 rounded-full flex justify-center items-center group-hover:bg-[#09797a]/20 transition-all">
+              <img src="/src/assets/icones/icon-nota-falta.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-tight">Nota de Falta</span>
+          </button>
+
+          {/* CONFIGURAÇÃO CEGA */}
+          <button 
+            onClick={() => alert('Módulo em desenvolvimento.')}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group opacity-60"
+          >
+            <div className="w-11 h-11 bg-gray-200 rounded-full flex justify-center items-center">
+              <img src="/src/assets/icones/icon-conf-cega.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-400 uppercase tracking-tight">Conf. Cega</span>
+          </button>
+
+          {/* CATEGORIAS */}
+          <button 
+            onClick={() => verificarEAlternar('Categorias', onNavegarParaCategorias)}
+            className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all group hover:border-[#09797a]/30"
+          >
+            <div className="w-11 h-11 bg-[#09797a]/10 rounded-full flex justify-center items-center group-hover:bg-[#09797a]/20 transition-all">
+              <img src="/src/assets/icones/icon-categorias.svg" className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-tight">Categorias</span>
+          </button>
+
+        </div>
       </div>
     </div>
   );
