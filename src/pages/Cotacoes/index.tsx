@@ -36,90 +36,65 @@ export default function Cotacoes({ onVoltarParaHome, usuarioLogado }: CotacoesPr
     );
   }
 
- return (
+  return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-[calc(100vh-32px)] relative">
+      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-[calc(100vh-32px)]">
         
-        {/* HEADER ADAPTADO PARA O PADRÃO MÓVEL DO HAZON */}
+        {/* CABEÇALHO COM ESTILIZAÇÃO DO PADRÃO HAZON */}
         <div className="flex items-center gap-3 w-full mb-6 border-b border-gray-100 pb-4">
           <button 
-            onClick={etapa === 1 ? onVoltar : () => setEtapa(1)} 
+            onClick={onVoltarParaHome} 
             className="p-2 hover:bg-gray-50 rounded-full active:scale-90 transition-all text-[#09797a] font-bold text-xl"
           >
             ←
           </button>
-          <div>
-            <h1 className="text-[#09797a] font-bold text-xl leading-tight">Nova Cotação</h1>
-            <p className="text-[11px] text-[#e07a5f] font-medium">
-              Passo {etapa} de 2: {etapa === 1 ? 'Itens em Falta' : 'Fornecedores'}
-            </p>
-          </div>
+          <h1 className="text-[#09797a] font-bold text-xl leading-tight">Cotações</h1>
         </div>
 
-        {/* ÁREA DE CONTEÚDO COM ROLAGEM MÓVEL INTERNA */}
-        <div className="flex-1 overflow-y-auto pr-0.5 max-h-[calc(100vh-240px)] pb-4">
-          {etapa === 1 && (
-            <>
-              {loadingFaltas ? (
-                <p className="text-center text-gray-500 mt-10 text-sm font-medium">Carregando faltas...</p>
-              ) : faltas.length === 0 ? (
-                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum item pendente para cotação.</p>
-              ) : (
-                faltas.map(item => (
-                  <CardNotaFalta 
-                    key={item.id} 
-                    item={item} 
-                    selecionado={itensSelecionados.has(item.id)} 
-                    onToggle={handleToggleItem} 
-                  />
-                ))
-              )}
-            </>
-          )}
-
-          {etapa === 2 && (
-            <>
-              {loadingFornecedores ? (
-                <p className="text-center text-gray-500 mt-10 text-sm font-medium">Buscando fornecedores compatíveis...</p>
-              ) : fornecedores.length === 0 ? (
-                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum fornecedor encontrado para os setores selecionados.</p>
-              ) : (
-                fornecedores.map(forn => (
-                  <CardFornecedor 
-                    key={forn.fornecedor_id} 
-                    fornecedor={forn} 
-                    selecionado={fornecedoresSelecionados.has(forn.fornecedor_id)} 
-                    onToggle={handleToggleFornecedor} 
-                  />
-                ))
-              )}
-            </>
-          )}
-        </div>
-
-        {/* BARRA DE AÇÕES INFERIOR FIXADA NO CONTAINER DA MÁQUINA */}
-        <div className="pt-4 border-t border-gray-100 mt-auto flex justify-between items-center bg-white w-full">
-          <span className="text-xs text-gray-500 font-bold tracking-wide">
-            {etapa === 1 ? `${itensSelecionados.size} itens` : `${fornecedoresSelecionados.size} convites`}
-          </span>
-          
-          {etapa === 1 ? (
-            <button 
-              onClick={() => setEtapa(2)}
-              disabled={itensSelecionados.size === 0}
-              className="bg-[#09797a] text-white px-6 py-3 rounded-2xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm"
-            >
-              Avançar
-            </button>
+        {/* LISTAGEM DE HISTÓRICO COM ROLAGEM ISOLADA */}
+        <div className="flex-1 overflow-y-auto pr-0.5 max-h-[calc(100vh-220px)]">
+          {loading ? (
+            <p className="text-center text-gray-500 mt-6 text-sm font-medium">Carregando cotações...</p>
+          ) : historico.length === 0 ? (
+            <p className="text-center text-gray-500 mt-6 text-sm">Nenhuma rodada de cotação aberta.</p>
           ) : (
-            <button 
-              onClick={handleDisparar}
-              disabled={fornecedoresSelecionados.size === 0 || salvando}
-              className="bg-[#09797a] text-white px-6 py-3 rounded-2xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm flex items-center gap-2"
-            >
-              {salvando ? 'Processando...' : 'Disparar Cotação'}
-            </button>
+            <div className="flex flex-col gap-3">
+              {historico.map((cotacao) => (
+                <div key={cotacao.id} className="p-4 bg-gray-50/50 rounded-3xl border border-gray-200 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-all">
+                  <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-200/60 pb-2">
+                    <span className="text-[11px] text-gray-500 font-mono font-bold tracking-wider">
+                      # {cotacao.id.substring(0, 8).toUpperCase()}
+                    </span>
+                    <div className="shrink-0">
+                      <BadgeStatusCotacao status={cotacao.status as any} />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1 px-0.5">
+                    <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                      <span className="opacity-60 text-xs">👤</span> {cotacao.usuarios?.nome || 'Comprador'}
+                    </p>
+                    <p className="text-xs text-gray-600 font-medium flex items-center gap-1.5">
+                      <span className="opacity-60 text-xs">📦</span> Itens Vinculados: <span className="font-bold text-[#09797a] bg-[#09797a]/5 px-2 py-0.5 rounded-md">{cotacao.itens_vinculados_count}</span>
+                    </p>
+                    <p className="text-[10px] text-gray-400 font-medium mt-1 flex justify-end">
+                      Abertura: {new Date(cotacao.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
+        </div>
+        
+        {/* BOTÃO OPERACIONAL FIXADO NO RODAPÉ DO DISPOSITIVO */}
+        <div className="pt-4 border-t border-gray-100 mt-4">
+          <button 
+            onClick={() => setView('nova-cotacao')}
+            className="w-full bg-[#09797a] text-white py-4 rounded-3xl text-sm font-bold shadow-md flex justify-center items-center gap-2 active:scale-95 transition-all"
+          >
+            <span className="text-lg leading-none">+</span> Nova Cotação
+          </button>
         </div>
 
       </div>
