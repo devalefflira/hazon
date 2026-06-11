@@ -62,86 +62,91 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans">
-      {/* Header Fixo */}
-      <div className="bg-[#09797a] text-white p-4 sticky top-0 z-10 shadow-md">
-        <div className="flex items-center gap-3">
-          <button onClick={etapa === 1 ? onVoltar : () => setEtapa(1)} className="text-xl font-bold p-1">
+    <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
+      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-[calc(100vh-32px)] relative">
+        
+        {/* CABEÇALHO COM IDENTIDADE OPERACIONAL DO HAZON */}
+        <div className="flex items-center gap-3 w-full mb-6 border-b border-gray-100 pb-4">
+          <button 
+            onClick={etapa === 1 ? onVoltar : () => setEtapa(1)} 
+            className="p-2 hover:bg-gray-50 rounded-full active:scale-90 transition-all text-[#09797a] font-bold text-xl"
+          >
             ←
           </button>
           <div>
-            <h1 className="text-lg font-bold leading-tight">Nova Cotação</h1>
-            <p className="text-[11px] opacity-80">
+            <h1 className="text-[#09797a] font-bold text-xl leading-tight">Nova Cotação</h1>
+            <p className="text-[11px] text-[#e07a5f] font-bold mt-0.5">
               Passo {etapa} de 2: {etapa === 1 ? 'Itens em Falta' : 'Fornecedores'}
             </p>
           </div>
         </div>
-      </div>
 
-      {/* Área de Rolagem de Conteúdo */}
-      <div className="flex-1 overflow-y-auto p-4 pb-24">
-        {etapa === 1 && (
-          <>
-            {loadingFaltas ? (
-              <p className="text-center text-gray-500 mt-10 text-sm font-medium">Carregando faltas...</p>
-            ) : faltas.length === 0 ? (
-              <p className="text-center text-gray-500 mt-10 text-sm">Nenhum item pendente para cotação.</p>
-            ) : (
-              faltas.map(item => (
-                <CardNotaFalta 
-                  key={item.id} 
-                  item={item} 
-                  selecionado={itensSelecionados.has(item.id)} 
-                  onToggle={handleToggleItem} 
-                />
-              ))
-            )}
-          </>
-        )}
+        {/* ÁREA DE CONTEÚDO COM ROLAGEM MÓVEL INTERNA COMPATÍVEL */}
+        <div className="flex-1 overflow-y-auto pr-0.5 max-h-[calc(100vh-240px)] pb-4">
+          {etapa === 1 && (
+            <>
+              {loadingFaltas ? (
+                <p className="text-center text-gray-500 mt-10 text-sm font-medium">Carregando faltas...</p>
+              ) : faltas.length === 0 ? (
+                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum item pendente para cotação.</p>
+              ) : (
+                faltas.map(item => (
+                  <CardNotaFalta 
+                    key={item.id} 
+                    item={item} 
+                    selecionado={itensSelecionados.has(item.id)} 
+                    onToggle={handleToggleItem} 
+                  />
+                ))
+              )}
+            </>
+          )}
 
-        {etapa === 2 && (
-          <>
-            {loadingFornecedores ? (
-              <p className="text-center text-gray-500 mt-10 text-sm font-medium">Buscando fornecedores compatíveis...</p>
-            ) : fornecedores.length === 0 ? (
-              <p className="text-center text-gray-500 mt-10 text-sm">Nenhum fornecedor encontrado para os setores selecionados.</p>
-            ) : (
-              fornecedores.map(forn => (
-                <CardFornecedor 
-                  key={forn.fornecedor_id} 
-                  fornecedor={forn} 
-                  selecionado={fornecedoresSelecionados.has(forn.fornecedor_id)} 
-                  onToggle={handleToggleFornecedor} 
-                />
-              ))
-            )}
-          </>
-        )}
-      </div>
+          {etapa === 2 && (
+            <>
+              {loadingFornecedores ? (
+                <p className="text-center text-gray-500 mt-10 text-sm font-medium">Buscando fornecedores compatíveis...</p>
+              ) : !fornecedores || fornecedores.length === 0 ? (
+                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum fornecedor encontrado para os setores selecionados.</p>
+              ) : (
+                fornecedores.map(forn => (
+                  <CardFornecedor 
+                    key={forn.fornecedor_id} 
+                    fornecedor={forn} 
+                    selecionado={fornecedoresSelecionados.has(forn.fornecedor_id)} // <-- RETORNANDO BOOLEANO PURO CONFORME EXIGIDO
+                    onToggle={handleToggleFornecedor} 
+                  />
+                ))
+              )}
+            </>
+          )}
+        </div>
 
-      {/* Bottom Bar Fixa */}
-      <div className="bg-white border-t p-4 sticky bottom-0 z-10 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <span className="text-xs text-gray-600 font-medium">
-          {etapa === 1 ? `${itensSelecionados.size} itens` : `${fornecedoresSelecionados.size} convites`}
-        </span>
-        
-        {etapa === 1 ? (
-          <button 
-            onClick={() => setEtapa(2)}
-            disabled={itensSelecionados.size === 0}
-            className="bg-[#09797a] text-white px-6 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50 transition-opacity"
-          >
-            Avançar
-          </button>
-        ) : (
-          <button 
-            onClick={handleDisparar}
-            disabled={fornecedoresSelecionados.size === 0 || salvando}
-            className="bg-[#09797a] text-white px-6 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50 transition-opacity flex items-center gap-2"
-          >
-            {salvando ? 'Processando...' : 'Disparar Cotação'}
-          </button>
-        )}
+        {/* BARRA DE BOTÕES ADAPTADA AO RODAPÉ DO EMBREAGUAGEM */}
+        <div className="pt-4 border-t border-gray-100 mt-auto flex justify-between items-center bg-white w-full">
+          <span className="text-xs text-gray-500 font-bold tracking-wide">
+            {etapa === 1 ? `${itensSelecionados.size} itens` : `${fornecedoresSelecionados.size} convites`}
+          </span>
+          
+          {etapa === 1 ? (
+            <button 
+              onClick={() => setEtapa(2)}
+              disabled={itensSelecionados.size === 0}
+              className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm"
+            >
+              Avançar
+            </button>
+          ) : (
+            <button 
+              onClick={handleDisparar}
+              disabled={fornecedoresSelecionados.size === 0 || salvando}
+              className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+            >
+              {salvando ? 'Processando...' : 'Disparar Cotação'}
+            </button>
+          )}
+        </div>
+
       </div>
     </div>
   );
