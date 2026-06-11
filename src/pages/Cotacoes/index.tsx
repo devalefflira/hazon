@@ -51,15 +51,28 @@ export default function Cotacoes({ onVoltarParaHome, usuarioLogado }: CotacoesPr
         ) : (
           <div className="flex flex-col gap-3">
             {historico.map((cotacao) => (
-              <div key={cotacao.id} className="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col gap-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[11px] text-gray-400 font-mono font-medium">ID: {cotacao.id.substring(0, 8)}...</span>
-                  <BadgeStatusCotacao status={cotacao.status as any} />
+              <div key={cotacao.id} className="p-4 bg-white rounded-3xl border border-gray-200 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-all">
+                {/* Topo do Card: Força quebra em telas ultra-pequenas se necessário */}
+                <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 pb-2">
+                  <span className="text-[11px] text-gray-500 font-mono font-bold tracking-wider">
+                    # {cotacao.id.substring(0, 8).toUpperCase()}
+                  </span>
+                  <div className="shrink-0">
+                    <BadgeStatusCotacao status={cotacao.status as any} />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <p className="text-sm font-bold text-gray-800">Comprador: {cotacao.usuarios?.nome || 'Não informado'}</p>
-                  <p className="text-xs text-gray-500">Itens vinculados: <span className="font-bold text-[#09797a]">{cotacao.itens_vinculados_count}</span></p>
-                  <p className="text-[10px] text-gray-400 mt-1">Abertura: {new Date(cotacao.created_at).toLocaleDateString('pt-BR')}</p>
+
+                {/* Corpo do Card: Informações Operacionais */}
+                <div className="flex flex-col gap-1 px-0.5">
+                  <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                    <span className="opacity-60 text-xs">👤</span> {cotacao.usuarios?.nome || 'Comprador'}
+                  </p>
+                  <p className="text-xs text-gray-600 font-medium flex items-center gap-1.5">
+                    <span className="opacity-60 text-xs">📦</span> Itens Vinculados: <span className="font-bold text-[#09797a] bg-[#09797a]/5 px-2 py-0.5 rounded-md">{cotacao.itens_vinculados_count}</span>
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-medium mt-1 flex justify-end">
+                    Abertura: {new Date(cotacao.created_at).toLocaleDateString('pt-BR')}
+                  </p>
                 </div>
               </div>
             ))}
