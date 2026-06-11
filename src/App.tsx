@@ -7,7 +7,8 @@ import Permissoes from './pages/Permissoes';
 import Fornecedores from './pages/Fornecedores';
 import Vendedores from './pages/Vendedores';
 import Produtos from './pages/Produtos';
-import Inventario from './pages/Inventario'; // Importação do novo módulo
+import Inventario from './pages/Inventario';
+import NotaFalta from './pages/NotaFalta';
 
 interface UsuarioLogado {
   id: string;
@@ -17,7 +18,7 @@ interface UsuarioLogado {
 }
 
 // Tipos de telas globais do sistema
-type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos' | 'inventario';
+type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos' | 'inventario' | 'nota-falta';
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -93,6 +94,15 @@ export default function App() {
 
     return (
       <Inventario
+        onVoltarParaHome={() => setTelaAtiva('home')}
+        usuarioLogado={usuario}
+      />
+    );
+  }
+
+  if (telaAtiva === 'nota-falta') {
+    return (
+      <NotaFalta
         onVoltarParaHome={() => setTelaAtiva('home')}
         usuarioLogado={usuario}
       />
