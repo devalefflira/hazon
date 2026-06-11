@@ -1,11 +1,12 @@
 import { supabase } from '../../../lib/supabaseClient';
-import {
+import type {
   ItemFaltaCotacaoDTO,
   FornecedorSugeridoDTO,
   CotacaoMestre,
   CriarCotacaoPayload,
   SubmeterRespostaFornecedorPayload,
-  ConcluirCotacaoPayload
+  ConcluirCotacaoPayload,
+  CotacaoMestreRegistro
 } from '../types/cotacoes.types';
 
 export const cotacoesService = {
@@ -162,7 +163,7 @@ export const cotacoesService = {
       const ids = payload.itens_ganhadores.map(i => i.resposta_item_id);
       await supabase.from('cotacoes_respostas_itens').update({ ganhou_item: true }).in('id', ids);
     }
-  }
+  },
 
   async listarHistoricoCotacoes(): Promise<CotacaoMestreRegistro[]> {
     const { data, error } = await supabase
