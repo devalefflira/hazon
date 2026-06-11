@@ -1,4 +1,4 @@
-import { CotacaoStatus, StatusNotaFalta } from '../types/cotacoes.types';
+import type { CotacaoStatus, StatusNotaFalta } from '../types/cotacoes.types';
 
 interface BadgeStatusCotacaoProps {
   status: CotacaoStatus | StatusNotaFalta;

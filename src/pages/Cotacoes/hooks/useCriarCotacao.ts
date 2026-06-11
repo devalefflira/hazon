@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cotacoesService } from '../services/cotacoesService';
-import { CriarCotacaoPayload } from '../types/cotacoes.types';
+import type { CriarCotacaoPayload } from '../types/cotacoes.types';
 
 export function useCriarCotacao() {
   const [loading, setLoading] = useState(false);

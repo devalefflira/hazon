@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { cotacoesService } from '../services/cotacoesService';
-import { FornecedorSugeridoDTO } from '../types/cotacoes.types';
+import type { FornecedorSugeridoDTO } from '../types/cotacoes.types';
 
 export function useFornecedoresSugeridos(setoresIds: string[]) {
   const [fornecedores, setFornecedores] = useState<FornecedorSugeridoDTO[]>([]);

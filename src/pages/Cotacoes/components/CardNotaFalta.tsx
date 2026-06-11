@@ -1,4 +1,4 @@
-import { ItemFaltaCotacaoDTO } from '../types/cotacoes.types';
+import type { ItemFaltaCotacaoDTO } from '../types/cotacoes.types';
 import { BadgeStatusCotacao } from './BadgeStatusCotacao';
 
 interface CardNotaFaltaProps {

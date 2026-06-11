@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cotacoesService } from '../services/cotacoesService';
-import { ItemFaltaCotacaoDTO } from '../types/cotacoes.types';
+import type { ItemFaltaCotacaoDTO } from '../types/cotacoes.types';
 
 export function useFaltasPendentes() {
   const [faltas, setFaltas] = useState<ItemFaltaCotacaoDTO[]>([]);

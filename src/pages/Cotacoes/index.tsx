@@ -1,4 +1,3 @@
-// Arquivo: src/pages/Cotacoes/index.tsx
 import { useState, useEffect } from 'react';
 import NovaCotacao from './NovaCotacao';
 import { cotacoesService } from './services/cotacoesService';
@@ -58,7 +57,7 @@ export default function Cotacoes({ onVoltarParaHome, usuarioLogado }: CotacoesPr
                   <BadgeStatusCotacao status={cotacao.status as any} />
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <p className="text-sm font-bold text-gray-800">Comprador: {cotacao.usuarios?.nome || 'Comprador'}</p>
+                  <p className="text-sm font-bold text-gray-800">Comprador: {cotacao.usuarios?.nome || 'Não informado'}</p>
                   <p className="text-xs text-gray-500">Itens vinculados: <span className="font-bold text-[#09797a]">{cotacao.itens_vinculados_count}</span></p>
                   <p className="text-[10px] text-gray-400 mt-1">Abertura: {new Date(cotacao.created_at).toLocaleDateString('pt-BR')}</p>
                 </div>

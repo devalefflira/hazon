@@ -1,4 +1,4 @@
-import { FornecedorSugeridoDTO } from '../types/cotacoes.types';
+import type { FornecedorSugeridoDTO } from '../types/cotacoes.types';
 
 interface CardFornecedorProps {
   fornecedor: FornecedorSugeridoDTO;
