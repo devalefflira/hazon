@@ -2,7 +2,6 @@ import { supabase } from '../../../lib/supabaseClient';
 import type {
   ItemFaltaCotacaoDTO,
   FornecedorSugeridoDTO,
-  CotacaoMestre,
   CriarCotacaoPayload,
   SubmeterRespostaFornecedorPayload,
   ConcluirCotacaoPayload,
@@ -179,13 +178,19 @@ export const cotacoesService = {
 
     if (error) throw error;
 
-    return (data || []).map((item: any) => ({
-      id: item.id,
-      status: item.status,
-      created_at: item.created_at,
-      usuarios: { nome: item.usuarios?.nome || 'Comprador' },
-      itens_vinculados_count: item.cotacao_itens_vinculados?.[0]?.count || 0
-    }));
+    return (data || []).map((item: any) => {
+      // Extração 100% segura e imune a checagens de propriedades estritas do TS
+      const vinculos = item['cotacao_itens_vinculados'];
+      const contagem = Array.isArray(vinculos) && vinculos[0] ? vinculos[0].count : 0;
+
+      return {
+        id: item.id,
+        status: item.status,
+        created_at: item.created_at,
+        usuarios: { nome: item.usuarios?.nome || 'Comprador' },
+        itens_vinculados_count: Number(contagem)
+      };
+    });
   }
 
 };
