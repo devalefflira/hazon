@@ -9,6 +9,7 @@ import Vendedores from './pages/Vendedores';
 import Produtos from './pages/Produtos';
 import Inventario from './pages/Inventario';
 import NotaFalta from './pages/NotaFalta';
+import Cotacoes from './pages/Cotacoes';
 
 interface UsuarioLogado {
   id: string;
@@ -18,7 +19,7 @@ interface UsuarioLogado {
 }
 
 // Tipos de telas globais do sistema
-type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos' | 'inventario' | 'nota-falta';
+type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos' | 'inventario' | 'nota-falta' | 'cotacoes';
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -62,8 +63,8 @@ export default function App() {
         onNavegarParaVendedores={() => setTelaAtiva('vendedores')}
         onNavegarParaProdutos={() => setTelaAtiva('produtos')}
         onNavegarParaInventario={() => setTelaAtiva('inventario')}
-        // CORRIGIDO: Injetada a propriedade reativa para ligar o clique do botão ao roteador global
         onNavegarParaNotaFalta={() => setTelaAtiva('nota-falta')}
+        onNavegarParaCotacoes={() => setTelaAtiva('cotacoes')}
       />
     );
   }
@@ -75,7 +76,33 @@ export default function App() {
   if (usuario && telaAtiva === 'fornecedores') return <Fornecedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
-  
+
+  // <-- NOVA ROTA DO MÓDULO DE COTAÇÕES
+  if (telaAtiva === 'cotacoes') {
+    if (!usuario) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+            <button
+              onClick={() => setTelaAtiva('login')}
+              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
+            >
+              Fazer Login
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <Cotacoes
+        onVoltarParaHome={() => setTelaAtiva('home')}
+        usuarioLogado={usuario}
+      />
+    );
+  }
+
   // Rota do Inventário blindada contra concorrência de estado nulo
   if (telaAtiva === 'inventario') {
     if (!usuario) {
@@ -83,8 +110,8 @@ export default function App() {
         <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
           <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
             <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button 
-              onClick={() => setTelaAtiva('login')} 
+            <button
+              onClick={() => setTelaAtiva('login')}
               className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
             >
               Fazer Login
