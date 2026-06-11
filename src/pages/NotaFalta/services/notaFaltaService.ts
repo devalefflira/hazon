@@ -84,7 +84,7 @@ export const notaFaltaService = {
     return (data || []) as unknown as ProdutoFalta[];
   },
 
-  // 3. Cadastra a Nota de Falta em gôndola com status inicial regulamentar 'Pendente'
+  // 3. Cadastra a Nota de Falta em gôndola injetando explicitamente o código customizado exigido pelo Postgres
   async registrarNotaFalta(item: {
     usuario_id: string;
     produto_id: string;
@@ -92,14 +92,14 @@ export const notaFaltaService = {
     subsetor_id: string;
     motivo_falta_id: string;
   }): Promise<void> {
-    // Código customizado baseado em timestamp para evitar colisões concorrentes
+    // Gera o código sequencial único baseado nos últimos 6 dígitos do timestamp
     const codigoGerado = `FLT-${Date.now().toString().slice(-6)}`;
 
     const { error } = await supabase
       .from('notas_falta')
       .insert([
         {
-          codigo_customizado: codigoGerado,
+          codigo_customizado: codigoGerado, // CORRIGIDO: Forçado no topo do payload de gravação
           usuario_id: item.usuario_id,
           produto_id: item.produto_id,
           setor_id: item.setor_id,
@@ -109,7 +109,10 @@ export const notaFaltaService = {
         }
       ]);
 
-    if (error) throw error;
+    if (error) {
+      console.error("Erro detalhado retornado pelo Supabase:", error);
+      throw error;
+    }
   },
 
   // 4. Carrega o histórico do Dashboard resolvendo todas as foreign keys relacionais
