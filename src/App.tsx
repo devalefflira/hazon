@@ -14,7 +14,7 @@ interface UsuarioLogado {
   id: string;
   nome: string;
   perfil: string;
-  setor?: string; // Colocado como opcional com '?' para não quebrar caso o banco não retorne em algum teste
+  setor?: string;
 }
 
 // Tipos de telas globais do sistema
@@ -62,6 +62,8 @@ export default function App() {
         onNavegarParaVendedores={() => setTelaAtiva('vendedores')}
         onNavegarParaProdutos={() => setTelaAtiva('produtos')}
         onNavegarParaInventario={() => setTelaAtiva('inventario')}
+        // CORRIGIDO: Injetada a propriedade reativa para ligar o clique do botão ao roteador global
+        onNavegarParaNotaFalta={() => setTelaAtiva('nota-falta')}
       />
     );
   }
@@ -100,6 +102,7 @@ export default function App() {
     );
   }
 
+  // Rota da Nota de Falta
   if (telaAtiva === 'nota-falta') {
     return (
       <NotaFalta
