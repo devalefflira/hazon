@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import NovaCotacao from './NovaCotacao';
 import { cotacoesService } from './services/cotacoesService';
-import { CotacaoMestreRegistro } from './types/cotacoes.types';
+import type { CotacaoMestreRegistro } from './types/cotacoes.types';
 import { BadgeStatusCotacao } from './components/BadgeStatusCotacao';
 
 interface CotacoesProps {
@@ -22,7 +22,7 @@ export default function Cotacoes({ onVoltarParaHome, usuarioLogado }: CotacoesPr
       setLoading(true);
       cotacoesService.listarHistoricoCotacoes()
         .then(setHistorico)
-        .catch(err => console.error('Erro ao listar cotações:', err))
+        .catch((err: any) => console.error('Erro ao listar cotações:', err))
         .finally(() => setLoading(false));
     }
   }, [view]);

@@ -23,7 +23,7 @@ export const cotacoesService = {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    
+
     return (data || []).map((item: any) => ({
       id: item.id,
       codigo_customizado: item.codigo_customizado,
@@ -163,4 +163,28 @@ export const cotacoesService = {
       await supabase.from('cotacoes_respostas_itens').update({ ganhou_item: true }).in('id', ids);
     }
   }
+
+  async listarHistoricoCotacoes(): Promise<CotacaoMestreRegistro[]> {
+    const { data, error } = await supabase
+      .from('cotacoes_mestre')
+      .select(`
+        id,
+        status,
+        created_at,
+        usuarios:comprador_id ( nome ),
+        cotacao_itens_vinculados ( count )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      status: item.status,
+      created_at: item.created_at,
+      usuarios: { nome: item.usuarios?.nome || 'Comprador' },
+      itens_vinculados_count: item.cotacao_itens_vinculados?.[0]?.count || 0
+    }));
+  }
+
 };
