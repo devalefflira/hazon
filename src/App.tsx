@@ -77,7 +77,7 @@ export default function App() {
   if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
 
-  // <-- NOVA ROTA DO MÓDULO DE COTAÇÕES
+  // ROTA DO MÓDULO DE COTAÇÕES
   if (telaAtiva === 'cotacoes') {
     if (!usuario) {
       return (

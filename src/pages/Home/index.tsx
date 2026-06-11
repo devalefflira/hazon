@@ -31,7 +31,8 @@ interface HomeProps {
   onNavegarParaVendedores: () => void;
   onNavegarParaProdutos: () => void;
   onNavegarParaInventario: () => void;
-  onNavegarParaNotaFalta?: () => void; // CORRIGIDO: Injetada a propriedade reativa de controle do módulo
+  onNavegarParaNotaFalta?: () => void;
+  onNavegarParaCotacoes: () => void;
 }
 
 export default function Home({
@@ -45,7 +46,8 @@ export default function Home({
   onNavegarParaVendedores,
   onNavegarParaProdutos,
   onNavegarParaInventario,
-  onNavegarParaNotaFalta
+  onNavegarParaNotaFalta,
+  onNavegarParaCotacoes,
 }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
@@ -150,8 +152,9 @@ export default function Home({
       onNavegarParaProdutos();
     } else if (label === 'Inventário') {
       onNavegarParaInventario();
+    } else if (label === 'Cotações') {
+      onNavegarParaCotacoes();         
     } else if (label === 'Nota de Falta') {
-      // CORRIGIDO: Vinculada a navegação real e reativa para abrir o módulo sem cair no alert
       if (onNavegarParaNotaFalta) {
         onNavegarParaNotaFalta();
       } else {

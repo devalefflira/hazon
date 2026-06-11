@@ -73,6 +73,14 @@ export interface RespostaFornecedorDTO {
   preco_ofertado: number;
 }
 
+export interface CotacaoMestreRegistro {
+  id: string;
+  status: CotacaoStatus;
+  created_at: string;
+  usuarios: { nome: string };
+  itens_vinculados_count: number;
+}
+
 // ---------------------------------------------------------
 // 3. Payloads de Mutação (Input para os Services)
 // ---------------------------------------------------------
