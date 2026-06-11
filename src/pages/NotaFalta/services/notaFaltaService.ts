@@ -84,7 +84,7 @@ export const notaFaltaService = {
     return (data || []) as unknown as ProdutoFalta[];
   },
 
-  // 3. Cadastra a Nota de Falta em gôndola de forma direta e otimizada
+  // 3. Cadastra a Nota de Falta em gôndola garantindo o limite de tamanho character varying(6)
   async registrarNotaFalta(item: {
     usuario_id: string;
     produto_id: string;
@@ -92,10 +92,9 @@ export const notaFaltaService = {
     subsetor_id: string;
     motivo_falta_id: string;
   }): Promise<void> {
-    // Código customizado obrigatório (NOT NULL)
-    const codigoGerado = `FLT-${Date.now().toString().slice(-6)}`;
+    // CORRIGIDO: Gera um código identificador único de EXATAMENTE 6 caracteres para não estourar o limite (type 22001)
+    const codigoGerado = Date.now().toString().slice(-6);
 
-    // Monta o payload exatamente com as chaves correspondentes ao DDL do Postgres
     const payload = {
       codigo_customizado: codigoGerado,
       usuario_id: item.usuario_id,
