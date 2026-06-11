@@ -30,23 +30,21 @@ export const fornecedoresService = {
     return data;
   },
 
-  // Busca os vendedores vinculados a este fornecedor específico
-  // Nota: Deixamos a chamada pronta consumindo a futura tabela de vendedores
-  async buscarVendedoresAtrelados(fornecedorId: string) {
+  async obterPorId(id: string) {
     const { data, error } = await supabase
-      .from('vendedores')
-      .select('id, nome, telefone, email')
-      .eq('fornecedor_id', fornecedorId)
-      .order('nome', { ascending: true });
+      .from('fornecedores')
+      .select(`
+        *,
+        vendedores (
+          id,
+          nome,
+          telefone
+        )
+      `)
+      .eq('id', id)
+      .single();
 
-    // Tratamento sênior: Se a tabela 'vendedores' ainda não existir no banco,
-    // interceptamos o erro 404 e retornamos uma lista vazia temporária para não quebrar o app
-    if (error) {
-      if (error.code === 'PGRST116' || error.message?.includes('not found')) {
-        return [];
-      }
-      throw error;
-    }
+    if (error) throw error;
     return data;
   }
 };

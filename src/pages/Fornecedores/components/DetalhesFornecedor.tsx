@@ -36,8 +36,9 @@ export default function DetalhesFornecedor({ fornecedor, onFechar }: DetalhesPro
       async function carregarVendedores() {
         try {
           setLoading(true);
-          const dados = await fornecedoresService.buscarVendedoresAtrelados(fornecedor.id);
-          setVendedores(dados as Vendedor[] || []);
+          const dados: any = await fornecedoresService.obterPorId(fornecedor.id);
+          // Extrai o array de vendedores de dentro da propriedade do objeto retornado
+          setVendedores(dados?.vendedores || []); 
         } catch (err) {
           console.error(err);
         } finally {
