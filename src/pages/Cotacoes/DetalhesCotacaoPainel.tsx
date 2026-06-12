@@ -19,7 +19,7 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
       try {
         setLoading(true);
 
-        // 1. Busca os dados da cotação mestre e os itens vinculados
+        // 1. Busca os dados da cotação mestre
         const { data: mestre, error: errMestre } = await supabase
           .from('cotacoes_mestre')
           .select(`
@@ -32,11 +32,10 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
         if (errMestre) throw errMestre;
         setCotacaoMestre(mestre);
 
-        // 2. Busca os itens vinculados e suas respectivas notas de falta/produtos
+        // 2. Busca os itens vinculados
         const { data: itensVinculados, error: errItens } = await supabase
           .from('cotacao_itens_vinculados')
           .select(`
-            id,
             notas_falta (
               id,
               produtos ( id, descricao, codigo_barras )
@@ -56,11 +55,10 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
         
         const listaIdsVinculos = (vinculosForn || []).map(f => f.id);
 
-        // Se nenhum fornecedor foi vinculado ainda, não há o que buscar de respostas
         let respostas: any[] = [];
         if (listaIdsVinculos.length > 0) {
           const { data: resData, error: errRespostas } = await supabase
-            .from('cotacoes_respostas_itens')
+            .from('cotacoes_respostas_itens') // <-- AJUSTADO PARA O PLURAL CONFORME SEU BANCO DE DADOS
             .select(`
               id, produto_id, preco_ofertado,
               vinculo:cotacao_fornecedor_id (
@@ -79,7 +77,6 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
           const produto = iv.notas_falta?.produtos;
           if (!produto) return null;
 
-          // Filtra todas as propostas comerciais recebidas para este produto específico
           const propostasDoItem = (respostas || [])
             .filter((r: any) => r.produto_id === produto.id)
             .map((r: any) => ({
@@ -89,7 +86,7 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
               prazo: r.vinculo?.prazo_entrega_dias,
               pagamento: r.vinculo?.condicoes_pagamento
             }))
-            .sort((a, b) => a.preco - b.preco); // Ordena do menor preço para o maior
+            .sort((a, b) => a.preco - b.preco);
 
           return {
             id: produto.id,
@@ -112,7 +109,6 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
   }, [cotacaoId]);
 
   const handleConcluirRodada = async () => {
-    // Coleta o ganhador de cada item (o de menor preço que ficou no topo do sort)
     const itensGanhadores = produtosComPropostas
       .map(p => p.propostas[0])
       .filter(Boolean)
