@@ -10,6 +10,7 @@ import Produtos from './pages/Produtos';
 import Inventario from './pages/Inventario';
 import NotaFalta from './pages/NotaFalta';
 import Cotacoes from './pages/Cotacoes';
+import ResponderCotacao from './pages/Cotacoes/ResponderCotacao';
 
 interface UsuarioLogado {
   id: string;
@@ -38,6 +39,12 @@ export const MATRIZ_PERMISSOES: Record<string, string[]> = {
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>('login');
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenFornecedor = urlParams.get('token');
+
+  if (tokenFornecedor) {
+    return <ResponderCotacao token={tokenFornecedor} />;
+  }
 
   const handleLoginSuccess = (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);

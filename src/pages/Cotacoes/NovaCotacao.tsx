@@ -13,7 +13,7 @@ interface NovaCotacaoProps {
 }
 
 export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoProps) {
-  const [etapa, setEtapa] = useState<1 | 2 | 3>(1);
+  const [etapa, setEtapa] = useState<1 | 2 | 3>(1 as any);
   const [itensSelecionados, setItensSelecionados] = useState<Set<string>>(new Set());
   const [fornecedoresSelecionados, setFornecedoresSelecionados] = useState<Set<string>>(new Set());
   const [linksGerados, setLinksGerados] = useState<{ fornecedor: string; url: string }[]>([]);
@@ -105,7 +105,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
       }));
 
       setLinksGerados(linksMapped);
-      setEtapa(3 as any); // Move para a tela de Launchpad de links
+      setEtapa(3);
     } catch (error: any) {
       console.error('Erro no disparo da cotação:', error);
       alert(`⚠️ Falha ao disparar cotação: ${error.message || error}`);
@@ -118,16 +118,20 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
 
         {/* CABEÇALHO COM IDENTIDADE OPERACIONAL DO HAZON */}
         <div className="flex items-center gap-3 w-full mb-6 border-b border-gray-100 pb-4">
-          <button
-            onClick={etapa === 1 ? onVoltar : () => setEtapa(1)}
-            className="p-2 hover:bg-gray-50 rounded-full active:scale-90 transition-all text-[#09797a] font-bold text-xl"
-          >
-            ←
-          </button>
+          {etapa !== 3 && (
+            <button
+              onClick={() => setEtapa((prev) => (prev === 2 ? 1 : prev))}
+              className="p-2 hover:bg-gray-50 rounded-full active:scale-90 transition-all text-[#09797a] font-bold text-xl"
+            >
+              ←
+            </button>
+          )}
           <div>
             <h1 className="text-[#09797a] font-bold text-xl leading-tight">Nova Cotação</h1>
             <p className="text-[11px] text-[#e07a5f] font-bold mt-0.5">
-              Passo {etapa} de 2: {etapa === 1 ? 'Itens em Falta' : 'Fornecedores'}
+              {etapa === 3 && 'Links comerciais gerados'}
+              {etapa === 2 && 'Passo 2 de 2: Fornecedores'}
+              {etapa === 1 && 'Passo 1 de 2: Itens em Falta'}
             </p>
           </div>
         </div>
@@ -219,30 +223,31 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
         </div>
 
         {/* BARRA DE BOTÕES ADAPTADA AO RODAPÉ DO EMBREAGUAGEM */}
-        <div className="pt-4 border-t border-gray-100 mt-auto flex justify-between items-center bg-white w-full">
-          <span className="text-xs text-gray-500 font-bold tracking-wide">
-            {etapa === 1 ? `${itensSelecionados.size} itens` : `${fornecedoresSelecionados.size} convites`}
-          </span>
+        {etapa !== 3 && (
+          <div className="pt-4 border-t border-gray-100 mt-auto flex justify-between items-center bg-white w-full">
+            <span className="text-xs text-gray-500 font-bold tracking-wide">
+              {etapa === 1 ? `${itensSelecionados.size} itens` : `${fornecedoresSelecionados.size} convites`}
+            </span>
 
-          {etapa === 1 ? (
-            <button
-              onClick={() => setEtapa(2)}
-              disabled={itensSelecionados.size === 0}
-              className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm"
-            >
-              Avançar
-            </button>
-          ) : (
-            <button
-              onClick={handleDisparar}
-              disabled={fornecedoresSelecionados.size === 0 || salvando}
-              className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm flex items-center gap-2"
-            >
-              {salvando ? 'Processando...' : 'Disparar Cotação'}
-            </button>
-          )}
-        </div>
-
+            {etapa === 1 ? (
+              <button
+                onClick={() => setEtapa(2)}
+                disabled={itensSelecionados.size === 0}
+                className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm"
+              >
+                Avançar
+              </button>
+            ) : (
+              <button
+                onClick={handleDisparar}
+                disabled={fornecedoresSelecionados.size === 0 || salvando}
+                className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+              >
+                {salvando ? 'Processando...' : 'Disparar Cotação'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
