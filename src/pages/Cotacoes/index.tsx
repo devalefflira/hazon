@@ -43,7 +43,15 @@ export default function Cotacoes({ onVoltarParaHome, usuarioLogado }: CotacoesPr
       <DetalhesCotacaoPainel
         cotacaoId={idCotacaoSelecionada}
         onVoltar={() => setView('dashboard')}
-        onSucesso={() => setView('dashboard')}
+        onSucesso={() => {
+          setView('dashboard');
+          // Força o recarregamento do histórico para atualizar os badges reativos (Aberta -> Concluída)
+          if (typeof (window as any).carregarHistoricoCotacoes === 'function') {
+            (window as any).carregarHistoricoCotacoes();
+          } else {
+            window.location.reload(); // Fallback de atualização limpa
+          }
+        }}
       />
     );
   }

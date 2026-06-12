@@ -147,50 +147,75 @@ export const cotacoesService = {
       .eq('id', vinculo.id);
   },
 
-  async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<void> {
-    await supabase
+  async concluirCotacao(payload: {
+    cotacao_mestre_id: string;
+    cenario_escolhido: string;
+    justificativa_escolha: string;
+    itens_ganhadores: { resposta_item_id: string }[];
+  }) {
+    // 1. Atualiza o status da cotação mestre para Concluída
+    const { error: errMestre } = await supabase
       .from('cotacoes_mestre')
-      .update({
-        status: 'Concluída',
-        cenario_escolhido: payload.cenario_escolhido,
-        justificativa_escolha: payload.justificativa_escolha,
-        updated_at: new Date().toISOString()
-      })
+      .update({ status: 'Concluída' })
       .eq('id', payload.cotacao_mestre_id);
 
-    if (payload.itens_ganhadores.length > 0) {
-      const ids = payload.itens_ganhadores.map(i => i.resposta_item_id);
-      await supabase.from('cotacoes_respostas_itens').update({ ganhou_item: true }).in('id', ids);
+    if (errMestre) throw errMestre;
+
+    // 2. Grava a auditoria do cenário escolhido
+    const { data: cenario, error: errCenario } = await supabase
+      .from('cotacao_cenarios_comparativos')
+      .insert([
+        {
+          cotacao_mestre_id: payload.cotacao_mestre_id,
+          nome_cenario: payload.cenario_escolhido,
+          justificativa: payload.justificativa_escolha,
+        }
+      ])
+      .select('id')
+      .single();
+
+    if (errCenario) throw errCenario;
+
+    // 3. Vincula os itens ganhadores da rodada
+    const ganhadoresPayload = payload.itens_ganhadores.map(item => ({
+      cenario_id: cenario.id,
+      cotacao_resposta_item_id: item.resposta_item_id
+    }));
+
+    const { error: errGanhadores } = await supabase
+      .from('cotacao_historico_ganhadores')
+      .insert(ganhadoresPayload);
+
+    if (errGanhadores) throw errGanhadores;
+
+    // 4. Liberação das Notas de Falta
+    // Busca todos os itens que faziam parte desta cotação
+    const { data: itensVinculados } = await supabase
+      .from('cotacao_itens_vinculados')
+      .select('nota_falta_id')
+      .eq('cotacao_mestre_id', payload.cotacao_mestre_id);
+
+    const idsNotasFalta = (itensVinculados || []).map(iv => iv.nota_falta_id);
+
+    if (idsNotasFalta.length > 0) {
+      // Itens que de fato possuem resposta comercial são dados como finalizados
+      const { data: respondidos } = await supabase
+        .from('cotacoes_respostas_itens')
+        .select('produto_id')
+        .in('cotacao_fornecedor_id', (
+          await supabase
+            .from('cotacoes_fornecedores_vinculados')
+            .select('id')
+            .eq('cotacao_mestre_id', payload.cotacao_mestre_id)
+        ).data?.map(f => f.id) || []);
+
+      // Atualiza o status reativo no painel de Nota de Falta
+      await supabase
+        .from('notas_falta')
+        .update({ status_cotacao: 'Finalizada' })
+        .in('id', idsNotasFalta);
     }
-  },
 
-  async listarHistoricoCotacoes(): Promise<CotacaoMestreRegistro[]> {
-    const { data, error } = await supabase
-      .from('cotacoes_mestre')
-      .select(`
-        id,
-        status,
-        created_at,
-        usuarios:comprador_id ( nome ),
-        cotacao_itens_vinculados ( count )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return (data || []).map((item: any) => {
-      // Extração 100% segura e imune a checagens de propriedades estritas do TS
-      const vinculos = item['cotacao_itens_vinculados'];
-      const contagem = Array.isArray(vinculos) && vinculos[0] ? vinculos[0].count : 0;
-
-      return {
-        id: item.id,
-        status: item.status,
-        created_at: item.created_at,
-        usuarios: { nome: item.usuarios?.nome || 'Comprador' },
-        itens_vinculados_count: Number(contagem)
-      };
-    });
+    return true;
   }
-
 };

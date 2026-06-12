@@ -17,9 +17,15 @@ export default function ResponderCotacao({ token }: ResponderCotacaoProps) {
   useEffect(() => {
     cotacoesService.obterDetalhesCotacaoPorToken(token)
       .then((res: any) => {
+        // VERIFICAÇÃO DE SEGURANÇA COMERCIAL:
+        if (res.cotacoes_mestre?.status === 'Concluída') {
+          alert('⚠️ Esta cotação já foi encerrada pelo departamento de compras e não aceita mais propostas.');
+          setSucesso(true); // Redireciona direto para o Splash Screen de encerramento
+          return;
+        }
+
         setFornecedorNome(res.fornecedores?.razao_social || 'Fornecedor');
         
-        // Extrai os produtos vinculados de dentro da estrutura relacional
         const itensVinculados = res.cotacoes_mestre?.cotacao_itens_vinculados || [];
         const produtosMapeados = itensVinculados.map((iv: any) => iv.notas_falta?.produtos).filter(Boolean);
         
