@@ -170,7 +170,7 @@ export const cotacoesService = {
     }));
   },
 
-  async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<boolean> {
+ async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<boolean> {
     // 1. Atualiza o status da cotação mestre para Concluída
     const { error: errMestre } = await supabase
       .from('cotacoes_mestre')
@@ -179,9 +179,9 @@ export const cotacoesService = {
 
     if (errMestre) throw errMestre;
 
-    // 2. Grava a auditoria do cenário escolhido (Ajustado para o SINGULAR exato do seu banco)
+    // 2. Grava a auditoria do cenário escolhido (Ajustado para o nome real do banco: cotacao_cenarios)
     const { data: cenario, error: errCenario } = await supabase
-      .from('cotacao_cenarios_comparativos')
+      .from('cotacao_cenarios') // <-- NOME REAL DA TABELA NO SEU SCHEMA DO SUPABASE
       .insert([
         {
           cotacao_mestre_id: payload.cotacao_mestre_id,
@@ -194,10 +194,11 @@ export const cotacoesService = {
 
     if (errCenario) throw errCenario;
 
-    // 3. Vincula os itens ganhadores da rodada (Ajustado para o SINGULAR exato do seu banco)
+    // 3. Vincula os itens ganhadores da rodada
     const ganhadoresPayload = payload.itens_ganhadores.map(item => ({
       cenario_id: cenario.id,
-      cotacao_resposta_item_id: item.resposta_item_id
+      cotacao_resposta_item_id: item.resposta_item_id,
+      criado_em: new Date().toISOString() // Mantém a proteção contra a not-null constraint
     }));
 
     const { error: errGanhadores } = await supabase
