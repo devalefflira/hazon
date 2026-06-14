@@ -179,9 +179,9 @@ export const cotacoesService = {
 
     if (errMestre) throw errMestre;
 
-    // 2. Grava a auditoria do cenário escolhido (Ajustado para o nome real do banco: cotacao_cenarios)
+    // 2. Grava a auditoria do cenário escolhido (Sincronizado com o nome real do banco: cotacoes_cenarios)
     const { data: cenario, error: errCenario } = await supabase
-      .from('cotacao_cenarios') // <-- NOME REAL DA TABELA NO SEU SCHEMA DO SUPABASE
+      .from('cotacoes_cenarios') // <-- NOME REAL DA TABELA NO SEU SCHEMA DO SUPABASE
       .insert([
         {
           cotacao_mestre_id: payload.cotacao_mestre_id,
