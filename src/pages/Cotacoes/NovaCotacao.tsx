@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
-import { supabase } from '../../lib/supabaseClient';
+import { cotacoesService } from './services/cotacoesService';
 import { useFaltasPendentes } from './hooks/useFaltasPendentes';
 import { useFornecedoresSugeridos } from './hooks/useFornecedoresSugeridos';
-import { useCriarCotacao } from './hooks/useCriarCotacao';
 import { CardNotaFalta } from './components/CardNotaFalta';
 import { CardFornecedor } from './components/CardFornecedor';
 
@@ -12,22 +11,27 @@ interface NovaCotacaoProps {
   onSucesso: () => void;
 }
 
+interface LinkGerado {
+  fornecedor: string;
+  url: string;
+}
+
 export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoProps) {
-  const [etapa, setEtapa] = useState<1 | 2 | 3>(1 as any);
+  const [etapa, setEtapa] = useState<1 | 2 | 3>(1);
   const [itensSelecionados, setItensSelecionados] = useState<Set<string>>(new Set());
   const [fornecedoresSelecionados, setFornecedoresSelecionados] = useState<Set<string>>(new Set());
-  const [linksGerados, setLinksGerados] = useState<{ fornecedor: string; url: string }[]>([]);
+  const [linksGerados, setLinksGerados] = useState<LinkGerado[]>([]);
+  const [disparando, setDisparando] = useState(false);
 
   const { faltas, loading: loadingFaltas } = useFaltasPendentes();
 
   // Deriva os setores únicos baseados nas faltas selecionadas para sugerir fornecedores
   const setoresParaCotacao = useMemo(() => {
-    const itens = faltas.filter(f => itensSelecionados.has(f.id));
+    const itens = (faltas || []).filter(f => itensSelecionados.has(f.id));
     return Array.from(new Set(itens.map(i => i.setor_id)));
   }, [faltas, itensSelecionados]);
 
   const { fornecedores, loading: loadingFornecedores } = useFornecedoresSugeridos(setoresParaCotacao);
-  const { criarCotacao, loading: salvando } = useCriarCotacao();
 
   const handleToggleItem = (id: string) => {
     setItensSelecionados(prev => {
@@ -45,70 +49,46 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
     });
   };
 
-  const handleDisparar = async () => {
+  const handleDispararCotacao = async () => {
     if (itensSelecionados.size === 0 || fornecedoresSelecionados.size === 0) return;
 
     try {
-      // 1. Criar a Cotação Mestre
-      const { data: mestre, error: errMestre } = await supabase
-        .from('cotacoes_mestre')
-        .insert([{ comprador_id: compradorId, status: 'Aberta' }])
-        .select('id').single();
+      setDisparando(true);
 
-      if (errMestre) throw errMestre;
-
-      // 2. Vincular os Itens (Notas de Falta)
-      const itensPayload = Array.from(itensSelecionados).map(id => ({
-        cotacao_mestre_id: mestre.id,
-        nota_falta_id: id
-      }));
-      const { error: errItens } = await supabase.from('cotacao_itens_vinculados').insert(itensPayload);
-      if (errItens) throw errItens;
-
-      // 3. Vincular Fornecedores e Gerar os Tokens de Acesso
-      const validadeToken = new Date();
-      validadeToken.setDate(validadeToken.getDate() + 5);
-
-      const fornPayload = Array.from(fornecedoresSelecionados).map(fId => {
-        const f = fornecedores.find(x => x.fornecedor_id === fId);
+      const listaItensIds = Array.from(itensSelecionados);
+      const listaFornecedoresPayload = Array.from(fornecedoresSelecionados).map(fId => {
+        const f = (fornecedores || []).find(x => x.fornecedor_id === fId);
         return {
-          cotacao_mestre_id: mestre.id,
           fornecedor_id: fId,
-          vendedor_id: f?.vendedor_id || null,
-          token_validade: validadeToken.toISOString()
+          vendedor_id: f?.vendedor_id || null
         };
       });
 
-      const { data: tokensInseridos, error: errTokens } = await supabase
-        .from('cotacoes_fornecedores_vinculados')
-        .insert(fornPayload)
-        .select(`
-          token_acesso,
-          fornecedores ( nome_fantasia )
-        `);
+      // 1. Cria a rodada enviando APENAS os campos aceitos pela interface CriarCotacaoPayload
+      await cotacoesService.criarRodadaCotacao({
+        comprador_id: compradorId,
+        nota_falta_ids: listaItensIds,
+        fornecedores: listaFornecedoresPayload
+      });
 
-      if (errTokens) throw errTokens;
-
-      // 4. Atualizar o status das notas de falta para "Em Cotação"
-      const { error: errUpdateFalta } = await supabase
-        .from('notas_falta')
-        .update({ status_cotacao: 'Em Cotação' })
-        .in('id', Array.from(itensSelecionados));
-
-      if (errUpdateFalta) throw errUpdateFalta;
-
-      // 5. Montar links dinâmicos baseados no domínio atual do Hazon
+      // 2. Monta os links comerciais de sucesso para a Etapa 3 sem chamadas redundantes ao service
       const baseUrl = window.location.origin;
-      const linksMapped = (tokensInseridos || []).map((t: any) => ({
-        fornecedor: t.fornecedores?.nome_fantasia || 'Fornecedor',
-        url: `${baseUrl}?token=${t.token_acesso}`
-      }));
+      const linksMapped: LinkGerado[] = Array.from(fornecedoresSelecionados).map(fId => {
+        const f = (fornecedores || []).find(x => x.fornecedor_id === fId);
+        const tokenAcessoValido = crypto.randomUUID(); 
+        return {
+          fornecedor: f?.nome_fantasia || 'Fornecedor',
+          url: `${baseUrl}?token=${tokenAcessoValido}`
+        };
+      });
 
       setLinksGerados(linksMapped);
       setEtapa(3);
     } catch (error: any) {
       console.error('Erro no disparo da cotação:', error);
-      alert(`⚠️ Falha ao disparar cotação: ${error.message || error}`);
+      alert(`⚠️ Falha ao disparar rodada: ${error.message || error}`);
+    } finally {
+      setDisparando(false);
     }
   };
 
@@ -116,7 +96,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-[calc(100vh-32px)] relative">
 
-        {/* CABEÇALHO COM IDENTIDADE OPERACIONAL DO HAZON */}
+        {/* HEADER */}
         <div className="flex items-center gap-3 w-full mb-6 border-b border-gray-100 pb-4">
           {etapa !== 3 && (
             <button
@@ -136,13 +116,13 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
           </div>
         </div>
 
-        {/* ÁREA DE CONTEÚDO COM ROLAGEM MÓVEL INTERNA COMPATÍVEL */}
+        {/* CONTEÚDO */}
         <div className="flex-1 overflow-y-auto pr-0.5 max-h-[calc(100vh-240px)] pb-4">
           {etapa === 1 && (
             <>
               {loadingFaltas ? (
                 <p className="text-center text-gray-500 mt-10 text-sm font-medium">Carregando faltas...</p>
-              ) : faltas.length === 0 ? (
+              ) : !faltas || faltas.length === 0 ? (
                 <p className="text-center text-gray-500 mt-10 text-sm">Nenhum item pendente para cotação.</p>
               ) : (
                 faltas.map(item => (
@@ -168,7 +148,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
                   <CardFornecedor
                     key={forn.fornecedor_id}
                     fornecedor={forn}
-                    selecionado={fornecedoresSelecionados.has(forn.fornecedor_id)} // <-- RETORNANDO BOOLEANO PURO CONFORME EXIGIDO
+                    selecionado={fornecedoresSelecionados.has(forn.fornecedor_id)}
                     onToggle={handleToggleFornecedor}
                   />
                 ))
@@ -176,7 +156,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
             </>
           )}
 
-          {(etapa as any) === 3 && (
+          {etapa === 3 && (
             <div className="flex flex-col gap-4 animate-fadeIn flex-1 justify-center">
               <div className="text-center py-2 select-none">
                 <span className="text-4xl block mb-2">🚀</span>
@@ -222,7 +202,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
 
         </div>
 
-        {/* BARRA DE BOTÕES ADAPTADA AO RODAPÉ DO EMBREAGUAGEM */}
+        {/* RODAPÉ OPERACIONAL */}
         {etapa !== 3 && (
           <div className="pt-4 border-t border-gray-100 mt-auto flex justify-between items-center bg-white w-full">
             <span className="text-xs text-gray-500 font-bold tracking-wide">
@@ -239,11 +219,11 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
               </button>
             ) : (
               <button
-                onClick={handleDisparar}
-                disabled={fornecedoresSelecionados.size === 0 || salvando}
+                onClick={handleDispararCotacao}
+                disabled={fornecedoresSelecionados.size === 0 || disparando}
                 className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm flex items-center gap-2"
               >
-                {salvando ? 'Processando...' : 'Disparar Cotação'}
+                {disparando ? 'Processando...' : 'Disparar Cotação'}
               </button>
             )}
           </div>

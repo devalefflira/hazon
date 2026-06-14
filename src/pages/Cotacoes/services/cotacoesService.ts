@@ -92,7 +92,13 @@ export const cotacoesService = {
       cotacao_mestre_id: mestre.id, 
       nota_falta_id: id
     }));
-    await supabase.from('cotacoes_itens_vinculados').insert(itensPayload);
+    
+    // CORREÇÃO AQUI: Mudado de 'cotacao_itens_vinculados' para 'cotacoes_itens_vinculados'
+    const { error: errPivot } = await supabase
+      .from('cotacoes_itens_vinculados') 
+      .insert(itensPayload);
+
+    if (errPivot) throw errPivot;
 
     const validadeToken = new Date();
     validadeToken.setDate(validadeToken.getDate() + 5);
@@ -103,11 +109,19 @@ export const cotacoesService = {
       vendedor_id: f.vendedor_id,
       token_validade: validadeToken.toISOString()
     }));
-    await supabase.from('cotacoes_fornecedores_vinculados').insert(fornPayload);
+    
+    const { error: errForn } = await supabase
+      .from('cotacoes_fornecedores_vinculados')
+      .insert(fornPayload);
 
-    await supabase.from('notas_falta').update({ status_cotacao: 'Em Cotação' }).in('id', payload.nota_falta_ids);
+    if (errForn) throw errForn;
+
+    await supabase
+      .from('notas_falta')
+      .update({ status_cotacao: 'Em Cotação' })
+      .in('id', payload.nota_falta_ids);
   },
-
+  
   async obterDetalhesCotacaoPorToken(token: string) {
     const { data, error } = await supabase
       .from('cotacoes_fornecedores_vinculados')
