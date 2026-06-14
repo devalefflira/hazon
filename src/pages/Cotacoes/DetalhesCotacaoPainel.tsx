@@ -80,7 +80,7 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
           const propostasDoItem = (respostas || [])
             .filter((r: any) => r.produto_id === produto.id)
             .map((r: any) => ({
-              resposta_item_id: r.id,
+              resposta_item_id: r.id, // <-- AJUSTE FINAL: r.id é a chave primária correta exigida pela FK da tabela de ganhadores
               fornecedor: r.vinculo?.fornecedores?.nome_fantasia || 'Fornecedor',
               preco: r.preco_ofertado,
               prazo: r.vinculo?.prazo_entrega_dias,

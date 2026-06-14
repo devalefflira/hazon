@@ -41,15 +41,14 @@ export default function Cotacoes({ onVoltarParaHome, usuarioLogado }: CotacoesPr
   if (view === 'detalhes') {
     return (
       <DetalhesCotacaoPainel
-        cotacaoId={idCotacaoSelecionada}
+        cotacaoId={idCotacaoSelecionada || ''} // <-- FALLBACK SEGURO ADICIONADO
         onVoltar={() => setView('dashboard')}
         onSucesso={() => {
           setView('dashboard');
-          // Força o recarregamento do histórico para atualizar os badges reativos (Aberta -> Concluída)
           if (typeof (window as any).carregarHistoricoCotacoes === 'function') {
             (window as any).carregarHistoricoCotacoes();
           } else {
-            window.location.reload(); // Fallback de atualização limpa
+            window.location.reload();
           }
         }}
       />
