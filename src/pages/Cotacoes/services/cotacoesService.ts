@@ -170,44 +170,41 @@ export const cotacoesService = {
     }));
   },
 
- async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<boolean> {
-    // 1. Atualiza o status da cotação mestre para Concluída
+  async concluirCotacao(payload: {
+    cotacao_mestre_id: string;
+    cenario_escolhido: string;
+    justificativa_escolha: string;
+    itens_ganhadores: { resposta_item_id: string }[];
+  }): Promise<boolean> {
+    // 1. Atualiza o status e a auditoria diretamente na tabela mestre
     const { error: errMestre } = await supabase
       .from('cotacoes_mestre')
-      .update({ status: 'Concluída' })
+      .update({ 
+        status: 'Concluída',
+        cenario_escolhido: payload.cenario_escolhido,
+        justificativa_escolha: payload.justificativa_escolha,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', payload.cotacao_mestre_id);
 
     if (errMestre) throw errMestre;
 
-    // 2. Grava a auditoria do cenário escolhido (Sincronizado com o nome real do banco: cotacoes_cenarios)
-    const { data: cenario, error: errCenario } = await supabase
-      .from('cotacoes_cenarios') // <-- NOME REAL DA TABELA NO SEU SCHEMA DO SUPABASE
-      .insert([
-        {
-          cotacao_mestre_id: payload.cotacao_mestre_id,
-          nome_cenario: payload.cenario_escolhido,
-          justificativa: payload.justificativa_escolha,
-        }
-      ])
-      .select('id')
-      .single();
-
-    if (errCenario) throw errCenario;
-
-    // 3. Vincula os itens ganhadores da rodada
+    // 2. Grava os itens vencedores na nova tabela criada no banco de dados
     const ganhadoresPayload = payload.itens_ganhadores.map(item => ({
-      cenario_id: cenario.id,
+      cotacao_mestre_id: payload.cotacao_mestre_id,
       cotacao_resposta_item_id: item.resposta_item_id,
-      criado_em: new Date().toISOString() // Mantém a proteção contra a not-null constraint
+      cenario_escolhido: payload.cenario_escolhido,
+      justificativa: payload.justificativa_escolha,
+      criado_em: new Date().toISOString()
     }));
 
     const { error: errGanhadores } = await supabase
-      .from('cotacao_historico_ganhadores')
+      .from('cotacoes_ganhadores')
       .insert(ganhadoresPayload);
 
     if (errGanhadores) throw errGanhadores;
 
-    // 4. Liberação reativa das Notas de Falta
+    // 3. Liberação reativa das Notas de Falta para 'Finalizada'
     const { data: itensVinculados } = await supabase
       .from('cotacao_itens_vinculados')
       .select('nota_falta_id')
