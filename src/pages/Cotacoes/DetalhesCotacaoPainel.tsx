@@ -1,3 +1,4 @@
+// Arquivo: src/pages/Cotacoes/DetalhesCotacaoPainel.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { cotacoesService } from './services/cotacoesService';
@@ -8,10 +9,25 @@ interface DetalhesCotacaoPainelProps {
   onSucesso: () => void;
 }
 
+interface PropostaItem {
+  resposta_item_id: string;
+  fornecedor: string;
+  preco: number;
+  prazo: number;
+  pagamento: string;
+}
+
+interface ProdutoComProposta {
+  id: string;
+  descricao: string;
+  codigo_barras: string | null;
+  propostas: PropostaItem[];
+}
+
 export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }: DetalhesCotacaoPainelProps) {
   const [loading, setLoading] = useState(true);
   const [cotacaoMestre, setCotacaoMestre] = useState<any>(null);
-  const [produtosComPropostas, setProdutosComPropostas] = useState<any[]>([]);
+  const [produtosComPropostas, setProdutosComPropostas] = useState<ProdutoComProposta[]>([]);
   const [finalizando, setFinalizando] = useState(false);
 
   useEffect(() => {
@@ -19,7 +35,6 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
       try {
         setLoading(true);
 
-        // 1. Busca os dados da cotação mestre
         const { data: mestre, error: errMestre } = await supabase
           .from('cotacoes_mestre')
           .select(`
@@ -32,9 +47,8 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
         if (errMestre) throw errMestre;
         setCotacaoMestre(mestre);
 
-        // 2. Busca os itens vinculados
         const { data: itensVinculados, error: errItens } = await supabase
-          .from('cotacao_itens_vinculados')
+          .from('cotacoes_itens_vinculados')
           .select(`
             notas_falta (
               id,
@@ -45,7 +59,6 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
 
         if (errItens) throw errItens;
 
-        // 3. Busca os IDs dos vínculos de fornecedores de forma isolada e segura
         const { data: vinculosForn, error: errVinculos } = await supabase
           .from('cotacoes_fornecedores_vinculados')
           .select('id')
@@ -58,7 +71,7 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
         let respostas: any[] = [];
         if (listaIdsVinculos.length > 0) {
           const { data: resData, error: errRespostas } = await supabase
-            .from('cotacoes_respostas_itens') // <-- AJUSTADO PARA O PLURAL CONFORME SEU BANCO DE DADOS
+            .from('cotacoes_respostas_itens')
             .select(`
               id, produto_id, preco_ofertado,
               vinculo:cotacao_fornecedor_id (
@@ -72,34 +85,37 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
           respostas = resData || [];
         }
 
-        // 4. Montar o mapa agrupado por produto para análise lado a lado no celular
-        const mapaProdutos = (itensVinculados || []).map((iv: any) => {
-          const produto = iv.notas_falta?.produtos;
-          if (!produto) return null;
+        // 4. Montar o mapa agrupado por produto (Estrutura explícita à prova de falhas do build)
+        const mapaProdutos: ProdutoComProposta[] = [];
 
-          const propostasDoItem = (respostas || [])
-            .filter((r: any) => r.produto_id === produto.id)
-            .map((r: any) => ({
-              resposta_item_id: r.id, // <-- AJUSTE FINAL: r.id é a chave primária correta exigida pela FK da tabela de ganhadores
-              fornecedor: r.vinculo?.fornecedores?.nome_fantasia || 'Fornecedor',
-              preco: r.preco_ofertado,
-              prazo: r.vinculo?.prazo_entrega_dias,
-              pagamento: r.vinculo?.condicoes_pagamento
-            }))
-            .sort((a, b) => a.preco - b.preco);
+        if (itensVinculados && itensVinculados.length > 0) {
+          itensVinculados.forEach((iv: any) => {
+            const produto = iv.notas_falta?.produtos;
+            if (produto) {
+              const propostasDoItem: PropostaItem[] = (respostas || [])
+                .filter((r: any) => r.produto_id === produto.id)
+                .map((r: any) => ({
+                  resposta_item_id: String(r.id),
+                  fornecedor: String(r.vinculo?.fornecedores?.nome_fantasia || 'Fornecedor'),
+                  preco: Number(r.preco_ofertado || 0),
+                  prazo: Number(r.vinculo?.prazo_entrega_dias || 0),
+                  pagamento: String(r.vinculo?.condicoes_pagamento || 'A Combinar')
+                }))
+                .sort((a, b) => a.preco - b.preco);
 
-          return {
-            id: produto.id,
-            descricao: produto.descricao,
-            codigo_barras: produto.codigo_barras,
-            propostas: propostasDoItem
-          };
-        }).filter(Boolean);
+              mapaProdutos.push({
+                id: String(produto.id),
+                descricao: String(produto.descricao),
+                codigo_barras: produto.codigo_barras ? String(produto.codigo_barras) : null,
+                propostas: propostasDoItem
+              });
+            }
+          });
+        }
 
         setProdutosComPropostas(mapaProdutos);
       } catch (err) {
         console.error('Erro ao carregar auditoria:', err);
-        alert('Falha ao processar dados de propostas.');
       } finally {
         setLoading(false);
       }
@@ -111,7 +127,7 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
   const handleConcluirRodada = async () => {
     const itensGanhadores = produtosComPropostas
       .map(p => p.propostas[0])
-      .filter(Boolean)
+      .filter((prop): prop is PropostaItem => prop !== undefined)
       .map(p => ({ resposta_item_id: p.resposta_item_id }));
 
     if (itensGanhadores.length === 0) {
@@ -128,7 +144,7 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
         itens_ganhadores: itensGanhadores
       });
 
-      alert('🏆 Rodada concluída com sucesso! Ganhadores definidos e salvos.');
+      alert('🏆 Rodada concluída com sucesso! Ganhadores definidos e salvos na tabela definitiva.');
       onSucesso();
     } catch (err: any) {
       alert(`Erro ao fechar rodada: ${err.message}`);
@@ -173,7 +189,7 @@ export default function DetalhesCotacaoPainel({ cotacaoId, onVoltar, onSucesso }
                 {prod.propostas.length === 0 ? (
                   <p className="text-[11px] text-gray-400 italic font-medium py-1">Nenhuma resposta deste item ainda...</p>
                 ) : (
-                  prod.propostas.map((prop: any, idx: number) => (
+                  prod.propostas.map((prop: PropostaItem, idx: number) => (
                     <div 
                       key={idx} 
                       className={`p-3 rounded-2xl border flex flex-col gap-1 transition-all ${

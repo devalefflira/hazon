@@ -1,3 +1,4 @@
+// Arquivo: src/pages/Cotacoes/services/cotacoesService.ts
 import { supabase } from '../../../lib/supabaseClient';
 import type {
   ItemFaltaCotacaoDTO,
@@ -88,9 +89,10 @@ export const cotacoesService = {
     if (errMestre) throw errMestre;
 
     const itensPayload = payload.nota_falta_ids.map(id => ({
-      cotacao_mestre_id: mestre.id, nota_falta_id: id
+      cotacao_mestre_id: mestre.id, 
+      nota_falta_id: id
     }));
-    await supabase.from('cotacao_itens_vinculados').insert(itensPayload);
+    await supabase.from('cotacoes_itens_vinculados').insert(itensPayload);
 
     const validadeToken = new Date();
     validadeToken.setDate(validadeToken.getDate() + 5);
@@ -114,7 +116,7 @@ export const cotacoesService = {
         fornecedores ( razao_social ),
         cotacoes_mestre ( 
           status, 
-          cotacao_itens_vinculados ( 
+          cotacoes_itens_vinculados ( 
             notas_falta ( produtos ( id, descricao, codigo_barras, unidades_medida(sigla) ) ) 
           ) 
         )
@@ -147,14 +149,13 @@ export const cotacoesService = {
       .eq('id', vinculo.id);
   },
 
-  // Implementação da listagem do Histórico para suprir a demanda do index.tsx
   async listarHistoricoCotacoes(): Promise<CotacaoMestreRegistro[]> {
     const { data, error } = await supabase
       .from('cotacoes_mestre')
       .select(`
         id, status, created_at, comprador_id,
         usuarios:comprador_id ( nome ),
-        cotacao_itens_vinculados ( count )
+        cotacoes_itens_vinculados ( count )
       `)
       .order('created_at', { ascending: false });
 
@@ -166,17 +167,12 @@ export const cotacoesService = {
       created_at: registro.created_at,
       comprador_id: registro.comprador_id,
       usuarios: registro.usuarios,
-      itens_vinculados_count: registro.cotacao_itens_vinculados?.[0]?.count || 0
+      itens_vinculados_count: registro.cotacoes_itens_vinculados?.[0]?.count || 0
     }));
   },
 
-  async concluirCotacao(payload: {
-    cotacao_mestre_id: string;
-    cenario_escolhido: string;
-    justificativa_escolha: string;
-    itens_ganhadores: { resposta_item_id: string }[];
-  }): Promise<boolean> {
-    // 1. Atualiza o status e a auditoria diretamente na tabela mestre
+  async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<boolean> {
+    // 1. Atualiza o status e auditoria diretamente no registro mestre unificado
     const { error: errMestre } = await supabase
       .from('cotacoes_mestre')
       .update({ 
@@ -189,46 +185,27 @@ export const cotacoesService = {
 
     if (errMestre) throw errMestre;
 
-    // 2. Grava os itens vencedores na nova tabela criada no banco de dados
-    const ganhadoresPayload = payload.itens_ganhadores.map(item => ({
+    // 2. Grava os itens vencedores na nova tabela unificada e padronizada do banco
+    const listagemGanhadores = payload.itens_ganhadores.map(item => ({
       cotacao_mestre_id: payload.cotacao_mestre_id,
-      cotacao_resposta_item_id: item.resposta_item_id,
-      cenario_escolhido: payload.cenario_escolhido,
-      justificativa: payload.justificativa_escolha,
-      criado_em: new Date().toISOString()
+      cotacao_resposta_item_id: item.resposta_item_id
     }));
 
     const { error: errGanhadores } = await supabase
       .from('cotacoes_ganhadores')
-      .insert(ganhadoresPayload);
+      .insert(listagemGanhadores);
 
     if (errGanhadores) throw errGanhadores;
 
-    // 3. Liberação reativa das Notas de Falta para 'Finalizada'
+    // 3. Liberação reativa das Notas de Falta vinculadas para status 'Finalizada'
     const { data: itensVinculados } = await supabase
-      .from('cotacao_itens_vinculados')
+      .from('cotacoes_itens_vinculados')
       .select('nota_falta_id')
       .eq('cotacao_mestre_id', payload.cotacao_mestre_id);
 
     const idsNotasFalta = (itensVinculados || []).map(iv => iv.nota_falta_id);
 
     if (idsNotasFalta.length > 0) {
-      const { data: fornVinculados } = await supabase
-        .from('cotacoes_fornecedores_vinculados')
-        .select('id')
-        .eq('cotacao_mestre_id', payload.cotacao_mestre_id);
-
-      const idsForn = (fornVinculados || []).map(f => f.id);
-
-      if (idsForn.length > 0) {
-        const { data: respondidos } = await supabase
-          .from('cotacoes_respostas_itens')
-          .select('produto_id')
-          .in('cotacao_fornecedor_id', idsForn);
-
-        console.log('Itens consolidados com sucesso comerciais:', respondidos?.length || 0);
-      }
-
       await supabase
         .from('notas_falta')
         .update({ status_cotacao: 'Finalizada' })

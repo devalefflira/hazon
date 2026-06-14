@@ -105,7 +105,5 @@ export interface ConcluirCotacaoPayload {
   cotacao_mestre_id: string;
   cenario_escolhido: string;
   justificativa_escolha: string;
-  itens_ganhadores: {
-    resposta_item_id: string; // ID da resposta que ganhou
-  }[];
+  itens_ganhadores: { resposta_item_id: string }[];
 }
