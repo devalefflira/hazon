@@ -1,3 +1,4 @@
+// Arquivo: src/pages/Cotacoes/NovaCotacao.tsx
 import { useState, useMemo } from 'react';
 import { cotacoesService } from './services/cotacoesService';
 import { useFaltasPendentes } from './hooks/useFaltasPendentes';
@@ -25,7 +26,6 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
 
   const { faltas, loading: loadingFaltas } = useFaltasPendentes();
 
-  // Deriva os setores únicos baseados nas faltas selecionadas para sugerir fornecedores
   const setoresParaCotacao = useMemo(() => {
     const itens = (faltas || []).filter(f => itensSelecionados.has(f.id));
     return Array.from(new Set(itens.map(i => i.setor_id)));
@@ -64,14 +64,12 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
         };
       });
 
-      // 1. Cria a rodada enviando APENAS os campos aceitos pela interface CriarCotacaoPayload
       await cotacoesService.criarRodadaCotacao({
         comprador_id: compradorId,
         nota_falta_ids: listaItensIds,
         fornecedores: listaFornecedoresPayload
       });
 
-      // 2. Monta os links comerciais de sucesso para a Etapa 3 sem chamadas redundantes ao service
       const baseUrl = window.location.origin;
       const linksMapped: LinkGerado[] = Array.from(fornecedoresSelecionados).map(fId => {
         const f = (fornecedores || []).find(x => x.fornecedor_id === fId);
@@ -142,7 +140,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
               {loadingFornecedores ? (
                 <p className="text-center text-gray-500 mt-10 text-sm font-medium">Buscando fornecedores compatíveis...</p>
               ) : !fornecedores || fornecedores.length === 0 ? (
-                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum fornecedor encontrado para os setores selecionados.</p>
+                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum fornecedor encontrado.</p>
               ) : (
                 fornecedores.map(forn => (
                   <CardFornecedor
@@ -157,7 +155,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
           )}
 
           {etapa === 3 && (
-            <div className="flex flex-col gap-4 animate-fadeIn flex-1 justify-center">
+            <div className="flex flex-col gap-4 flex-1 justify-center">
               <div className="text-center py-2 select-none">
                 <span className="text-4xl block mb-2">🚀</span>
                 <h3 className="text-sm font-black text-gray-800 uppercase">Cotação Disparada!</h3>
@@ -174,7 +172,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(link.url);
-                          alert(`Link de "${link.fornecedor}" copiado com sucesso!`);
+                          alert(`Link de "${link.fornecedor}" copiado!`);
                         }}
                         className="text-[10px] bg-[#09797a] text-white font-bold px-3 py-1 rounded-lg active:scale-90 transition-all shadow-sm"
                       >
@@ -199,10 +197,9 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
               </button>
             </div>
           )}
-
         </div>
 
-        {/* RODAPÉ OPERACIONAL */}
+        {/* RODAPÉ */}
         {etapa !== 3 && (
           <div className="pt-4 border-t border-gray-100 mt-auto flex justify-between items-center bg-white w-full">
             <span className="text-xs text-gray-500 font-bold tracking-wide">
@@ -221,7 +218,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
               <button
                 onClick={handleDispararCotacao}
                 disabled={fornecedoresSelecionados.size === 0 || disparando}
-                className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+                className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm"
               >
                 {disparando ? 'Processando...' : 'Disparar Cotação'}
               </button>

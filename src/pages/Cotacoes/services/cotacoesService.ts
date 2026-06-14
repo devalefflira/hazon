@@ -10,6 +10,9 @@ import type {
 } from '../types/cotacoes.types';
 
 export const cotacoesService = {
+  /**
+   * Lista todas as Notas de Falta que ainda estão com status 'Pendente'
+   */
   async listarFaltasPendentes(): Promise<ItemFaltaCotacaoDTO[]> {
     const { data, error } = await supabase
       .from('notas_falta')
@@ -29,35 +32,51 @@ export const cotacoesService = {
       id: item.id,
       codigo_customizado: item.codigo_customizado,
       produto_id: item.produto_id,
-      produto_descricao: item.produtos?.descricao,
-      produto_codigo_barras: item.produtos?.codigo_barras,
+      produto_descricao: item.produtos?.descricao || 'Produto não encontrado',
+      produto_codigo_barras: item.produtos?.codigo_barras || null,
       setor_id: item.setor_id,
-      setor_nome: item.categorias_setores?.nome,
+      setor_nome: item.categorias_setores?.nome || 'Setor',
       subsetor_id: item.subsetor_id,
-      subsetor_nome: item.categorias_subsetores?.nome,
-      motivo_falta_descricao: item.motivos_falta?.descricao,
+      subsetor_nome: item.categorias_subsetores?.nome || 'Subsetor',
+      motivo_falta_descricao: item.motivos_falta?.descricao || 'Não informado',
       status_cotacao: item.status_cotacao,
-      data_registro: item.data_registro,
+      data_registro: item.data_registro
     }));
   },
 
+  /**
+   * Busca os fornecedores compatíveis com base no setor (categoria) selecionado
+   */
   async listarFornecedoresPorSetor(setorId: string): Promise<FornecedorSugeridoDTO[]> {
     if (!setorId) return [];
 
     const { data, error } = await supabase
       .from('vendedor_setores')
       .select(`
+        vendedor_id,
         vendedores:vendedor_id (
-          id, nome, telefone,
-          fornecedores:fornecedor_id ( id, razao_social, nome_fantasia, cnpj )
+          id,
+          nome,
+          telefone,
+          fornecedor_id,
+          fornecedores:fornecedor_id (
+            id,
+            razao_social,
+            nome_fantasia,
+            cnpj
+          )
         )
       `)
       .eq('categoria_id', setorId);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Erro na query de fornecedores por setor:', error);
+      throw error;
+    }
 
     const map = new Map<string, FornecedorSugeridoDTO>();
-    data?.forEach((item: any) => {
+    
+    (data || []).forEach((item: any) => {
       const vend = item.vendedores;
       const forn = vend?.fornecedores;
       if (forn && !map.has(forn.id)) {
@@ -76,29 +95,47 @@ export const cotacoesService = {
     return Array.from(map.values());
   },
 
+  /**
+   * Cria uma nova rodada de cotação de forma síncrona e ordenada no PostgreSQL
+   */
   async criarRodadaCotacao(payload: CriarCotacaoPayload): Promise<void> {
     if (!payload.nota_falta_ids.length || !payload.fornecedores.length) {
-      throw new Error('Itens e fornecedores são obrigatórios.');
+      throw new Error('Itens e fornecedores são obrigatórios para abrir uma rodada.');
     }
 
     const { data: mestre, error: errMestre } = await supabase
       .from('cotacoes_mestre')
-      .insert([{ comprador_id: payload.comprador_id, status: 'Aberta' }])
-      .select('id').single();
+      .insert([{ 
+        comprador_id: payload.comprador_id, 
+        status: 'Aberta',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select('id')
+      .single();
 
-    if (errMestre) throw errMestre;
+    if (errMestre) {
+      console.error('Erro ao criar cotacoes_mestre:', errMestre);
+      throw errMestre;
+    }
+
+    if (!mestre || !mestre.id) {
+      throw new Error('Falha crítica: O ID da cotação mestre não foi retornado pelo Supabase.');
+    }
 
     const itensPayload = payload.nota_falta_ids.map(id => ({
       cotacao_mestre_id: mestre.id, 
       nota_falta_id: id
     }));
     
-    // CORREÇÃO AQUI: Mudado de 'cotacao_itens_vinculados' para 'cotacoes_itens_vinculados'
-    const { error: errPivot } = await supabase
-      .from('cotacoes_itens_vinculados') 
+    const { error: errItens } = await supabase
+      .from('cotacoes_itens_vinculados')
       .insert(itensPayload);
 
-    if (errPivot) throw errPivot;
+    if (errItens) {
+      console.error('Erro ao vincular itens:', errItens);
+      throw errItens;
+    }
 
     const validadeToken = new Date();
     validadeToken.setDate(validadeToken.getDate() + 5);
@@ -106,7 +143,7 @@ export const cotacoesService = {
     const fornPayload = payload.fornecedores.map(f => ({
       cotacao_mestre_id: mestre.id,
       fornecedor_id: f.fornecedor_id,
-      vendedor_id: f.vendedor_id,
+      vendedor_id: f.vendedor_id || null,
       token_validade: validadeToken.toISOString()
     }));
     
@@ -114,55 +151,121 @@ export const cotacoesService = {
       .from('cotacoes_fornecedores_vinculados')
       .insert(fornPayload);
 
-    if (errForn) throw errForn;
+    if (errForn) {
+      console.error('Erro ao vincular fornecedores:', errForn);
+      throw errForn;
+    }
 
-    await supabase
+    const { error: errUpdateFalta } = await supabase
       .from('notas_falta')
       .update({ status_cotacao: 'Em Cotação' })
       .in('id', payload.nota_falta_ids);
+
+    if (errUpdateFalta) {
+      console.error('Erro ao atualizar notas_falta:', errUpdateFalta);
+      throw errUpdateFalta;
+    }
   },
-  
-  async obterDetalhesCotacaoPorToken(token: string) {
-    const { data, error } = await supabase
+
+  /**
+   * Obtém de forma linear os dados da cotação mestre e os produtos vinculados via token
+   */
+  async obtenerDetalhesCotacaoPorToken(token: string) {
+    if (!token) throw new Error('Token de acesso não fornecido.');
+
+    const { data: vinculo, error: errVinculo } = await supabase
       .from('cotacoes_fornecedores_vinculados')
       .select(`
-        id, cotacao_mestre_id, prazo_entrega_dias, condicoes_pagamento, respondido_em,
-        fornecedores ( razao_social ),
-        cotacoes_mestre ( 
-          status, 
-          cotacoes_itens_vinculados ( 
-            notas_falta ( produtos ( id, descricao, codigo_barras, unidades_medida(sigla) ) ) 
-          ) 
-        )
+        id,
+        cotacao_mestre_id,
+        prazo_entrega_dias,
+        condicoes_pagamento,
+        respondido_em,
+        fornecedores:fornecedor_id ( razao_social, nome_fantasia )
       `)
       .eq('token_acesso', token)
       .single();
 
-    if (error || !data) throw new Error('Token inválido ou expirado.');
-    return data;
+    if (errVinculo || !vinculo) {
+      console.error('Erro ao validar token comercial:', errVinculo);
+      throw new Error('Link de acesso inválido ou expirado.');
+    }
+
+    const { data: itensVinculados, error: errItens } = await supabase
+      .from('cotacoes_itens_vinculados')
+      .select(`
+        notas_falta:nota_falta_id (
+          id,
+          produtos:produto_id (
+            id,
+            descricao,
+            codigo_barras,
+            unidades_medida:unidade_medida_id ( sigla )
+          )
+        )
+      `)
+      .eq('cotacao_mestre_id', vinculo.cotacao_mestre_id);
+
+    if (errItens) {
+      console.error('Erro ao buscar itens vinculados da cotação:', errItens);
+      throw errItens;
+    }
+
+    const itensFormatados = (itensVinculados || []).map((iv: any) => {
+      const prod = iv.notas_falta?.produtos;
+      return {
+        id: String(prod?.id || ''),
+        descricao: String(prod?.descricao || 'Produto não identificado'),
+        codigo_barras: prod?.codigo_barras ? String(prod.codigo_barras) : null,
+        unidade_medida: String(prod?.unidades_medida?.sigla || 'UN')
+      };
+    }).filter(item => item.id !== '');
+
+    return {
+      vinculo_id: vinculo.id,
+      cotacao_mestre_id: vinculo.cotacao_mestre_id,
+      respondido_em: vinculo.respondido_em,
+      prazo_entrega_dias: vinculo.prazo_entrega_dias || '',
+      condicoes_pagamento: vinculo.condicoes_pagamento || '',
+      fornecedor_nome: vinculo.fornecedores?.nome_fantasia || vinculo.fornecedores?.razao_social || 'Fornecedor',
+      itens: itensFormatados as any[] // Força o cast para evitar conflito com contratos globais desatualizados
+    };
   },
 
+  /**
+   * Registra a resposta com preços de cada item enviado pelo painel externo do vendedor
+   */
   async registrarRespostaFornecedor(payload: SubmeterRespostaFornecedorPayload): Promise<void> {
-    const vinculo = await this.obterDetalhesCotacaoPorToken(payload.token_acesso);
-    if (vinculo.respondido_em) throw new Error('Cotação já respondida.');
+    const vinculo = await this.obtenerDetalhesCotacaoPorToken(payload.token_acesso);
+    if (vinculo.respondido_em) throw new Error('Esta cotação já foi respondida previamente.');
 
     const respostasPayload = payload.respostas.map(r => ({
-      cotacao_fornecedor_id: vinculo.id,
+      cotacao_fornecedor_id: vinculo.vinculo_id,
       produto_id: r.produto_id,
       preco_ofertado: r.preco_ofertado
     }));
 
-    await supabase.from('cotacoes_respostas_itens').insert(respostasPayload);
-    await supabase
+    const { error: errRespostas } = await supabase
+      .from('cotacoes_respostas_itens')
+      .insert(respostasPayload);
+
+    if (errRespostas) throw errRespostas;
+
+    const { error: errVinculoUpdate } = await supabase
       .from('cotacoes_fornecedores_vinculados')
       .update({
         prazo_entrega_dias: payload.prazo_entrega_dias,
         condicoes_pagamento: payload.condicoes_pagamento,
         respondido_em: new Date().toISOString()
       })
-      .eq('id', vinculo.id);
+      .eq('id', vinculo.vinculo_id);
+
+    if (errVinculoUpdate) throw errVinculoUpdate;
   },
 
+  /**
+   * Lista o histórico completo das rodadas abertas para o dashboard do comprador
+   */
   async listarHistoricoCotacoes(): Promise<CotacaoMestreRegistro[]> {
     const { data, error } = await supabase
       .from('cotacoes_mestre')
@@ -180,13 +283,15 @@ export const cotacoesService = {
       status: registro.status,
       created_at: registro.created_at,
       comprador_id: registro.comprador_id,
-      usuarios: registro.usuarios,
+      usuarios: registro.usuarios ? { nome: registro.usuarios.nome } : null,
       itens_vinculados_count: registro.cotacoes_itens_vinculados?.[0]?.count || 0
     }));
   },
 
+  /**
+   * Fecha a rodada, grava os itens vencedores em cotacoes_ganhadores e finaliza as faltas
+   */
   async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<boolean> {
-    // 1. Atualiza o status e auditoria diretamente no registro mestre unificado
     const { error: errMestre } = await supabase
       .from('cotacoes_mestre')
       .update({ 
@@ -199,7 +304,6 @@ export const cotacoesService = {
 
     if (errMestre) throw errMestre;
 
-    // 2. Grava os itens vencedores na nova tabela unificada e padronizada do banco
     const listagemGanhadores = payload.itens_ganhadores.map(item => ({
       cotacao_mestre_id: payload.cotacao_mestre_id,
       cotacao_resposta_item_id: item.resposta_item_id
@@ -211,7 +315,6 @@ export const cotacoesService = {
 
     if (errGanhadores) throw errGanhadores;
 
-    // 3. Liberação reativa das Notas de Falta vinculadas para status 'Finalizada'
     const { data: itensVinculados } = await supabase
       .from('cotacoes_itens_vinculados')
       .select('nota_falta_id')
