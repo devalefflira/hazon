@@ -1,3 +1,4 @@
+// Arquivo: src/pages/Home/index.tsx
 import { useState, useEffect } from 'react';
 
 import iconUserLogin from '../../assets/icones/icon-user-login.svg';
@@ -35,7 +36,8 @@ interface HomeProps {
   onNavegarParaPedidos: () => void;
   onNavegarParaTarefas: () => void;
   onNavegarParaAvarias: () => void;
-  onNavegarParaConfCega: () => void; // Adicionado ao contrato da Home
+  onNavegarParaConfCega: () => void;
+  onNavegarParaRelatorios: () => void; // <-- CONTRATO INJETADO NA HOME
 }
 
 export default function Home({
@@ -54,7 +56,8 @@ export default function Home({
   onNavegarParaPedidos,
   onNavegarParaTarefas,
   onNavegarParaAvarias,
-  onNavegarParaConfCega, // Desestruturação realizada
+  onNavegarParaConfCega,
+  onNavegarParaRelatorios, // <-- DESESTRUTURADO AQUI
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -91,13 +94,9 @@ export default function Home({
       setDataHora(formatador.format(agora));
 
       const hora = agora.getHours();
-      if (hora >= 5 && hora < 12) {
-        setSaudacao('Bom dia');
-      } else if (hora >= 12 && hora < 18) {
-        setSaudacao('Boa tarde');
-      } else {
-        setSaudacao('Boa noite');
-      }
+      if (hora >= 5 && hora < 12) setSaudacao('Bom dia');
+      else if (hora >= 12 && hora < 18) setSaudacao('Boa tarde');
+      else setSaudacao('Boa noite');
     };
 
     atualizarRelogio();
@@ -143,7 +142,8 @@ export default function Home({
     else if (label === 'Pedidos') onNavegarParaPedidos();
     else if (label === 'Tarefas') onNavegarParaTarefas();
     else if (label === 'Avarias') onNavegarParaAvarias();
-    else if (label === 'Conf. Cega') onNavegarParaConfCega(); // Rota disparadora plugada
+    else if (label === 'Conf. Cega') onNavegarParaConfCega();
+    else if (label === 'Relatórios') onNavegarParaRelatorios(); // <-- ROTA DISPARADA
     else if (label === 'Nota de Falta') {
       if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
     } else {
@@ -155,7 +155,7 @@ export default function Home({
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col">
 
-        {/* CABEÇALHO DINÂMICO */}
+        {/* CABEÇALHO */}
         <div className="flex justify-between items-center w-full mb-6">
           <div className="flex items-center">
             <img src={iconUserLogin} alt="Usuário Logado" className="w-12 h-12 mr-3 select-none" />
@@ -164,34 +164,31 @@ export default function Home({
               <span className="text-[#e07a5f] font-medium text-sm leading-tight">{perfilUsuario}</span>
             </div>
           </div>
-
-          <button onClick={onLogout} className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all" title="Sair do Sistema">
+          <button onClick={onLogout} className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all">
             <img src={iconLogout} alt="Sair" className="w-8 h-8" />
           </button>
         </div>
 
-        {/* SAUDAÇÃO E DATA/HORA */}
+        {/* SUBTITLE */}
         <div className="flex justify-between items-center w-full text-[#545454] font-medium text-xs mb-6 px-1">
           <span>{saudacao}. O que vamos fazer agora?</span>
           <span>{dataHora}</span>
         </div>
 
-        {/* GRADE DE BOTÕES */}
+        {/* MESH GRID */}
         <div className="grid grid-cols-3 gap-3 w-full overflow-y-auto max-h-[calc(100vh-160px)] pr-0.5">
-          {menuItems.map((item, index) => {
-            return (
-              <button
-                key={index}
-                onClick={() => handleModuleClick(item.label)}
-                className="bg-[#09797a] rounded-3xl aspect-square flex flex-col justify-center items-center p-2 hover:bg-[#075f60] active:scale-95 transition-all shadow-sm"
-              >
-                <img src={item.icon} alt={item.label} className="w-10 h-10 object-contain mb-2" />
-                <span className="text-white text-[11px] font-bold tracking-wide text-center leading-tight">
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
+          {menuItems.map((item, index) => (
+            <button
+              key={index}
+              onClick={() => handleModuleClick(item.label)}
+              className="bg-[#09797a] rounded-3xl aspect-square flex flex-col justify-center items-center p-2 hover:bg-[#075f60] active:scale-95 transition-all shadow-sm"
+            >
+              <img src={item.icon} alt={item.label} className="w-10 h-10 object-contain mb-2" />
+              <span className="text-white text-[11px] font-bold tracking-wide text-center leading-tight">
+                {item.label}
+              </span>
+            </button>
+          ))}
         </div>
 
       </div>

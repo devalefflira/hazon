@@ -1,3 +1,4 @@
+// Arquivo: src/App.tsx
 import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -15,7 +16,8 @@ import { Pedidos } from './pages/Pedidos';
 import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
 import { Tarefas } from './pages/Tarefas';
 import Avarias from './pages/Avarias';
-import { ConfCega } from './pages/ConfCega'; // CORREÇÃO: Importação oficial adicionada
+import { ConfCega } from './pages/ConfCega';
+import Relatorios from './pages/Relatorios'; // <-- IMPORTAÇÃO INJETADA
 
 interface UsuarioLogado {
   id: string;
@@ -41,7 +43,8 @@ type TelaAtiva =
   | 'formalizar_pedido_externo'
   | 'tarefas'
   | 'avarias'
-  | 'conf-cega'; // CORREÇÃO: Tela ativa adicionada ao canivete do roteador
+  | 'conf-cega'
+  | 'relatorios'; // <-- TELA ADICIONADA AO CANIVETE DE ROTAS
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -94,7 +97,6 @@ export default function App() {
     return <FormalizarPedidoExterno token={tokenAcesso} />;
   }
 
-  // RENDERIZAÇÃO DA TELA HOME
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -113,7 +115,8 @@ export default function App() {
         onNavegarParaPedidos={() => setTelaAtiva('pedidos')}
         onNavegarParaTarefas={() => setTelaAtiva('tarefas')}
         onNavegarParaAvarias={() => setTelaAtiva('avarias')}
-        onNavegarParaConfCega={() => setTelaAtiva('conf-cega')} // Gatilho plugado
+        onNavegarParaConfCega={() => setTelaAtiva('conf-cega')}
+        onNavegarParaRelatorios={() => setTelaAtiva('relatorios')} // <-- GATILHO PLUGADO
       />
     );
   }
@@ -125,92 +128,39 @@ export default function App() {
   if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
 
-  // ROTA DO MÓDULO DE COTAÇÕES
   if (telaAtiva === 'cotacoes') {
-    if (!usuario) {
-      return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
-          </div>
-        </div>
-      );
-    }
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Cotacoes usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  // ROTA DO MÓDULO DE PEDIDOS
   if (telaAtiva === 'pedidos') {
-    if (!usuario) {
-      return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
-          </div>
-        </div>
-      );
-    }
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Pedidos usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  // ROTA DO MÓDULO DE TAREFAS
   if (telaAtiva === 'tarefas') {
-    if (!usuario) {
-      return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
-          </div>
-        </div>
-      );
-    }
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Tarefas usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  // ROTA DO MÓDULO DE AVARIAS
   if (telaAtiva === 'avarias') {
-    if (!usuario) {
-      return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
-          </div>
-        </div>
-      );
-    }
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Avarias usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  // ROTA DO MÓDULO DE CONFERÊNCIA CEGA
   if (telaAtiva === 'conf-cega') {
-    if (!usuario) {
-      return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
-          </div>
-        </div>
-      );
-    }
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <ConfCega usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
+  // FIÇÃO DA TELA DE RELATÓRIOS
+  if (telaAtiva === 'relatorios') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Relatorios onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
   if (telaAtiva === 'inventario') {
-    if (!usuario) {
-      return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
-          </div>
-        </div>
-      );
-    }
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Inventario onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
   }
 
