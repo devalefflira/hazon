@@ -239,6 +239,7 @@ export const cotacoesService = {
   },
 
   async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<boolean> {
+    // 1. Atualiza o status da Cotação Mestre
     const { error: errMestre } = await supabase
       .from('cotacoes_mestre')
       .update({ 
@@ -251,6 +252,7 @@ export const cotacoesService = {
 
     if (errMestre) throw errMestre;
 
+    // 2. Grava a lista de itens ganhadores da auditoria
     const listagemGanhadores = payload.itens_ganhadores.map(item => ({
       cotacao_mestre_id: payload.cotacao_mestre_id,
       cotacao_resposta_item_id: item.resposta_item_id
@@ -259,13 +261,13 @@ export const cotacoesService = {
     const { error: errGanhadores } = await supabase.from('cotacoes_ganhadores').insert(listagemGanhadores);
     if (errGanhadores) throw errGanhadores;
 
+    // 3. Atualiza as Notas de Falta originais para 'Finalizada'
     const { data: itensVinculados } = await supabase
       .from('cotacoes_itens_vinculados')
       .select('nota_falta_id')
       .eq('cotacao_mestre_id', payload.cotacao_mestre_id);
 
     const idsNotasFalta = (itensVinculados || []).map(iv => iv.nota_falta_id);
-
     if (idsNotasFalta.length > 0) {
       await supabase
         .from('notas_falta')
@@ -273,6 +275,85 @@ export const cotacoesService = {
         .in('id', idsNotasFalta);
     }
 
+    // =========================================================================
+    // AUTOMAÇÃO DO MÓDULO DE PEDIDOS: DISPARO DO SPLIT POR FORNECEDOR
+    // =========================================================================
+    try {
+      // Busca os detalhes das respostas vencedoras para descobrir quem são os fornecedores
+      const { data: detalhesGanhadores } = await supabase
+        .from('cotacoes_respostas_itens')
+        .select(`
+          id, produto_id, preco_ofertado,
+          vinculo:cotacao_fornecedor_id (
+            fornecedor_id, vendedor_id, cotacao_mestre_id,
+            cotacoes_mestre ( comprador_id )
+          )
+        `)
+        .in('id', payload.itens_ganhadores.map(ig => ig.resposta_item_id));
+
+      if (detalhesGanhadores && detalhesGanhadores.length > 0) {
+        // Agrupa os itens em memória pelo ID do Fornecedor
+        const agrupamentoFornecedores: { [key: string]: any[] } = {};
+        let compradorId = '00000000-0000-0000-0000-000000000000';
+
+        detalhesGanhadores.forEach((item: any) => {
+          const fornId = item.vinculo?.fornecedor_id;
+          if (item.vinculo?.cotacoes_mestre?.comprador_id) {
+            compradorId = item.vinculo.cotacoes_mestre.comprador_id;
+          }
+          if (fornId) {
+            if (!agrupamentoFornecedores[fornId]) {
+              agrupamentoFornecedores[fornId] = [];
+            }
+            agrupamentoFornecedores[fornId].push(item);
+          }
+        });
+
+        // Para cada fornecedor vencedor único, gera um cabeçalho de pedido e injeta os itens dele
+        for (const fornId of Object.keys(agrupamentoFornecedores)) {
+          const itensDoFornecedor = agrupamentoFornecedores[fornId];
+          const primeiroItem = itensDoFornecedor[0];
+
+          // Descobre o contador sequencial atual para gerar o código amigável (Ex: #000001)
+          const { count } = await supabase
+            .from('pedidos_mestre')
+            .select('*', { count: 'exact', head: true });
+          
+          const proximoNumero = (count || 0) + 1;
+          const codigoFormatado = `#${String(proximoNumero).padStart(6, '0')}`;
+
+          // Insere o cabeçalho mestre do Pedido
+          const { data: novoPedido, error: errPedMestre } = await supabase
+            .from('pedidos_mestre')
+            .insert([{
+              codigo_customizado: codigoFormatado,
+              cotacao_mestre_id: payload.cotacao_mestre_id,
+              fornecedor_id: fornId,
+              vendedor_id: primeiroItem.vinculo?.vendedor_id || null,
+              comprador_id: compradorId,
+              status: 'Falta Pedir'
+            }])
+            .select('id')
+            .single();
+
+          if (!errPedMestre && novoPedido?.id) {
+            // Insere a listagem de produtos com o preço travado da cotação e quantidade inicial 0
+            const cargaItensPedido = itensDoFornecedor.map((item: any) => ({
+              pedido_mestre_id: novoPedido.id,
+              produto_id: item.produto_id,
+              preco_unitario: item.preco_ofertado,
+              quantidade_solicitada: 0.00 // Será estabelecida pelo comprador na esteira 'Falta Pedir'
+            }));
+
+            await supabase.from('pedido_itens').insert(cargaItensPedido);
+          }
+        }
+      }
+    } catch (errSplit) {
+      // Log defensivo para não quebrar a transação principal caso ocorra falha no split secundário
+      console.error('Falha interna ao processar o split automático de pedidos:', errSplit);
+    }
+
     return true;
   }
-};
+}
