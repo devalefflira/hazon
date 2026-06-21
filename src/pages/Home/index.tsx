@@ -35,7 +35,8 @@ interface HomeProps {
   onNavegarParaNotaFalta?: () => void;
   onNavegarParaCotacoes: () => void;
   onNavegarParaPedidos: () => void;
-  onNavegarParaTarefas: () => void; // Adicionado ao contrato
+  onNavegarParaTarefas: () => void;
+  onNavegarParaAvarias: () => void; // CORREÇÃO: Mapeado no contrato de props da Home
 }
 
 export default function Home({
@@ -52,7 +53,8 @@ export default function Home({
   onNavegarParaNotaFalta,
   onNavegarParaCotacoes,
   onNavegarParaPedidos,
-  onNavegarParaTarefas, // Extraído via destructuring
+  onNavegarParaTarefas,
+  onNavegarParaAvarias, // CORREÇÃO: Desestruturação da propriedade realizada
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -126,7 +128,7 @@ export default function Home({
     const modulosLiberados = MATRIZ_PERMISSOES[perfilUsuario] || [];
 
     if (moduloChave && !modulosLiberados.includes(moduloChave)) {
-      alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissionamento para acessar o módulo de ${label}.`);
+      alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissão para acessar o módulo de ${label}.`);
       return;
     }
 
@@ -139,7 +141,8 @@ export default function Home({
     else if (label === 'Inventário') onNavegarParaInventario();
     else if (label === 'Cotações') onNavegarParaCotacoes();         
     else if (label === 'Pedidos') onNavegarParaPedidos();
-    else if (label === 'Tarefas') onNavegarParaTarefas(); // CORREÇÃO: Disparador corrigido e plugado
+    else if (label === 'Tarefas') onNavegarParaTarefas();
+    else if (label === 'Avarias') onNavegarParaAvarias(); // CORREÇÃO: Roteador plugado ao clique do botão
     else if (label === 'Nota de Falta') {
       if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
     } else {

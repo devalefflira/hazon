@@ -14,7 +14,8 @@ import { Cotacoes } from './pages/Cotacoes';
 import { ResponderCotacao } from './pages/Cotacoes/ResponderCotacao';
 import { Pedidos } from './pages/Pedidos';
 import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
-import { Tarefas } from './pages/Tarefas'; // Adicionado import
+import { Tarefas } from './pages/Tarefas';
+import Avarias from './pages/Avarias'; // CORREÇÃO: Importação do módulo adicionada
 
 interface UsuarioLogado {
   id: string;
@@ -38,7 +39,8 @@ type TelaAtiva =
   | 'responder_cotacao'
   | 'pedidos'
   | 'formalizar_pedido_externo'
-  | 'tarefas'; // Adicionado tipo 'tarefas'
+  | 'tarefas'
+  | 'avarias'; // CORREÇÃO: Tipo 'avarias' adicionado ao canivete de telas
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -108,7 +110,8 @@ export default function App() {
         onNavegarParaNotaFalta={() => setTelaAtiva('nota-falta')}
         onNavegarParaCotacoes={() => setTelaAtiva('cotacoes')}
         onNavegarParaPedidos={() => setTelaAtiva('pedidos')}
-        onNavegarParaTarefas={() => setTelaAtiva('tarefas')} // Adicionado gatilho de navegação
+        onNavegarParaTarefas={() => setTelaAtiva('tarefas')}
+        onNavegarParaAvarias={() => setTelaAtiva('avarias')} // Propriedade de fiação da home plugada
       />
     );
   }
@@ -163,6 +166,21 @@ export default function App() {
       );
     }
     return <Tarefas usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  // ROTA DO MÓDULO DE AVARIAS
+  if (telaAtiva === 'avarias') {
+    if (!usuario) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
+          </div>
+        </div>
+      );
+    }
+    return <Avarias usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
   if (telaAtiva === 'inventario') {
