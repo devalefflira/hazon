@@ -50,16 +50,30 @@ export const pedidosService = {
 
     if (error) throw error;
 
-    return (data || []).map((i: any) => ({
-      id: i.id,
-      pedido_mestre_id: i.pedido_mestre_id,
-      produto_id: i.produto_id,
-      produto_descricao: i.produtos?.descricao || 'Produto',
-      produto_codigo_barras: i.produtos?.codigo_barras || null,
-      produto_unidade_medida: i.produtos?.unidades_medida?.sigla || 'UN',
-      preco_unitario: Number(i.preco_unitario || 0),
-      quantidade_solicitada: Number(i.quantidade_solicitada || 0)
-    }));
+    return (data || []).map((i: any) => {
+      const prod = i.produtos;
+      
+      // Tratamento defensivo caso unidades_medida venha como objeto ou array de 1 posição
+      let siglaUnidade = 'UN';
+      if (prod?.unidades_medida) {
+        if (Array.isArray(prod.unidades_medida)) {
+          siglaUnidade = prod.unidades_medida[0]?.sigla || 'UN';
+        } else {
+          siglaUnidade = prod.unidades_medida.sigla || 'UN';
+        }
+      }
+
+      return {
+        id: String(i.id),
+        pedido_mestre_id: String(i.pedido_mestre_id),
+        produto_id: String(i.produto_id),
+        produto_descricao: String(prod?.descricao || 'Produto não identificado'),
+        produto_codigo_barras: prod?.codigo_barras ? String(prod.codigo_barras) : null,
+        produto_unidade_medida: siglaUnidade,
+        preco_unitario: Number(i.preco_unitario || 0),
+        quantidade_solicitada: Number(i.quantidade_solicitada || 0)
+      };
+    });
   },
 
   // Etapa 1 -> Etapa 2: Comprador define quantidades e gera o link externo do vendedor
