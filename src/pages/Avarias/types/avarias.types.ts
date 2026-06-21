@@ -9,8 +9,8 @@ export interface AvariaRegistroDTO {
   produto_descricao: string;
   produto_codigo_barras: string;
   produto_unidade_medida: string;
-  motivo_avaria_id: string;
-  motivo_avaria_descricao: string;
+  motivo_avaria_id: string;          // Nome unificado oficial
+  motivo_avaria_descricao: string;   // Nome unificado oficial
   quantidade: number;
   destinacao: DestinacaoAvaria;
   observacao: string | null;
