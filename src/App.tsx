@@ -1,4 +1,3 @@
-// Arquivo: src/App.tsx
 import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -15,7 +14,8 @@ import { ResponderCotacao } from './pages/Cotacoes/ResponderCotacao';
 import { Pedidos } from './pages/Pedidos';
 import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
 import { Tarefas } from './pages/Tarefas';
-import Avarias from './pages/Avarias'; // CORREÇÃO: Importação do módulo adicionada
+import Avarias from './pages/Avarias';
+import { ConfCega } from './pages/ConfCega'; // CORREÇÃO: Importação oficial adicionada
 
 interface UsuarioLogado {
   id: string;
@@ -40,7 +40,8 @@ type TelaAtiva =
   | 'pedidos'
   | 'formalizar_pedido_externo'
   | 'tarefas'
-  | 'avarias'; // CORREÇÃO: Tipo 'avarias' adicionado ao canivete de telas
+  | 'avarias'
+  | 'conf-cega'; // CORREÇÃO: Tela ativa adicionada ao canivete do roteador
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -49,7 +50,7 @@ export const MATRIZ_PERMISSOES: Record<string, string[]> = {
     'Pedidos', 'Tarefas', 'Conf. Cega', 'Permissoes', 'Categorias'
   ],
   'Gerencial': [
-    'Inventario', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias', 'Pedidos', 'Tarefas'
+    'Inventario', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias', 'Pedidos', 'Tarefas', 'Conf. Cega'
   ],
   'Operacional': [
     'Inventario', 'Nota de Falta', 'Avarias', 'Tarefas', 'Conf. Cega'
@@ -93,7 +94,7 @@ export default function App() {
     return <FormalizarPedidoExterno token={tokenAcesso} />;
   }
 
-  // 1. RENDERIZAÇÃO DA TELA HOME
+  // RENDERIZAÇÃO DA TELA HOME
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -111,7 +112,8 @@ export default function App() {
         onNavegarParaCotacoes={() => setTelaAtiva('cotacoes')}
         onNavegarParaPedidos={() => setTelaAtiva('pedidos')}
         onNavegarParaTarefas={() => setTelaAtiva('tarefas')}
-        onNavegarParaAvarias={() => setTelaAtiva('avarias')} // Propriedade de fiação da home plugada
+        onNavegarParaAvarias={() => setTelaAtiva('avarias')}
+        onNavegarParaConfCega={() => setTelaAtiva('conf-cega')} // Gatilho plugado
       />
     );
   }
@@ -181,6 +183,21 @@ export default function App() {
       );
     }
     return <Avarias usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  // ROTA DO MÓDULO DE CONFERÊNCIA CEGA
+  if (telaAtiva === 'conf-cega') {
+    if (!usuario) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
+          </div>
+        </div>
+      );
+    }
+    return <ConfCega usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
   if (telaAtiva === 'inventario') {

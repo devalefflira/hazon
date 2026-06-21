@@ -1,7 +1,5 @@
-// Arquivo: src/pages/Home/index.tsx
 import { useState, useEffect } from 'react';
 
-// Importação dos ícones originais
 import iconUserLogin from '../../assets/icones/icon-user-login.svg';
 import iconLogout from '../../assets/icones/icon-logout.svg';
 import iconUsuarios from '../../assets/icones/icon-usuarios.svg';
@@ -36,7 +34,8 @@ interface HomeProps {
   onNavegarParaCotacoes: () => void;
   onNavegarParaPedidos: () => void;
   onNavegarParaTarefas: () => void;
-  onNavegarParaAvarias: () => void; // CORREÇÃO: Mapeado no contrato de props da Home
+  onNavegarParaAvarias: () => void;
+  onNavegarParaConfCega: () => void; // Adicionado ao contrato da Home
 }
 
 export default function Home({
@@ -54,7 +53,8 @@ export default function Home({
   onNavegarParaCotacoes,
   onNavegarParaPedidos,
   onNavegarParaTarefas,
-  onNavegarParaAvarias, // CORREÇÃO: Desestruturação da propriedade realizada
+  onNavegarParaAvarias,
+  onNavegarParaConfCega, // Desestruturação realizada
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -142,7 +142,8 @@ export default function Home({
     else if (label === 'Cotações') onNavegarParaCotacoes();         
     else if (label === 'Pedidos') onNavegarParaPedidos();
     else if (label === 'Tarefas') onNavegarParaTarefas();
-    else if (label === 'Avarias') onNavegarParaAvarias(); // CORREÇÃO: Roteador plugado ao clique do botão
+    else if (label === 'Avarias') onNavegarParaAvarias();
+    else if (label === 'Conf. Cega') onNavegarParaConfCega(); // Rota disparadora plugada
     else if (label === 'Nota de Falta') {
       if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
     } else {
