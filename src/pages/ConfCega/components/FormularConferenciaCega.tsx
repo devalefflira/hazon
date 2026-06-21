@@ -1,3 +1,4 @@
+// Arquivo: src/pages/ConfCega/components/FormularConferenciaCega.tsx
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { conferenciasService } from '../services/conferenciasService';
@@ -44,20 +45,19 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
     carregarItensJaContados();
   }, [conferencia.id]);
 
-  // Foca automaticamente no campo de bipe para agilizar o uso do leitor físico
   useEffect(() => {
     if (!loadingItens && conferencia.status === 'Em Andamento' && !produtoDetectado) {
       inputBipeRef.current?.focus();
     }
   }, [loadingItens, produtoDetectado, conferencia.status]);
 
-  // Atalho reativo: se o conferente bipa um EAN, procura o produto no banco
   const handlePesquisarCodigo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!codigoBipado.trim() || processandoBipe) return;
 
     try {
       setProcessandoBipe(true);
+      
       const { data, error } = await supabase
         .from('produtos')
         .select(`
@@ -65,7 +65,7 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
           unidades_medida:unidade_medida_id ( sigla )
         `)
         .eq('codigo_barras', codigoBipado.trim())
-        .limit(1);
+        .limit(1) as any;
 
       if (error || !data || data.length === 0) {
         alert('⚠️ ATENÇÃO: Produto não cadastrado na base de dados do Hazon!');
@@ -74,11 +74,19 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
       }
 
       const p = data[0];
+      
+      let siglaUnidade = 'UN';
+      if (p.unidades_medida) {
+        siglaUnidade = Array.isArray(p.unidades_medida)
+          ? p.unidades_medida[0]?.sigla || 'UN'
+          : p.unidades_medida.sigla || 'UN';
+      }
+
       setProdutoBipado({
         id: p.id,
         descricao: p.descricao,
         codigo_barras: p.codigo_barras,
-        sigla_unidade: p.unidades_medida?.sigla || 'UN'
+        sigla_unidade: siglaUnidade
       });
     } catch (err) {
       console.error(err);
@@ -99,16 +107,14 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
         quantidade_contada: Number(quantidadeInput)
       });
 
-      // Limpa os estados do bipe para o próximo produto
       setProdutoBipado(null);
       setCodigoBipado('');
       setQuantidadeInput('1');
       
-      // Recarrega a lista cega do painel
       await carregarItensJaContados();
     } catch (err) {
       alert('Erro ao registrar contagem.');
-    } {
+    } finally {
       setProcessandoBipe(false);
     }
   };
@@ -165,11 +171,10 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
           </div>
         </div>
 
-        {/* ÁREA DE ENTRADA DO LEITOR (SÓ EXIBE SE ESTIVER EM ANDAMENTO) */}
+        {/* ÁREA DE ENTRADA DO LEITOR */}
         {!modoLeitura && (
           <div className="mb-4 bg-gray-50 p-3 rounded-3xl border border-gray-200">
             {produtoDetectado ? (
-              // SUB-FORMULÁRIO DE QUANTIDADE DO PRODUTO DETECTADO
               <form onSubmit={handleConfirmarVolumeItem} className="flex flex-col gap-2 animate-scale-up">
                 <div className="px-1 truncate">
                   <span className="text-[9px] font-black text-[#09797a] uppercase tracking-wider block">Produto Identificado</span>
@@ -198,7 +203,7 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setProdutoBipado(null); setCodigoBipado(''); }}
+                    onClick={() => { setProdutoBipado(null); setCodigoBipado(''); setQuantidadeInput('1'); }}
                     className="bg-gray-200 text-gray-500 text-xs font-bold px-3 h-10 rounded-xl"
                   >
                     ✕
@@ -206,7 +211,6 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
                 </div>
               </form>
             ) : (
-              // FORMULÁRIO DE CAPTURA DO LEITOR DE BARRAS
               <form onSubmit={handlePesquisarCodigo} className="flex flex-col gap-1">
                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider px-1">Aguardando bipe do produto...</label>
                 <div className="flex bg-white border border-gray-200 rounded-xl px-3 items-center focus-within:border-[#09797a] h-11 mt-0.5">
@@ -225,7 +229,7 @@ export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConfe
           </div>
         )}
 
-        {/* LISTAGEM CEGA DOS VOLUMES JÁ COLETADOS */}
+        {/* LISTAGEM CEGA DOS VOLUMES */}
         <div className="flex-1 overflow-y-auto max-h-[calc(100vh-270px)] pb-4 flex flex-col gap-2.5">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1 border-b border-gray-50 pb-1">Lista de Volumes Digitados</h3>
           {itensContados.length === 0 ? (
