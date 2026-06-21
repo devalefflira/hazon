@@ -62,7 +62,7 @@ export const avariasService = {
     });
   },
 
-  // Grava o registro da avaria gerando o código customizado incremental
+  // Grava o registro da avaria gerando o código customizado incremental e tratando o fuso horário
   async registrarAvaria(payload: RegistrarAvariaPayload): Promise<void> {
     // 1. Descobre o contador sequencial atual para gerar o código amigável (Ex: #AV000001)
     const { count } = await supabase
@@ -72,7 +72,22 @@ export const avariasService = {
     const proximoNumero = (count || 0) + 1;
     const codigoFormatado = `#AV${String(proximoNumero).padStart(6, '0')}`;
 
-    // 2. Insere o registro definitivo na tabela de avarias
+    // CORREÇÃO: Captura a data e hora local exata no fuso horário do dispositivo (Brasil)
+    const agora = new Date();
+    
+    // Formata a data local para o padrão YYYY-MM-DD
+    const ano = agora.getFullYear();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    const dia = String(agora.getDate()).padStart(2, '0');
+    const dataLocal = `${ano}-${mes}-${dia}`;
+
+    // Formata a hora local para o padrão HH:MM:SS
+    const hora = String(agora.getHours()).padStart(2, '0');
+    const minuto = String(agora.getMinutes()).padStart(2, '0');
+    const segundo = String(agora.getSeconds()).padStart(2, '0');
+    const horaLocal = `${hora}:${minuto}:${segundo}`;
+
+    // 2. Insere o registro definitivo na tabela de avarias forçando o tempo local do usuário
     const { error } = await supabase
       .from('avarias')
       .insert([{
@@ -83,7 +98,9 @@ export const avariasService = {
         quantidade: payload.quantidade,
         destinacao: payload.destinacao,
         observacao: payload.observacao?.trim().toUpperCase() || null,
-        preco_custo_na_perda: 0.00 // Travado em zero conforme a ressalva da v1
+        preco_custo_na_perda: 0.00,
+        data_registro: dataLocal, // Força a data correta do Brasil
+        hora_registro: horaLocal  // Força a hora correta do Brasil
       }]);
 
     if (error) throw error;
