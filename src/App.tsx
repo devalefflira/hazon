@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import CategoriasHub from './pages/Categorias';
@@ -10,7 +10,9 @@ import Produtos from './pages/Produtos';
 import Inventario from './pages/Inventario';
 import NotaFalta from './pages/NotaFalta';
 import { Cotacoes } from './pages/Cotacoes';
-import {ResponderCotacao} from './pages/Cotacoes/ResponderCotacao';
+import { ResponderCotacao } from './pages/Cotacoes/ResponderCotacao';
+import { Pedidos } from './pages/Pedidos';
+import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
 
 interface UsuarioLogado {
   id: string;
@@ -19,8 +21,22 @@ interface UsuarioLogado {
   setor?: string;
 }
 
-// Tipos de telas globais do sistema
-type TelaAtiva = 'login' | 'home' | 'categorias' | 'usuarios' | 'permissoes' | 'fornecedores' | 'vendedores' | 'produtos' | 'inventario' | 'nota-falta' | 'cotacoes';
+// Tipos de telas globais do sistema atualizados para abranger Pedidos e fluxos de links externos
+type TelaAtiva = 
+  | 'login' 
+  | 'home' 
+  | 'categorias' 
+  | 'usuarios' 
+  | 'permissoes' 
+  | 'fornecedores' 
+  | 'vendedores' 
+  | 'produtos' 
+  | 'inventario' 
+  | 'nota-falta' 
+  | 'cotacoes'
+  | 'responder_cotacao'
+  | 'pedidos'
+  | 'formalizar_pedido_externo';
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -39,12 +55,22 @@ export const MATRIZ_PERMISSOES: Record<string, string[]> = {
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>('login');
-  const urlParams = new URLSearchParams(window.location.search);
-  const tokenFornecedor = urlParams.get('token');
+  const [tokenAcesso, setTokenAcesso] = useState<string | null>(null);
 
-  if (tokenFornecedor) {
-    return <ResponderCotacao token={tokenFornecedor} />;
-  }
+  // Interceptador inteligente e unificado de parâmetros de URL para portais de fornecedores/vendedores
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenCotacao = params.get('token');
+    const tokenPedido = params.get('pedidoToken');
+
+    if (tokenCotacao) {
+      setTokenAcesso(tokenCotacao);
+      setTelaAtiva('responder_cotacao');
+    } else if (tokenPedido) {
+      setTokenAcesso(tokenPedido);
+      setTelaAtiva('formalizar_pedido_externo');
+    }
+  }, []);
 
   const handleLoginSuccess = (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);
@@ -56,7 +82,20 @@ export default function App() {
     setTelaAtiva('login');
   };
 
-  // 1. RENDERIZAÇÃO DA TELA HOME
+  // =========================================================================
+  // 1. RENDERIZAÇÃO DOS PORTAIS DE LINKS EXTERNOS (SEM EXIGÊNCIA DE LOGIN)
+  // =========================================================================
+  if (telaAtiva === 'responder_cotacao' && tokenAcesso) {
+    return <ResponderCotacao token={tokenAcesso} />;
+  }
+
+  if (telaAtiva === 'formalizar_pedido_externo' && tokenAcesso) {
+    return <FormalizarPedidoExterno token={tokenAcesso} />;
+  }
+
+  // =========================================================================
+  // 2. RENDERIZAÇÃO DA TELA HOME
+  // =========================================================================
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -72,11 +111,14 @@ export default function App() {
         onNavegarParaInventario={() => setTelaAtiva('inventario')}
         onNavegarParaNotaFalta={() => setTelaAtiva('nota-falta')}
         onNavegarParaCotacoes={() => setTelaAtiva('cotacoes')}
+        onNavegarParaPedidos={() => setTelaAtiva('pedidos')}
       />
     );
   }
 
-  // 2. DIRECIONAMENTO ISOLADO DOS MÓDULOS ATIVOS
+  // =========================================================================
+  // 3. DIRECIONAMENTO ISOLADO DOS MÓDULOS INTERNOS ATIVOS
+  // =========================================================================
   if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'usuarios') return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'permissoes') return <Permissoes onVoltarParaHome={() => setTelaAtiva('home')} />;
@@ -85,32 +127,57 @@ export default function App() {
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
 
   // ROTA DO MÓDULO DE COTAÇÕES
-if (telaAtiva === 'cotacoes') {
-  if (!usuario) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-        <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-          <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-          <button
-            onClick={() => setTelaAtiva('login')}
-            className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
-          >
-            Fazer Login
-          </button>
+  if (telaAtiva === 'cotacoes') {
+    if (!usuario) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+            <button
+              onClick={() => setTelaAtiva('login')}
+              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
+            >
+              Fazer Login
+            </button>
+          </div>
         </div>
-      </div>
+      );
+    }
+
+    return (
+      <Cotacoes
+        usuarioLogadoId={usuario.id}
+        onVoltarParaHome={() => setTelaAtiva('home')}
+      />
     );
   }
 
-  // AJUSTE OPERACIONAL DEFINITIVO:
-  // Injeta diretamente a propriedade de ID extraída dinamicamente do objeto 'usuario' da sessão
-  return (
-  <Cotacoes
-    usuarioLogadoId={usuario.id}
-    onVoltarParaHome={() => setTelaAtiva('home')} // Passando a ação de retorno dinamicamente[cite: 2]
-  />
-);
-}
+  // ROTA DO MÓDULO DE PEDIDOS
+  if (telaAtiva === 'pedidos') {
+    if (!usuario) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+            <button
+              onClick={() => setTelaAtiva('login')}
+              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
+            >
+              Fazer Login
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <Pedidos
+        usuarioLogadoId={usuario.id}
+        onVoltarParaHome={() => setTelaAtiva('home')}
+      />
+    );
+  }
+
   // Rota do Inventário blindada contra concorrência de estado nulo
   if (telaAtiva === 'inventario') {
     if (!usuario) {

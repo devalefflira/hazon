@@ -1,3 +1,4 @@
+// Arquivo: src/pages/Home/index.tsx
 import { useState, useEffect } from 'react';
 
 // Importação dos ícones originais
@@ -33,6 +34,7 @@ interface HomeProps {
   onNavegarParaInventario: () => void;
   onNavegarParaNotaFalta?: () => void;
   onNavegarParaCotacoes: () => void;
+  onNavegarParaPedidos: () => void;
 }
 
 export default function Home({
@@ -48,6 +50,7 @@ export default function Home({
   onNavegarParaInventario,
   onNavegarParaNotaFalta,
   onNavegarParaCotacoes,
+  onNavegarParaPedidos,
 }: HomeProps) {
   // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
@@ -98,7 +101,7 @@ export default function Home({
       }
     };
 
-    // Executa imediatamente ao abrir a tela
+    // CORREÇÃO: Chamada do método corrigida de 'atualizogio()' para 'atualizarRelogio()'
     atualizarRelogio();
 
     // Cria um intervalo para atualizar o relógio a cada 30 segundos
@@ -154,6 +157,8 @@ export default function Home({
       onNavegarParaInventario();
     } else if (label === 'Cotações') {
       onNavegarParaCotacoes();         
+    } else if (label === 'Pedidos') {
+      onNavegarParaPedidos();
     } else if (label === 'Nota de Falta') {
       if (onNavegarParaNotaFalta) {
         onNavegarParaNotaFalta();
@@ -167,7 +172,6 @@ export default function Home({
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      {/* Ajustado tamanho max-w e rounded com colchetes para compatibilidade robusta com Tailwind */}
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col">
 
         {/* CABEÇALHO DINÂMICO */}
@@ -195,7 +199,7 @@ export default function Home({
           <span>{dataHora}</span>
         </div>
 
-        {/* GRADE DE BOTÕES ORIGINAL PRESERVADA (GRID LAUNCHPAD) */}
+        {/* GRADE DE BOTÕES */}
         <div className="grid grid-cols-3 gap-3 w-full overflow-y-auto max-h-[calc(100vh-160px)] pr-0.5">
           {menuItems.map((item, index) => {
             const Icon = item.icon;
