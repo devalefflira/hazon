@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { tarefasService } from './services/tarefasService';
 import type { TarefaMestreDTO } from './types/tarefas.types';
-import { NovaTarefaModal } from './components/NovaTarefaPayload';
+import { NovaTarefaModal } from './components/NovaTarefaModal';
 import { DetalhesTarefaPainel } from './components/DetalhesTarefaPainel';
 
 interface TarefasProps {
