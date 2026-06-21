@@ -105,10 +105,11 @@ if (telaAtiva === 'cotacoes') {
   // AJUSTE OPERACIONAL DEFINITIVO:
   // Injeta diretamente a propriedade de ID extraída dinamicamente do objeto 'usuario' da sessão
   return (
-    <Cotacoes
-      usuarioLogadoId={usuario.id}
-    />
-  );
+  <Cotacoes
+    usuarioLogadoId={usuario.id}
+    onVoltarParaHome={() => setTelaAtiva('home')} // Passando a ação de retorno dinamicamente[cite: 2]
+  />
+);
 }
   // Rota do Inventário blindada contra concorrência de estado nulo
   if (telaAtiva === 'inventario') {
