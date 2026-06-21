@@ -1,14 +1,4 @@
-export type StatusTarefa = 'Pendentes' | 'Em Andamento' | 'Concluídas';
-
-export type TipoTarefa =
-  | 'Contagem de Estoque'
-  | 'Nota de Falta'
-  | 'Avarias'
-  | 'Recebimento de Mercadorias'
-  | 'Limpeza do Depósito'
-  | 'Organização do Depósito';
-
-export type PrioridadeTarefa = 'Baixa' | 'Média' | 'Alta';
+// Arquivo: src/pages/Tarefas/types/tarefas.types.ts
 
 export interface TarefaMestreDTO {
   id: string;
@@ -17,31 +7,48 @@ export interface TarefaMestreDTO {
   responsavel_id: string;
   responsavel_nome: string;
   descricao: string;
-  status: StatusTarefa;
-  tipo_tarefa: TipoTarefa;
-  prioridade: PrioridadeTarefa;
+  status: string;
+  tipo_tarefa: string;
+  prioridade: string;
   prioridade_peso: number;
   data_inicio_planejada: string;
   prazo_entrega_planejado: string;
   tempo_gasto_minutos: number;
   created_at: string;
-  cronometro_ativo?: boolean; // Indica se a tarefa possui um bloco de tempo aberto (rodando agora)
-}
+  cronometro_ativo: boolean; // <-- RESGATADO
 
-export interface TarefaChecklistItemDTO {
-  id: string;
-  tarefa_id: string;
-  descricao: string;
-  concluido: boolean;
+  // Campos de Recebimento de Mercadorias
+  numero_nota_fiscal?: string | null;
+  fornecedor_id?: string | null;
+  fornecedor_nome?: string | null;
+  conferente_id?: string | null;
+  conferente_nome?: string | null;
+  identificacao_doca?: string | null;
+  placa_veiculo?: string | null;
+  nome_motorista?: string | null;
 }
 
 export interface CriarTarefaPayload {
   criador_id: string;
   responsavel_id: string;
   descricao: string;
-  tipo_tarefa: TipoTarefa;
-  prioridade: PrioridadeTarefa;
-  data_inicio_planejada: string;
+  tipo_tarefa: string;
+  prioridade: string;
   prazo_entrega_planejado: string;
-  checklists?: string[]; // Array de strings com as descrições dos sub-itens
+  numero_nota_fiscal?: string | null;
+  fornecedor_id?: string | null;
+  conferente_id?: string | null;
+  identificacao_doca?: string | null;
+  placa_veiculo?: string | null;
+  nome_motorista?: string | null;
 }
+
+export interface ChecklistItemDTO {
+  id: string;
+  tarefa_id: string;
+  descricao: string;
+  concluido: boolean;
+}
+
+// Fallback/Alias para manter retrocompatibilidade com DetalhesTarefaPainel
+export type TarefaChecklistItemDTO = ChecklistItemDTO;

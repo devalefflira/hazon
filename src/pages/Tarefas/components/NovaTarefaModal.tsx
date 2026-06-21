@@ -2,258 +2,271 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { tarefasService } from '../services/tarefasService';
-import type { TipoTarefa, PrioridadeTarefa } from '../types/tarefas.types';
 
 interface NovaTarefaModalProps {
-  criadorId: string;
+  usuarioLogadoId: string;
   onFechar: () => void;
   onSucesso: () => void;
 }
 
-interface UsuarioLista {
-  id: string;
-  nome: string;
-}
+export function NovaTarefaModal({ usuarioLogadoId, onFechar, onSucesso }: NovaTarefaModalProps) {
+  const [loadingCarga, setLoadingCarga] = useState(true);
+  const [salvando, setSalvando] = useState(false);
 
-export function NovaTarefaModal({ criadorId, onFechar, onSucesso }: NovaTarefaModalProps) {
-  const [loadingUsuarios, setLoadingUsuarios] = useState(true);
-  const [usuarios, setUsuarios] = useState<UsuarioLista[]>([]);
-  const [submetendo, setSubmetendo] = useState(false);
+  // Listas Relacionais
+  const [listaUsuarios, setListaUsuarios] = useState<any[]>([]);
+  const [listaFornecedores, setListaFornecedores] = useState<any[]>([]);
 
-  // Estados do Formulário
+  // Estados Base do Formulário
   const [responsavelId, setResponsavelId] = useState('');
-  const [tipoTarefa, setTipoTarefa] = useState<TipoTarefa>('Contagem de Estoque');
-  const [prioridade, setPrioridade] = useState<PrioridadeTarefa>('Média');
-  const [descricao, setDescricao] = useState('');
-  const [dataInicio, setDataInicio] = useState(new Date().toISOString().split('T')[0]);
+  const [tipoTarefa, setTipoTarefa] = useState('OPERACIONAL');
+  const [prioridade, setPrioridade] = useState('Média');
   const [prazoEntrega, setPrazoEntrega] = useState('');
+  const [descricao, setDescricao] = useState('');
 
-  // Estados do Checklist Dinâmico
-  const [checklistInput, setChecklistInput] = useState('');
-  const [checklists, setChecklists] = useState<string[]>([]);
+  // Estados Extras Reativos (Recebimento de Mercadorias)
+  const [numeroNF, setNumeroNF] = useState('');
+  const [fornecedorId, setFornecedorId] = useState('');
+  const [conferenteId, setConferenteId] = useState('');
+  const [identificacaoDoca, setIdentificacaoDoca] = useState('Principal');
+  const [placaVeiculo, setPlacaVeiculo] = useState('');
+  const [nomeMotorista, setNomeMotorista] = useState('');
 
   useEffect(() => {
-    async function carregarUsuarios() {
+    async function carregarDadosRelacionais() {
       try {
-        setLoadingUsuarios(true);
-        const { data, error } = await supabase
-          .from('usuarios')
-          .select('id, nome')
-          .order('nome', { ascending: true });
+        setLoadingCarga(true);
+        const [{ data: users }, { data: forns }] = await Promise.all([
+          supabase.from('usuarios').select('id, nome').order('nome', { ascending: true }),
+          supabase.from('fornecedores').select('id, nome_fantasia').order('nome_fantasia', { ascending: true })
+        ]);
 
-        if (error) throw error;
-        setUsuarios(data || []);
-        if (data && data.length > 0) setResponsavelId(data[0].id);
+        const totalUsers = users || [];
+        setListaUsuarios(totalUsers);
+        setListaFornecedores(forns || []);
+
+        if (totalUsers.length > 0) {
+          setResponsavelId(totalUsers[0].id);
+          setConferenteId(totalUsers[0].id);
+        }
+        if (forns && forns.length > 0) {
+          setFornecedorId(forns[0].id);
+        }
       } catch (err) {
-        console.error('Erro ao listar operadores para OS:', err);
+        console.error('Erro ao preparar formulário de tarefas:', err);
       } finally {
-        setLoadingUsuarios(false);
+        setLoadingCarga(false);
       }
     }
-    carregarUsuarios();
+    carregarDadosRelacionais();
   }, []);
-
-  const handleAdicionarChecklist = () => {
-    if (!checklistInput.trim()) return;
-    setChecklists(prev => [...prev, checklistInput.trim().toUpperCase()]);
-    setChecklistInput('');
-  };
-
-  const handleRemoverChecklist = (index: number) => {
-    setChecklists(prev => prev.filter((_, i) => i !== index));
-  };
 
   const handleSalvarTarefa = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!responsavelId || !descricao.trim() || !prazoEntrega) {
-      alert('Por favor, preencha todos os campos obrigatórios da ordem.');
-      return;
-    }
+    if (!responsavelId || !prazoEntrega || !descricao.trim() || salvando) return;
 
     try {
-      setSubmetendo(true);
+      setSalvando(true);
+      
       await tarefasService.criarTarefa({
-        criador_id: criadorId,
+        criador_id: usuarioLogadoId,
         responsavel_id: responsavelId,
-        descricao: descricao.trim().toUpperCase(),
+        descricao: descricao,
         tipo_tarefa: tipoTarefa,
         prioridade: prioridade,
-        data_inicio_planejada: dataInicio,
         prazo_entrega_planejado: prazoEntrega,
-        checklists: checklists
+        // Extras
+        numero_nota_fiscal: numeroNF,
+        fornecedor_id: fornecedorId,
+        conferente_id: conferenteId,
+        identificacao_doca: identificacaoDoca,
+        placa_veiculo: placaVeiculo,
+        nome_motorista: nomeMotorista
       });
 
-      alert('🚀 Ordem de Serviço cadastrada e triada com sucesso!');
+      alert('🚀 Nova Tarefa cadastrada e distribuída!');
       onSucesso();
-    } catch (err: any) {
-      alert(`Falha ao salvar OS: ${err.message || err}`);
+    } catch (err) {
+      alert('Erro ao registrar tarefa.');
     } finally {
-      setSubmetendo(false);
+      setSalvando(false);
     }
   };
 
+  if (loadingCarga) {
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex justify-center items-center z-50">
+        <p className="text-white text-xs font-bold animate-pulse uppercase tracking-widest">Preparando folha de atribuição...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 font-sans backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-white rounded-4xl shadow-2xl px-5 py-6 flex flex-col max-h-[calc(100vh-40px)] animate-scale-up">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-end md:items-center p-4 z-50 animate-fade-in">
+      <div className="w-full max-w-lg bg-white rounded-t-4xl md:rounded-4xl p-5 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto animate-scale-up">
         
         {/* HEADER */}
         <div className="flex justify-between items-center pb-3 border-b border-gray-100 mb-4">
-          <h2 className="text-[#09797a] font-black text-base uppercase tracking-wide">Nova Ordem de Serviço</h2>
-          <button 
-            type="button" 
-            onClick={onFechar} 
-            className="text-gray-400 font-bold hover:text-gray-600 text-lg p-1"
-          >
-            ✕
-          </button>
+          <h2 className="text-[#09797a] font-black text-base uppercase">Distribuir Nova Tarefa</h2>
+          <button onClick={onFechar} className="text-gray-400 font-bold hover:text-gray-600 text-sm">✕</button>
         </div>
 
-        {/* FORMULÁRIO ROLÁVEL */}
-        <form onSubmit={handleSalvarTarefa} className="flex-1 overflow-y-auto pr-0.5 flex flex-col gap-3.5 pb-2">
+        {/* FORMULÁRIO */}
+        <form onSubmit={handleSalvarTarefa} className="flex flex-col gap-3">
           
-          {/* TIPO DE TAREFA */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Tipo de Atividade</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Colaborador Responsável</label>
             <select
-              value={tipoTarefa}
-              onChange={(e) => setTipoTarefa(e.target.value as TipoTarefa)}
-              className="w-full text-xs bg-gray-50 border border-gray-200 px-4 h-11 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
-            >
-              <option value="Contagem de Estoque">CONTAGEM DE ESTOQUE</option>
-              <option value="Nota de Falta">NOTA DE FALTA</option>
-              <option value="Avarias">AVARIAS</option>
-              <option value="Recebimento de Mercadorias">RECEBIMENTO DE MERCADORIAS</option>
-              <option value="Limpeza do Depósito">LIMPEZA DO DEPÓSITO</option>
-              <option value="Organização do Depósito">ORGANIZAÇÃO DO DEPÓSITO</option>
-            </select>
-          </div>
-
-          {/* RESPONSÁVEL EXECUTOR */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Operador Responsável</label>
-            <select
-              disabled={loadingUsuarios}
               value={responsavelId}
               onChange={(e) => setResponsavelId(e.target.value)}
-              className="w-full text-xs bg-gray-50 border border-gray-200 px-4 h-11 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 uppercase"
+              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a]"
             >
-              {loadingUsuarios ? (
-                <option>A carregar operadores...</option>
-              ) : (
-                usuarios.map(u => (
-                  <option key={u.id} value={u.id}>{u.nome}</option>
-                ))
-              )}
+              {listaUsuarios.map(u => <option key={u.id} value={u.id}>{u.nome.toUpperCase()}</option>)}
             </select>
           </div>
 
-          {/* PRIORIDADE */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Tipo de Atividade</label>
+              <select
+                value={tipoTarefa}
+                onChange={(e) => setTipoTarefa(e.target.value)}
+                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a]"
+              >
+                <option value="CONTAGEM DE ESTOQUE">CONTAGEM DE ESTOQUE</option>
+                <option value="NOTA DE FALTA">NOTA DE FALTA</option>
+                <option value="AVARIAS">AVARIAS</option>
+                <option value="RECEBIMENTO DE MERCADORIAS">RECEBIMENTO DE MERCADORIAS</option>
+                <option value="LIMPEZA DO DEPÓSITO">LIMPEZA DO DEPÓSITO</option>
+                <option value="ORGANIZAÇÃO DO DEPÓSITO">ORGANIZAÇÃO DO DEPÓSITO</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Prioridade</label>
+              <select
+                value={prioridade}
+                onChange={(e) => setPrioridade(e.target.value)}
+                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a]"
+              >
+                <option value="Baixa">BAIXA</option>
+                <option value="Média">MÉDIA</option>
+                <option value="Alta">ALTA</option>
+              </select>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Nível de Prioridade</label>
-            <div className="grid grid-cols-3 gap-2 p-1 bg-gray-100 rounded-2xl">
-              {(['Baixa', 'Média', 'Alta'] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPrioridade(p)}
-                  className={`py-2 text-[10px] font-black rounded-xl uppercase transition-all ${
-                    prioridade === p 
-                      ? 'bg-gray-800 text-white shadow-sm' 
-                      : 'text-gray-400 hover:text-gray-500'
-                  }`}
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Prazo Máximo de Entrega</label>
+            <input
+              type="date"
+              required
+              value={prazoEntrega}
+              onChange={(e) => setPrazoEntrega(e.target.value)}
+              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a]"
+            />
+          </div>
+
+          {/* 🚚 CONDICIONAL EXCLUSIVA: RECEBIMENTO DE MERCADORIAS */}
+          {tipoTarefa === 'RECEBIMENTO DE MERCADORIAS' && (
+            <div className="bg-teal-50/50 border border-teal-200 p-4 rounded-3xl flex flex-col gap-3 animate-scale-up mt-1">
+              <span className="text-[10px] font-black text-teal-800 uppercase tracking-widest border-b border-teal-100 pb-1 block">Logística de Recebimento</span>
+              
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-teal-700 uppercase px-1">Nº Nota Fiscal</label>
+                  <input
+                    type="text"
+                    value={numeroNF}
+                    onChange={(e) => setNumeroNF(e.target.value)}
+                    placeholder="Ex: 123.456"
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a] uppercase"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-teal-700 uppercase px-1">Identificação da Doca</label>
+                  <select
+                    value={identificacaoDoca}
+                    onChange={(e) => setIdentificacaoDoca(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a]"
+                  >
+                    <option value="Principal">PRINCIPAL</option>
+                    <option value="Doca 02">DOCA 02</option>
+                    <option value="Doca 03">DOCA 03</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-black text-teal-700 uppercase px-1">Fornecedor Emissor</label>
+                <select
+                  value={fornecedorId}
+                  onChange={(e) => setFornecedorId(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a] uppercase"
                 >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
+                  {listaFornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia}</option>)}
+                </select>
+              </div>
 
-          {/* CRONOGRAMA DE DATAS */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Data de Início</label>
-              <input 
-                type="date" 
-                required 
-                value={dataInicio} 
-                onChange={(e) => setDataInicio(e.target.value)} 
-                className="w-full text-xs bg-gray-50 border border-gray-200 px-4 h-11 rounded-2xl focus:outline-none focus:border-[#09797a] font-mono font-bold text-gray-700" 
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Prazo de Entrega</label>
-              <input 
-                type="date" 
-                required 
-                value={prazoEntrega} 
-                onChange={(e) => setPrazoEntrega(e.target.value)} 
-                className="w-full text-xs bg-gray-50 border border-gray-200 px-4 h-11 rounded-2xl focus:outline-none focus:border-[#09797a] font-mono font-bold text-gray-700" 
-              />
-            </div>
-          </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-black text-teal-700 uppercase px-1">Conferente Alocado</label>
+                <select
+                  value={conferenteId}
+                  onChange={(e) => setConferenteId(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a] uppercase"
+                >
+                  {listaUsuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                </select>
+              </div>
 
-          {/* DESCRIÇÃO MESTRE */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-teal-700 uppercase px-1">Placa Veículo</label>
+                  <input
+                    type="text"
+                    value={placaVeiculo}
+                    onChange={(e) => setPlacaVeiculo(e.target.value)}
+                    placeholder="ABC-1234"
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a] uppercase"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-teal-700 uppercase px-1">Nome Motorista</label>
+                  <input
+                    type="text"
+                    value={nomeMotorista}
+                    onChange={(e) => setNomeMotorista(e.target.value)}
+                    placeholder="NOME COMPLETO"
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-700 focus:outline-none focus:border-[#09797a] uppercase"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Detalhamento do Objetivo</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Descrição Detalhada das Instruções</label>
             <textarea
               required
               rows={2}
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
-              placeholder="EX: FAZER CONTAGEM COMPLETA DO CORREDOR B..."
-              className="w-full text-xs bg-gray-50 border border-gray-200 px-4 py-3 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 placeholder:text-gray-300 resize-none uppercase"
+              placeholder="DESCREVA AQUI DETALHADAMENTE O QUE O COLABORADOR DEVE EXECUTAR..."
+              className="w-full bg-gray-50 border border-gray-200 p-3 rounded-2xl font-bold text-xs text-gray-700 focus:outline-none focus:border-[#09797a] uppercase resize-none leading-normal"
             />
           </div>
 
-          {/* INJEÇÃO DE CHECKLIST OPCONAL */}
-          <div className="flex flex-col gap-1 border-t border-gray-50 pt-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Checklist de Sub-tarefas (Opcional)</label>
-            <div className="flex gap-2 items-center">
-              <input
-                type="text"
-                value={checklistInput}
-                onChange={(e) => setChecklistInput(e.target.value)}
-                placeholder="EX: CONFERIR CAIXAS AVARIADAS"
-                className="w-full text-xs bg-gray-50 border border-gray-200 px-4 h-11 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 uppercase"
-              />
-              <button
-                type="button"
-                onClick={handleAdicionarChecklist}
-                className="bg-[#09797a] text-white font-black text-xs px-4 h-11 rounded-2xl shrink-0 active:scale-90 transition-all"
-              >
-                +
-              </button>
-            </div>
-
-            {/* LISTAGEM FLUIDA DE SUB-ITENS ADICIONADOS */}
-            {checklists.length > 0 && (
-              <div className="flex flex-col gap-1.5 mt-2 bg-gray-50 p-2.5 rounded-2xl max-h-28 overflow-y-auto">
-                {checklists.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center bg-white border border-gray-100 rounded-xl px-3 py-1.5 shadow-sm">
-                    <span className="text-[10px] font-bold text-gray-600 truncate max-w-[85%]">{item}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoverChecklist(idx)}
-                      className="text-red-500 font-bold text-xs px-1 hover:text-red-700"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* SUBMETER */}
           <button
             type="submit"
-            disabled={submetendo}
-            className="w-full bg-[#09797a] text-white py-4 rounded-3xl text-xs font-bold tracking-wide uppercase shadow-md active:scale-95 transition-all mt-2 flex justify-center items-center"
+            disabled={salvando}
+            className="w-full bg-[#09797a] text-white py-4 rounded-3xl text-xs font-black uppercase shadow-md active:scale-95 transition-all mt-2 disabled:opacity-40"
           >
-            {submetendo ? 'A salvar Ordem...' : 'Lançar e Distribuir Tarefa'}
+            {salvando ? 'Salvando e Notificando...' : 'Confirmar e Publicar'}
           </button>
-
         </form>
+
       </div>
     </div>
   );

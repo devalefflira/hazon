@@ -170,7 +170,7 @@ export function Tarefas({ usuarioLogadoId, onVoltarParaHome }: TarefasProps) {
       {/* MODAL DE CRIAÇÃO ASSINCRONA */}
       {modalAberto && (
         <NovaTarefaModal
-          criadorId={usuarioLogadoId}
+          usuarioLogadoId={usuarioLogadoId}
           onFechar={() => setModalAberto(false)}
           onSucesso={() => {
             setModalAberto(false);
