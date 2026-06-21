@@ -35,6 +35,7 @@ interface HomeProps {
   onNavegarParaNotaFalta?: () => void;
   onNavegarParaCotacoes: () => void;
   onNavegarParaPedidos: () => void;
+  onNavegarParaTarefas: () => void; // Adicionado ao contrato
 }
 
 export default function Home({
@@ -51,8 +52,8 @@ export default function Home({
   onNavegarParaNotaFalta,
   onNavegarParaCotacoes,
   onNavegarParaPedidos,
+  onNavegarParaTarefas, // Extraído via destructuring
 }: HomeProps) {
-  // Estados para controlar a data/hora e a saudação dinamicamente
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
 
@@ -74,12 +75,9 @@ export default function Home({
     { label: 'Categorias', icon: iconCategorias },
   ];
 
-  // Efeito responsável por atualizar o relógio em tempo real
   useEffect(() => {
     const atualizarRelogio = () => {
       const agora = new Date();
-
-      // 1. Formata a data e hora no padrão brasileiro (DD/MM/AAAA, HH:MM)
       const formatador = new Intl.DateTimeFormat('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -90,7 +88,6 @@ export default function Home({
       });
       setDataHora(formatador.format(agora));
 
-      // 2. Define a saudação baseada na hora atual do dispositivo
       const hora = agora.getHours();
       if (hora >= 5 && hora < 12) {
         setSaudacao('Bom dia');
@@ -101,18 +98,12 @@ export default function Home({
       }
     };
 
-    // CORREÇÃO: Chamada do método corrigida de 'atualizogio()' para 'atualizarRelogio()'
     atualizarRelogio();
-
-    // Cria um intervalo para atualizar o relógio a cada 30 segundos
     const intervalo = setInterval(atualizarRelogio, 30000);
-
-    // Função de limpeza (Clean-up)
     return () => clearInterval(intervalo);
   }, []);
 
   const handleModuleClick = (label: string) => {
-    // Mapeia o nome do botão da Home para a chave correspondente na nossa Matriz de Segurança
     const mapaModulos: Record<string, string> = {
       'Usuários': 'Usuarios',
       'Categorias': 'Categorias',
@@ -134,37 +125,23 @@ export default function Home({
     const moduloChave = mapaModulos[label];
     const modulosLiberados = MATRIZ_PERMISSOES[perfilUsuario] || [];
 
-    // SE NÃO TIVER PERMISSÃO: Trava o operador na hora
     if (moduloChave && !modulosLiberados.includes(moduloChave)) {
-      alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissão para acessar o módulo de ${label}.`);
+      alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissionamento para acessar o módulo de ${label}.`);
       return;
     }
 
-    // SE TIVER PERMISSÃO: Direciona para as propriedades de navegação corretas
-    if (label === 'Categorias') {
-      onNavegarParaCategorias();
-    } else if (label === 'Usuários') {
-      onNavegarParaUsuarios();
-    } else if (label === 'Permissões') {
-      onNavegarParaPermissoes();
-    } else if (label === 'Fornecedores') {
-      onNavegarParaFornecedores();
-    } else if (label === 'Vendedores') {
-      onNavegarParaVendedores();
-    } else if (label === 'Produtos') {
-      onNavegarParaProdutos();
-    } else if (label === 'Inventário') {
-      onNavegarParaInventario();
-    } else if (label === 'Cotações') {
-      onNavegarParaCotacoes();         
-    } else if (label === 'Pedidos') {
-      onNavegarParaPedidos();
-    } else if (label === 'Nota de Falta') {
-      if (onNavegarParaNotaFalta) {
-        onNavegarParaNotaFalta();
-      } else {
-        alert('Módulo "Nota de Falta" indisponível na fiação do App.');
-      }
+    if (label === 'Categorias') onNavegarParaCategorias();
+    else if (label === 'Usuários') onNavegarParaUsuarios();
+    else if (label === 'Permissões') onNavegarParaPermissoes();
+    else if (label === 'Fornecedores') onNavegarParaFornecedores();
+    else if (label === 'Vendedores') onNavegarParaVendedores();
+    else if (label === 'Produtos') onNavegarParaProdutos();
+    else if (label === 'Inventário') onNavegarParaInventario();
+    else if (label === 'Cotações') onNavegarParaCotacoes();         
+    else if (label === 'Pedidos') onNavegarParaPedidos();
+    else if (label === 'Tarefas') onNavegarParaTarefas(); // CORREÇÃO: Disparador corrigido e plugado
+    else if (label === 'Nota de Falta') {
+      if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
     } else {
       alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
     }
@@ -184,16 +161,12 @@ export default function Home({
             </div>
           </div>
 
-          <button
-            onClick={onLogout}
-            className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all"
-            title="Sair do Sistema"
-          >
+          <button onClick={onLogout} className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all" title="Sair do Sistema">
             <img src={iconLogout} alt="Sair" className="w-8 h-8" />
           </button>
         </div>
 
-        {/* SAUDAÇÃO E DATA/HORA DINÂMICAS */}
+        {/* SAUDAÇÃO E DATA/HORA */}
         <div className="flex justify-between items-center w-full text-[#545454] font-medium text-xs mb-6 px-1">
           <span>{saudacao}. O que vamos fazer agora?</span>
           <span>{dataHora}</span>
@@ -202,15 +175,14 @@ export default function Home({
         {/* GRADE DE BOTÕES */}
         <div className="grid grid-cols-3 gap-3 w-full overflow-y-auto max-h-[calc(100vh-160px)] pr-0.5">
           {menuItems.map((item, index) => {
-            const Icon = item.icon;
             return (
               <button
                 key={index}
                 onClick={() => handleModuleClick(item.label)}
                 className="bg-[#09797a] rounded-3xl aspect-square flex flex-col justify-center items-center p-2 hover:bg-[#075f60] active:scale-95 transition-all shadow-sm"
               >
-                <img src={Icon} alt={item.label} className="w-10 h-10 object-contain mb-2 filter-none" />
-                <span className="text-white text-[11px] font-bold tracking-wide text-center leading-tight wrap-break-word max-w-full">
+                <img src={item.icon} alt={item.label} className="w-10 h-10 object-contain mb-2" />
+                <span className="text-white text-[11px] font-bold tracking-wide text-center leading-tight">
                   {item.label}
                 </span>
               </button>

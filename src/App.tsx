@@ -1,3 +1,4 @@
+// Arquivo: src/App.tsx
 import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -13,6 +14,7 @@ import { Cotacoes } from './pages/Cotacoes';
 import { ResponderCotacao } from './pages/Cotacoes/ResponderCotacao';
 import { Pedidos } from './pages/Pedidos';
 import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
+import { Tarefas } from './pages/Tarefas'; // Adicionado import
 
 interface UsuarioLogado {
   id: string;
@@ -21,7 +23,6 @@ interface UsuarioLogado {
   setor?: string;
 }
 
-// Tipos de telas globais do sistema atualizados para abranger Pedidos e fluxos de links externos
 type TelaAtiva = 
   | 'login' 
   | 'home' 
@@ -36,7 +37,8 @@ type TelaAtiva =
   | 'cotacoes'
   | 'responder_cotacao'
   | 'pedidos'
-  | 'formalizar_pedido_externo';
+  | 'formalizar_pedido_externo'
+  | 'tarefas'; // Adicionado tipo 'tarefas'
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
@@ -57,7 +59,6 @@ export default function App() {
   const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>('login');
   const [tokenAcesso, setTokenAcesso] = useState<string | null>(null);
 
-  // Interceptador inteligente e unificado de parâmetros de URL para portais de fornecedores/vendedores
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenCotacao = params.get('token');
@@ -82,9 +83,6 @@ export default function App() {
     setTelaAtiva('login');
   };
 
-  // =========================================================================
-  // 1. RENDERIZAÇÃO DOS PORTAIS DE LINKS EXTERNOS (SEM EXIGÊNCIA DE LOGIN)
-  // =========================================================================
   if (telaAtiva === 'responder_cotacao' && tokenAcesso) {
     return <ResponderCotacao token={tokenAcesso} />;
   }
@@ -93,9 +91,7 @@ export default function App() {
     return <FormalizarPedidoExterno token={tokenAcesso} />;
   }
 
-  // =========================================================================
-  // 2. RENDERIZAÇÃO DA TELA HOME
-  // =========================================================================
+  // 1. RENDERIZAÇÃO DA TELA HOME
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -112,13 +108,11 @@ export default function App() {
         onNavegarParaNotaFalta={() => setTelaAtiva('nota-falta')}
         onNavegarParaCotacoes={() => setTelaAtiva('cotacoes')}
         onNavegarParaPedidos={() => setTelaAtiva('pedidos')}
+        onNavegarParaTarefas={() => setTelaAtiva('tarefas')} // Adicionado gatilho de navegação
       />
     );
   }
 
-  // =========================================================================
-  // 3. DIRECIONAMENTO ISOLADO DOS MÓDULOS INTERNOS ATIVOS
-  // =========================================================================
   if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'usuarios') return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'permissoes') return <Permissoes onVoltarParaHome={() => setTelaAtiva('home')} />;
@@ -133,23 +127,12 @@ export default function App() {
         <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
           <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
             <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button
-              onClick={() => setTelaAtiva('login')}
-              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
-            >
-              Fazer Login
-            </button>
+            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
           </div>
         </div>
       );
     }
-
-    return (
-      <Cotacoes
-        usuarioLogadoId={usuario.id}
-        onVoltarParaHome={() => setTelaAtiva('home')}
-      />
-    );
+    return <Cotacoes usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
   // ROTA DO MÓDULO DE PEDIDOS
@@ -159,59 +142,45 @@ export default function App() {
         <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
           <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
             <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button
-              onClick={() => setTelaAtiva('login')}
-              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
-            >
-              Fazer Login
-            </button>
+            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
           </div>
         </div>
       );
     }
-
-    return (
-      <Pedidos
-        usuarioLogadoId={usuario.id}
-        onVoltarParaHome={() => setTelaAtiva('home')}
-      />
-    );
+    return <Pedidos usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  // Rota do Inventário blindada contra concorrência de estado nulo
+  // ROTA DO MÓDULO DE TAREFAS
+  if (telaAtiva === 'tarefas') {
+    if (!usuario) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
+          </div>
+        </div>
+      );
+    }
+    return <Tarefas usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
   if (telaAtiva === 'inventario') {
     if (!usuario) {
       return (
         <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
           <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
             <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button
-              onClick={() => setTelaAtiva('login')}
-              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
-            >
-              Fazer Login
-            </button>
+            <button onClick={() => setTelaAtiva('login')} className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold">Fazer Login</button>
           </div>
         </div>
       );
     }
-
-    return (
-      <Inventario
-        onVoltarParaHome={() => setTelaAtiva('home')}
-        usuarioLogado={usuario}
-      />
-    );
+    return <Inventario onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
   }
 
-  // Rota da Nota de Falta
   if (telaAtiva === 'nota-falta') {
-    return (
-      <NotaFalta
-        onVoltarParaHome={() => setTelaAtiva('home')}
-        usuarioLogado={usuario}
-      />
-    );
+    return <NotaFalta onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
   }
 
   return <Login onLoginSuccess={handleLoginSuccess} />;
