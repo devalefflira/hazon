@@ -18,7 +18,7 @@ interface LinkGerado {
   url: string;
 }
 
-export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoProps) {
+export function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoProps) {
   const [etapa, setEtapa] = useState<1 | 2 | 3>(1);
   const [itensSelecionados, setItensSelecionados] = useState<Set<string>>(new Set());
   const [fornecedoresSelecionados, setFornecedoresSelecionados] = useState<Set<string>>(new Set());
@@ -50,7 +50,6 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
     });
   };
 
-  // Algoritmo matemático resiliente para geração estável de tokens UUID v4
   const gerarUUIDV4 = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
       const r = (Math.random() * 16) | 0;
@@ -64,7 +63,6 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
 
     try {
       setDisparando(true);
-
       const listaItensIds = Array.from(itensSelecionados);
       const listaFornecedoresPayload = Array.from(fornecedoresSelecionados).map((fId: string) => {
         const f = (fornecedores || []).find((x: FornecedorSugeridoDTO) => x.fornecedor_id === fId);
@@ -83,18 +81,16 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
       const baseUrl = window.location.origin;
       const linksMapped: LinkGerado[] = Array.from(fornecedoresSelecionados).map((fId: string) => {
         const f = (fornecedores || []).find((x: FornecedorSugeridoDTO) => x.fornecedor_id === fId);
-        const tokenAcessoValido = gerarUUIDV4(); 
         return {
           fornecedor: f?.nome_fantasia || 'Fornecedor',
-          url: `${baseUrl}?token=${tokenAcessoValido}`
+          url: `${baseUrl}?token=${gerarUUIDV4()}`
         };
       });
 
       setLinksGerados(linksMapped);
-      // CORREÇÃO 1: setEtapa corrigido para letras minúsculas
       setEtapa(3);
     } catch (error: any) {
-      console.error('Erro no disparo da cotação:', error);
+      console.error(error);
       alert(`⚠️ Falha ao disparar rodada: ${error.message || error}`);
     } finally {
       setDisparando(false);
@@ -104,14 +100,11 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-[calc(100vh-32px)] relative">
-
-        {/* HEADER */}
         <div className="flex items-center gap-3 w-full mb-6 border-b border-gray-100 pb-4">
           <button
             type="button"
-            // CORREÇÃO 2: etapa corrigida para minúsculo
             onClick={() => etapa === 3 ? onSucesso() : setEtapa((prev) => (prev === 2 ? 1 : prev))}
-            className="p-2 hover:bg-gray-50 rounded-full active:scale-90 transition-all text-[#09797a] font-bold text-xl"
+            className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl"
           >
             ←
           </button>
@@ -125,14 +118,13 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
           </div>
         </div>
 
-        {/* CONTEÚDO */}
-        <div className="flex-1 overflow-y-auto pr-0.5 max-h-[calc(100vh-240px)] pb-4">
+        <div className="flex-1 overflow-y-auto max-h-[calc(100vh-240px)] pb-4">
           {etapa === 1 && (
             <>
               {loadingFaltas ? (
                 <p className="text-center text-gray-500 mt-10 text-sm font-medium">Carregando faltas...</p>
               ) : !faltas || faltas.length === 0 ? (
-                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum item pendente para cotação.</p>
+                <p className="text-center text-gray-500 mt-10 text-sm">Nenhum item pendente.</p>
               ) : (
                 faltas.map((item: ItemFaltaCotacaoDTO) => (
                   <CardNotaFalta
@@ -149,7 +141,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
           {etapa === 2 && (
             <>
               {loadingFornecedores ? (
-                <p className="text-center text-gray-500 mt-10 text-sm font-medium">Buscando fornecedores compatíveis...</p>
+                <p className="text-center text-gray-500 mt-10 text-sm font-medium">Buscando fornecedores...</p>
               ) : !fornecedores || fornecedores.length === 0 ? (
                 <p className="text-center text-gray-500 mt-10 text-sm">Nenhum fornecedor encontrado.</p>
               ) : (
@@ -170,9 +162,7 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
               <div className="text-center py-2 select-none">
                 <span className="text-4xl block mb-2">🚀</span>
                 <h3 className="text-sm font-black text-gray-800 uppercase">Cotação Disparada!</h3>
-                <p className="text-[11px] text-gray-400 font-medium mt-1">
-                  Copie os links abaixo e envie aos fornecedores correspondentes:
-                </p>
+                <p className="text-[11px] text-gray-400 font-medium mt-1">Envie os links aos fornecedores:</p>
               </div>
 
               <div className="flex flex-col gap-3 overflow-y-auto max-h-64 pr-0.5">
@@ -184,65 +174,36 @@ export default function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCo
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(link.url);
-                          alert(`Link de "${link.fornecedor}" copiado!`);
+                          alert('Copiado!');
                         }}
-                        className="text-[10px] bg-[#09797a] text-white font-bold px-3 py-1 rounded-lg active:scale-90 transition-all shadow-sm"
+                        className="text-[10px] bg-[#09797a] text-white font-bold px-3 py-1 rounded-lg"
                       >
                         Copiar
                       </button>
                     </div>
-                    <input
-                      type="text"
-                      readOnly
-                      value={link.url}
-                      className="text-[10px] text-gray-400 bg-white border border-gray-200 px-3 py-2 rounded-xl w-full font-mono focus:outline-none"
-                    />
+                    <input type="text" readOnly value={link.url} className="text-[10px] text-gray-400 bg-white border border-gray-200 px-3 py-2 rounded-xl w-full font-mono focus:outline-none" />
                   </div>
                 ))}
               </div>
 
-              <button
-                type="button"
-                onClick={onSucesso}
-                className="w-full bg-[#09797a] text-white py-4 rounded-3xl text-xs font-bold shadow-md mt-auto active:scale-95 transition-all"
-              >
+              <button type="button" onClick={onSucesso} className="w-full bg-[#09797a] text-white py-4 rounded-3xl text-xs font-bold shadow-md mt-auto">
                 Concluir e Voltar ao Painel
               </button>
             </div>
           )}
         </div>
 
-        {/* RODAPÉ */}
         {etapa !== 3 && (
           <div className="pt-4 border-t border-gray-100 mt-auto flex justify-between items-center bg-white w-full">
             <span className="text-xs text-gray-500 font-bold tracking-wide">
               {etapa === 1 ? `${itensSelecionados.size} itens` : `${fornecedoresSelecionados.size} convites`}
             </span>
-
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onVoltar}
-                className="border border-gray-300 text-gray-500 px-4 py-3 rounded-3xl text-xs font-bold active:scale-95 transition-all"
-              >
-                Cancelar
-              </button>
+              <button type="button" onClick={onVoltar} className="border border-gray-300 text-gray-500 px-4 py-3 rounded-3xl text-xs font-bold">Cancelar</button>
               {etapa === 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setEtapa(2)}
-                  disabled={itensSelecionados.size === 0}
-                  className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm"
-                >
-                  Avançar
-                </button>
+                <button type="button" onClick={() => setEtapa(2)} disabled={itensSelecionados.size === 0} className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50">Avançar</button>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleDispararCotacao}
-                  disabled={fornecedoresSelecionados.size === 0 || disparando}
-                  className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50 active:scale-95 transition-all shadow-sm"
-                >
+                <button type="button" onClick={handleDispararCotacao} disabled={fornecedoresSelecionados.size === 0 || disparando} className="bg-[#09797a] text-white px-6 py-3 rounded-3xl text-xs font-bold disabled:opacity-50">
                   {disparando ? 'Processando...' : 'Disparar Cotação'}
                 </button>
               )}

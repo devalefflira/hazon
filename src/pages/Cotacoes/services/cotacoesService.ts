@@ -9,9 +9,6 @@ import type {
 } from '../types/cotacoes.types';
 
 export const cotacoesService = {
-  /**
-   * Obtém todas as Notas de Falta com status 'Pendente' para abrir cotação
-   */
   async listarFaltasPendentes(): Promise<ItemFaltaCotacaoDTO[]> {
     const { data, error } = await supabase
       .from('notas_falta')
@@ -43,9 +40,6 @@ export const cotacoesService = {
     }));
   },
 
-  /**
-   * Busca fornecedores compatíveis resolvendo a FK física vendedor_id
-   */
   async listarFornecedoresPorSetor(setorId: string): Promise<FornecedorSugeridoDTO[]> {
     if (!setorId) return [];
 
@@ -82,15 +76,11 @@ export const cotacoesService = {
     return Array.from(map.values());
   },
 
-  /**
-   * Executa a gravação sequencial síncrona das tabelas mestre, itens e fornecedores
-   */
   async criarRodadaCotacao(payload: CriarCotacaoPayload): Promise<void> {
     if (!payload.nota_falta_ids.length || !payload.fornecedores.length) {
       throw new Error('É mandatório vincular itens e fornecedores para disparar.');
     }
 
-    // 1. Grava o registro mestre
     const { data: mestre, error: errMestre } = await supabase
       .from('cotacoes_mestre')
       .insert([{ comprador_id: payload.comprador_id, status: 'Aberta' }])
@@ -100,19 +90,16 @@ export const cotacoesService = {
     if (errMestre) throw errMestre;
     if (!mestre?.id) throw new Error('Erro na geração da chave primária da rodada.');
 
-    // 2. Grava os itens vinculados na pivot N:N
     const itensPayload = payload.nota_falta_ids.map(id => ({
-      cotacao_mestre_id: mestre.id,
+      cotacao_mestre_id: mestre.id, 
       nota_falta_id: id
     }));
     const { error: errItens } = await supabase.from('cotacoes_itens_vinculados').insert(itensPayload);
     if (errItens) throw errItens;
 
-    // 3. Define a validade padrão do link comercial (5 dias)
     const validadeToken = new Date();
     validadeToken.setDate(validadeToken.getDate() + 5);
 
-    // 4. Grava os convites com os tokens gerados automaticamente pelo PostgreSQL
     const fornPayload = payload.fornecedores.map(f => ({
       cotacao_mestre_id: mestre.id,
       fornecedor_id: f.fornecedor_id,
@@ -122,7 +109,6 @@ export const cotacoesService = {
     const { error: errForn } = await supabase.from('cotacoes_fornecedores_vinculados').insert(fornPayload);
     if (errForn) throw errForn;
 
-    // 5. Atualiza a esteira original de Notas de Falta
     const { error: errFalta } = await supabase
       .from('notas_falta')
       .update({ status_cotacao: 'Em Cotação' })
@@ -130,9 +116,6 @@ export const cotacoesService = {
     if (errFalta) throw errFalta;
   },
 
-  /**
-   * Busca as propostas do vendedor de forma linear e isolada por escopo atômico
-   */
   async obterDetalhesCotacaoPorToken(token: string) {
     if (!token) throw new Error('Token inválido.');
 
@@ -172,23 +155,19 @@ export const cotacoesService = {
       };
     }).filter(item => item.id !== '');
 
+    const fornObj = Array.isArray(vinculo.fornecedores) ? vinculo.fornecedores[0] : vinculo.fornecedores;
+
     return {
       vinculo_id: vinculo.id,
       cotacao_mestre_id: vinculo.cotacao_mestre_id,
       respondido_em: vinculo.respondido_em,
       prazo_entrega_dias: vinculo.prazo_entrega_dias || '',
       condicoes_pagamento: vinculo.condicoes_pagamento || '',
-      // CORREÇÃO: Fornecedores vem como array na junção relacional do Supabase
-      fornecedor_nome: Array.isArray(vinculo.fornecedores)
-        ? (vinculo.fornecedores[0]?.nome_fantasia || vinculo.fornecedores[0]?.razao_social || 'Fornecedor')
-        : ((vinculo.fornecedores as any)?.nome_fantasia || (vinculo.fornecedores as any)?.razao_social || 'Fornecedor'),
+      fornecedor_nome: fornObj?.nome_fantasia || fornObj?.razao_social || 'Fornecedor',
       itens: itensFormatados
     };
   },
 
-  /**
-   * Registra a proposta comercial preenchida pelo vendedor externo
-   */
   async registrarRespostaFornecedor(payload: SubmeterRespostaFornecedorPayload): Promise<void> {
     const vinculo = await this.obterDetalhesCotacaoPorToken(payload.token_acesso);
     if (vinculo.respondido_em) throw new Error('Esta rodada já foi respondida por sua empresa.');
@@ -214,9 +193,6 @@ export const cotacoesService = {
     if (errVinculo) throw errVinculo;
   },
 
-  /**
-   * Obtém o histórico unificado de cotações para o painel principal
-   */
   async listarHistoricoCotacoes(): Promise<CotacaoMestreRegistro[]> {
     const { data, error } = await supabase
       .from('cotacoes_mestre')
@@ -239,13 +215,10 @@ export const cotacoesService = {
     }));
   },
 
-  /**
-   * Encerra a rodada de cotação e salva a listagem definitiva dos ganhadores
-   */
   async concluirCotacao(payload: ConcluirCotacaoPayload): Promise<boolean> {
     const { error: errMestre } = await supabase
       .from('cotacoes_mestre')
-      .update({
+      .update({ 
         status: 'Concluída',
         cenario_escolhido: payload.cenario_escolhido,
         justificativa_escolha: payload.justificativa_escolha,

@@ -1,4 +1,3 @@
-// Arquivo: src/pages/Cotacoes/hooks/useFornecedoresSugeridos.ts
 import { useState, useEffect } from 'react';
 import { cotacoesService } from '../services/cotacoesService';
 import type { FornecedorSugeridoDTO } from '../types/cotacoes.types';
@@ -8,6 +7,7 @@ export function useFornecedoresSugeridos(setorIds: string[]) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // CORREÇÃO: Alterado de sectorIds para setorIds
     if (!setorIds || setorIds.length === 0) {
       setFornecedores([]);
       return;
@@ -34,6 +34,9 @@ export function useFornecedoresSugeridos(setorIds: string[]) {
     carregar();
   }, [setorIds]);
 
-  // Retorna 'fornecedores' padronizado em português para o componente NovaCotacao consumir
-  return { proveedores: fornecedores, fornecedores, loading };
+  return { 
+    fornecedores, 
+    proveedores: fornecedores, 
+    loading 
+  };
 }
