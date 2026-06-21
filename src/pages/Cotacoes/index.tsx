@@ -4,25 +4,17 @@ import type { CotacaoMestreRegistro } from './types/cotacoes.types';
 import { NovaCotacao } from './NovaCotacao';
 import { DetalhesCotacaoPainel } from './DetalhesCotacaoPainel';
 
-export function Cotacoes() {
+// 1. O componente agora exige o id do operador de forma obrigatória e tipada
+interface CotacoesProps {
+  usuarioLogadoId: string;
+}
+
+export function Cotacoes({ usuarioLogadoId }: CotacoesProps) {
   const [view, setView] = useState<'list' | 'create' | 'details'>('list');
   const [loading, setLoading] = useState(true);
   const [historico, setHistorico] = useState<CotacaoMestreRegistro[]>([]);
   const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
-  const [compradorId, setCompradorId] = useState<string>('');
 
-  useEffect(() => {
-    async function obterUsuario() {
-      const { data } = await import('../../lib/supabaseClient').then(m => m.supabase.auth.getUser());
-      if (data?.user?.id) {
-        setCompradorId(data.user.id);
-      } else {
-        // Fallback defensivo para listagem local de testes
-        setCompradorId('00000000-0000-0000-0000-000000000000');
-      }
-    }
-    obterUsuario();
-  }, []);
 
   async function carregarHistorico() {
     try {
@@ -30,7 +22,7 @@ export function Cotacoes() {
       const dados = await cotacoesService.listarHistoricoCotacoes();
       setHistorico(dados);
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao buscar histórico:', err);
     } finally {
       setLoading(false);
     }
@@ -43,7 +35,7 @@ export function Cotacoes() {
   if (view === 'create') {
     return (
       <NovaCotacao 
-        compradorId={compradorId} 
+        compradorId={usuarioLogadoId} // Passa o ID real e dinâmico adiante
         onVoltar={() => setView('list')} 
         onSucesso={() => setView('list')} 
       />
@@ -83,8 +75,8 @@ export function Cotacoes() {
             <p className="text-center text-gray-400 text-xs font-medium py-10">Nenhuma rodada de cotação aberta.</p>
           ) : (
             historico.map((row) => (
-              <div 
-                key={row.id} 
+              <div
+                key={row.id}
                 onClick={() => {
                   setSelectedCotacaoId(row.id);
                   setView('details');
@@ -97,9 +89,8 @@ export function Cotacoes() {
                   <span className="text-[10px] text-gray-400 font-medium">📦 {row.itens_vinculados_count} itens vinculados</span>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
-                  <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
-                    row.status === 'Concluída' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                  }`}>{row.status}</span>
+                  <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${row.status === 'Concluída' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}>{row.status}</span>
                   <span className="text-[9px] text-gray-400 font-mono font-bold">{new Date(row.created_at).toLocaleDateString('pt-BR')}</span>
                 </div>
               </div>

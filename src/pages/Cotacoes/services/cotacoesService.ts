@@ -81,6 +81,7 @@ export const cotacoesService = {
       throw new Error('É mandatório vincular itens e fornecedores para disparar.');
     }
 
+    // 1. Grava o mestre
     const { data: mestre, error: errMestre } = await supabase
       .from('cotacoes_mestre')
       .insert([{ comprador_id: payload.comprador_id, status: 'Aberta' }])
@@ -90,6 +91,7 @@ export const cotacoesService = {
     if (errMestre) throw errMestre;
     if (!mestre?.id) throw new Error('Erro na geração da chave primária da rodada.');
 
+    // 2. Grava os itens vinculados na pivot N:N
     const itensPayload = payload.nota_falta_ids.map(id => ({
       cotacao_mestre_id: mestre.id, 
       nota_falta_id: id
@@ -97,18 +99,22 @@ export const cotacoesService = {
     const { error: errItens } = await supabase.from('cotacoes_itens_vinculados').insert(itensPayload);
     if (errItens) throw errItens;
 
+    // 3. Define a validade padrão do link comercial (5 dias)
     const validadeToken = new Date();
     validadeToken.setDate(validadeToken.getDate() + 5);
 
+    // 4. Grava os convites forçando o token gerado de forma síncrona pelo cliente
     const fornPayload = payload.fornecedores.map(f => ({
       cotacao_mestre_id: mestre.id,
       fornecedor_id: f.fornecedor_id,
       vendedor_id: f.vendedor_id || null,
+      token_acesso: f.token_acesso, // CORREÇÃO: Força a gravação do token correto
       token_validade: validadeToken.toISOString()
     }));
     const { error: errForn } = await supabase.from('cotacoes_fornecedores_vinculados').insert(fornPayload);
     if (errForn) throw errForn;
 
+    // 5. Atualiza a esteira original de Notas de Falta
     const { error: errFalta } = await supabase
       .from('notas_falta')
       .update({ status_cotacao: 'Em Cotação' })
@@ -118,25 +124,44 @@ export const cotacoesService = {
 
   async obterDetalhesCotacaoPorToken(token: string) {
     if (!token) throw new Error('Token inválido.');
-
-    const { data: vinculo, error: errVinculo } = await supabase
+    
+    const { data: vinculos, error: errVinculo } = await supabase
       .from('cotacoes_fornecedores_vinculados')
       .select(`
-        id, cotacao_mestre_id, prazo_entrega_dias, condicoes_pagamento, respondido_em,
-        fornecedores:fornecedor_id ( razao_social, nome_fantasia )
+        id, 
+        cotacao_mestre_id, 
+        prazo_entrega_dias, 
+        condicoes_pagamento, 
+        respondido_em,
+        fornecedor_id
       `)
-      .eq('token_acesso', token)
+      .eq('token_acesso', token);
+
+    if (errVinculo || !vinculos || vinculos.length === 0) {
+      throw new Error('Link comercial inativo ou expirado.');
+    }
+
+    const vinculo = vinculos[0];
+
+    // Busca o nome do fornecedor de forma isolada e segura
+    const { data: fornData } = await supabase
+      .from('fornecedores')
+      .select('razao_social, nome_fantasia')
+      .eq('id', vinculo.fornecedor_id)
       .single();
 
-    if (errVinculo || !vinculo) throw new Error('Link comercial inativo ou expirado.');
-
+    // Busca os itens vinculados à cotação mestre resolvendo a descrição do produto
     const { data: itensVinculados, error: errItens } = await supabase
       .from('cotacoes_itens_vinculados')
       .select(`
+        nota_falta_id,
         notas_falta:nota_falta_id (
           id,
+          produto_id,
           produtos:produto_id (
-            id, descricao, codigo_barras,
+            id, 
+            descricao, 
+            codigo_barras,
             unidades_medida:unidade_medida_id ( sigla )
           )
         )
@@ -149,13 +174,11 @@ export const cotacoesService = {
       const prod = iv.notas_falta?.produtos;
       return {
         id: String(prod?.id || ''),
-        descricao: String(prod?.descricao || 'Produto'),
+        descricao: String(prod?.descricao || 'Produto não identificado'),
         codigo_barras: prod?.codigo_barras ? String(prod.codigo_barras) : null,
         unidade_medida: String(prod?.unidades_medida?.sigla || 'UN')
       };
     }).filter(item => item.id !== '');
-
-    const fornObj = Array.isArray(vinculo.fornecedores) ? vinculo.fornecedores[0] : vinculo.fornecedores;
 
     return {
       vinculo_id: vinculo.id,
@@ -163,7 +186,7 @@ export const cotacoesService = {
       respondido_em: vinculo.respondido_em,
       prazo_entrega_dias: vinculo.prazo_entrega_dias || '',
       condicoes_pagamento: vinculo.condicoes_pagamento || '',
-      fornecedor_nome: fornObj?.nome_fantasia || fornObj?.razao_social || 'Fornecedor',
+      fornecedor_nome: fornData?.nome_fantasia || fornData?.razao_social || 'Fornecedor',
       itens: itensFormatados
     };
   },

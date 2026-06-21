@@ -40,7 +40,10 @@ export function ResponderCotacao({ token }: ResponderCotacaoProps) {
         setCondicoesPagamento(dados.condicoes_pagamento);
 
         const itensIniciais = dados.itens.map((item: any) => ({
-          ...item,
+          id: item.id,
+          descricao: item.descricao,
+          codigo_barras: item.codigo_barras,
+          unidade_medida: item.unidade_medida,
           preco: ''
         }));
         setItens(itensIniciais);
@@ -127,7 +130,7 @@ export function ResponderCotacao({ token }: ResponderCotacaoProps) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Forma / Condição de Pagamento</label>
-            <input type="text" required value={condicoesPagamento} onChange={(e) => setCondicoesPagamento(e.target.value)} placeholder="Ex: Boleto 30 dias" className="w-full text-xs bg-gray-50 border border-gray-200 px-4 py-3 rounded-2xl focus:outline-none focus:border-[#09797a] font-medium" />
+            <input type="text" required value={condicoesPagamento} onChange={(e) => setConditionsPagamentoLocal(e.target.value)} placeholder="Ex: Boleto 30 dias" className="w-full text-xs bg-gray-50 border border-gray-200 px-4 py-3 rounded-2xl focus:outline-none focus:border-[#09797a] font-medium" />
           </div>
         </div>
 
@@ -155,4 +158,8 @@ export function ResponderCotacao({ token }: ResponderCotacaoProps) {
       </form>
     </div>
   );
+
+  function setConditionsPagamentoLocal(val: string) {
+    setCondicoesPagamento(val || '');
+  }
 }

@@ -63,29 +63,37 @@ export function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoPro
 
     try {
       setDisparando(true);
+
       const listaItensIds = Array.from(itensSelecionados);
-      const listaFornecedoresPayload = Array.from(fornecedoresSelecionados).map((fId: string) => {
+      
+      // 1. Mapeia os fornecedores gerando um par estável de Fornecedor + Token de acesso único
+      const tokensMapeados = Array.from(fornecedoresSelecionados).map((fId: string) => {
         const f = (fornecedores || []).find((x: FornecedorSugeridoDTO) => x.fornecedor_id === fId);
         return {
           fornecedor_id: fId,
-          vendedor_id: f?.vendedor_id || null
+          vendedor_id: f?.vendedor_id || null,
+          nome_fantasia: f?.nome_fantasia || 'Fornecedor',
+          token: gerarUUIDV4() // Gerado uma única vez por fornecedor
         };
       });
 
+      // 2. Envia exatamente os mesmos tokens gerados para persistência no Supabase
       await cotacoesService.criarRodadaCotacao({
         comprador_id: compradorId,
         nota_falta_ids: listaItensIds,
-        fornecedores: listaFornecedoresPayload
+        fornecedores: tokensMapeados.map(t => ({
+          fornecedor_id: t.fornecedor_id,
+          vendedor_id: t.vendedor_id,
+          token_acesso: t.token
+        }))
       });
 
+      // 3. Monta as URLs de visualização da tela usando exatamente as mesmas chaves do banco
       const baseUrl = window.location.origin;
-      const linksMapped: LinkGerado[] = Array.from(fornecedoresSelecionados).map((fId: string) => {
-        const f = (fornecedores || []).find((x: FornecedorSugeridoDTO) => x.fornecedor_id === fId);
-        return {
-          fornecedor: f?.nome_fantasia || 'Fornecedor',
-          url: `${baseUrl}?token=${gerarUUIDV4()}`
-        };
-      });
+      const linksMapped: LinkGerado[] = tokensMapeados.map(t => ({
+        fornecedor: t.nome_fantasia,
+        url: `${baseUrl}?token=${t.token}`
+      }));
 
       setLinksGerados(linksMapped);
       setEtapa(3);

@@ -9,8 +9,8 @@ import Vendedores from './pages/Vendedores';
 import Produtos from './pages/Produtos';
 import Inventario from './pages/Inventario';
 import NotaFalta from './pages/NotaFalta';
-import Cotacoes from './pages/Cotacoes';
-import ResponderCotacao from './pages/Cotacoes/ResponderCotacao';
+import { Cotacoes } from './pages/Cotacoes';
+import {ResponderCotacao} from './pages/Cotacoes/ResponderCotacao';
 
 interface UsuarioLogado {
   id: string;
@@ -85,31 +85,31 @@ export default function App() {
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
 
   // ROTA DO MÓDULO DE COTAÇÕES
-  if (telaAtiva === 'cotacoes') {
-    if (!usuario) {
-      return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
-          <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
-            <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
-            <button
-              onClick={() => setTelaAtiva('login')}
-              className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
-            >
-              Fazer Login
-            </button>
-          </div>
-        </div>
-      );
-    }
-
+if (telaAtiva === 'cotacoes') {
+  if (!usuario) {
     return (
-      <Cotacoes
-        onVoltarParaHome={() => setTelaAtiva('home')}
-        usuarioLogado={usuario}
-      />
+      <div className="min-h-screen bg-gray-100 flex justify-center items-center font-sans">
+        <div className="bg-white p-6 rounded-4xl shadow-xl text-center max-w-85">
+          <p className="text-sm font-bold text-gray-600 mb-3">Sessão expirada ou inválida.</p>
+          <button
+            onClick={() => setTelaAtiva('login')}
+            className="px-4 h-10 bg-[#09797a] text-white rounded-xl text-xs font-bold"
+          >
+            Fazer Login
+          </button>
+        </div>
+      </div>
     );
   }
 
+  // AJUSTE OPERACIONAL DEFINITIVO:
+  // Injeta diretamente a propriedade de ID extraída dinamicamente do objeto 'usuario' da sessão
+  return (
+    <Cotacoes
+      usuarioLogadoId={usuario.id}
+    />
+  );
+}
   // Rota do Inventário blindada contra concorrência de estado nulo
   if (telaAtiva === 'inventario') {
     if (!usuario) {

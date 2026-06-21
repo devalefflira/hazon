@@ -29,6 +29,7 @@ export interface CriarCotacaoPayload {
   fornecedores: {
     fornecedor_id: string;
     vendedor_id: string | null;
+    token_acesso: string;
   }[];
 }
 
