@@ -19,6 +19,7 @@ export const temperaturaService = {
       .insert([{
         tipo_item: payload.tipo_item,
         nome: payload.nome.trim().toUpperCase(),
+        categoria_frio: payload.categoria_frio, // <-- GRAVA A CATEGORIA NO BANCO
         temp_conforme: Number(payload.temp_conforme),
         temp_limite_tolerancia: Number(payload.temp_limite_tolerancia),
         temp_nao_conforme: Number(payload.temp_nao_conforme)
