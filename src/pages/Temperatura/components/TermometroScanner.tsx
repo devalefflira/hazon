@@ -16,14 +16,18 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
 
   useEffect(() => {
     let ativo = true;
-    let intervaloProcessamento: number; // Tipo numérico nativo do navegador para evitar conflito com NodeJS
+    let intervaloProcessamento: number;
+    let processandoQuadro = false; // Trava de segurança para não acumular processamento
 
     async function iniciarCameraEReconhecimento() {
       try {
         setStatusTexto('Configurando leitor óptico...');
+        
+        // Inicializa o Worker focado estritamente nos caracteres do termômetro
         const worker = await createWorker('por');
         await worker.setParameters({
-          tessedit_char_whitelist: '0123456789.cC ',
+          tessedit_char_whitelist: '0123456789.cC-',
+          tessedit_pageseg_mode: '7' as any, // <-- Cast com 'as any' para sanar o erro de tipagem estrita do PSM
         });
 
         if (!ativo) {
@@ -32,10 +36,14 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
         }
 
         setStatusTexto('Abrindo câmera traseira...');
-        const stream = await mediaDevices_getUserMedia({
-          video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: { ideal: 'environment' }, 
+            width: { ideal: 640 }, // Reduzido de 1280 para 640 (Quadros menores processam 4x mais rápido!)
+            height: { ideal: 480 } 
+          }
         }).catch(() => {
-          return mediaDevices_getUserMedia({ video: true });
+          return navigator.mediaDevices.getUserMedia({ video: true });
         });
 
         streamRef.current = stream;
@@ -46,8 +54,9 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
         setLoading(false);
         setStatusTexto('Aponte para o display do termômetro');
 
+        // Loop de processamento otimizado
         intervaloProcessamento = setInterval(async () => {
-          if (!videoRef.current || !canvasRef.current || !ativo) return;
+          if (!videoRef.current || !canvasRef.current || !ativo || processandoQuadro) return;
 
           const video = videoRef.current;
           const canvas = canvasRef.current;
@@ -55,22 +64,37 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
 
           if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
+          processandoQuadro = true; // Bloqueia novas execuções até terminar esta
+
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-          const larguraCorte = canvas.width * 0.6;
-          const alturaCorte = canvas.height * 0.3;
+          // Corta uma região central bem focada (ROI)
+          const larguraCorte = canvas.width * 0.5;
+          const alturaCorte = canvas.height * 0.25;
           const xCorte = (canvas.width - larguraCorte) / 2;
           const yCorte = (canvas.height - alturaCorte) / 2;
 
           const imagemItem = ctx.getImageData(xCorte, yCorte, larguraCorte, alturaCorte);
-          
           const d = imagemItem.data;
+
+          // 🔥 FILTRO DE BINARIZAÇÃO DE ALTO CONTRASTE (PRETO E BRANCO PURO)
+          // Como os números são brancos e brilhantes, isolamos pixels de alta luminosidade
           for (let i = 0; i < d.length; i += 4) {
-            d[i] = 255 - d[i];       
-            d[i+1] = 255 - d[i+1];   
-            d[i+2] = 255 - d[i+2];   
+            const r = d[i];
+            const g = d[i+1];
+            const b = d[i+2];
+            
+            // Fórmula de luminosidade perceptível
+            const luminosidade = 0.299 * r + 0.587 * g + 0.114 * b;
+            
+            // Se o pixel for brilhante (número), vira Branco Puro. Se for escuro, vira Preto Absoluto.
+            const valorBinario = luminosidade > 160 ? 255 : 0; 
+            
+            d[i] = valorBinario;     
+            d[i+1] = valorBinario;   
+            d[i+2] = valorBinario;   
           }
           
           const canvasTratado = document.createElement('canvas');
@@ -78,10 +102,15 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
           canvasTratado.height = alturaCorte;
           canvasTratado.getContext('2d')?.putImageData(imagemItem, 0, 0);
 
+          // Executa o OCR na imagem limpa de ruídos
           const { data: { text } } = await worker.recognize(canvasTratado);
           
+          // Tratamento de string agressivo para limpar falsos espaços ou caracteres fantasmas
+          const textoLimpo = text.replace(/[^0-9.-]/g, '');
+
+          // Captura padrões como 30.1, 34.2, 35.5 ou negativos -10.5
           const regexTermometro = /(-?\d{1,2}\.\d)/;
-          const resultado = text.replace(/\s+/g, '').match(regexTermometro);
+          const resultado = textoLimpo.match(regexTermometro);
 
           if (resultado && resultado[1]) {
             const valorDetectado = parseFloat(resultado[1]);
@@ -91,9 +120,12 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
               await worker.terminate();
               stream.getTracks().forEach(track => track.stop());
               onCaptura(valorDetectado);
+              return;
             }
           }
-        }, 1500);
+
+          processandoQuadro = false; // Libera para o próximo quadro se não capturou
+        }, 800); // Frequência reduzida para 800ms (Mais tentativas por minuto de forma leve)
 
       } catch (err) {
         console.error(err);
@@ -103,7 +135,6 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
 
     iniciarCameraEReconhecimento();
 
-    // === O RETORNO DE LIMPEZA FICA EXATAMENTE AQUI (NO FINAL DO USEEFFECT) ===
     return () => {
       ativo = false;
       if (intervaloProcessamento) clearInterval(intervaloProcessamento);
@@ -112,10 +143,6 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
       }
     };
   }, [onCaptura]);
-
-  function mediaDevices_getUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream> {
-    return navigator.mediaDevices.getUserMedia(constraints);
-  }
 
   return (
     <div className="fixed inset-0 bg-black flex flex-col justify-center items-center z-50 p-4 font-sans select-none">
@@ -131,9 +158,10 @@ export function TermometroScanner({ onCaptura, onFechar }: TermometroScannerProp
 
         <canvas ref={canvasRef} className="hidden" />
 
+        {/* MIRA DO SCANNER */}
         <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
-          <div className="w-[60%] aspect-2/1 border-4 border-dashed border-orange-500 rounded-2xl flex justify-center items-center bg-black/20 animate-pulse">
-            <span className="text-[9px] text-white font-black bg-orange-500 px-2 py-0.5 rounded-md uppercase tracking-wider">Alinhe o Display Aqui</span>
+          <div className="w-[60%] aspect-2.5/1 border-4 border-emerald-500 rounded-2xl flex justify-center items-center bg-black/10">
+            <span className="text-[9px] text-white font-black bg-emerald-600 px-2 py-0.5 rounded-md uppercase tracking-wider animate-pulse">Enquadre o Número Central</span>
           </div>
         </div>
 
