@@ -39,21 +39,27 @@ export const temperaturaService = {
 
     if (error) throw error;
 
-    return (data || []).map((a: any) => ({
-      id: a.id,
-      codigo_customizado: a.codigo_customizado,
-      equipamento_id: a.equipamento_id,
-      equipamento_nome: a.temperatura_equipamentos?.nome || 'Equipamento Removido',
-      equipamento_tipo: a.temperatura_equipamentos?.tipo_item || 'N/A',
-      usuario_id: a.usuario_id,
-      usuario_nome: a.usuarios?.nome || 'Operador',
-      temperatura_aferida: Number(a.temperatura_aferida),
-      status_resultado: a.status_resultado,
-      foto_comprobatoria: a.foto_comprobatoria, // Recupera a imagem
-      data_registro: a.data_registro,
-      hora_registro: a.hora_registro,
-      created_at: a.created_at
-    }));
+    return (data || []).map((a: any) => {
+      // Força o TypeScript a converter o timestamp UTC do banco para o fuso horário local do celular/PC
+      const dataLocal = new Date(a.created_at);
+      const horaTratada = dataLocal.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      return {
+        id: a.id,
+        codigo_customizado: a.codigo_customizado,
+        equipamento_id: a.equipamento_id,
+        equipamento_nome: a.temperatura_equipamentos?.nome || 'Equipamento Removido',
+        equipamento_tipo: a.temperatura_equipamentos?.tipo_item || 'N/A',
+        usuario_id: a.usuario_id,
+        usuario_nome: a.usuarios?.nome || 'Operador',
+        temperatura_aferida: Number(a.temperatura_aferida),
+        status_resultado: a.status_resultado,
+        foto_comprobatoria: a.foto_comprobatoria,
+        data_registro: a.data_registro,
+        hora_registro: horaTratada, // <-- AJUSTE AQUI: Substitui a string bruta pela hora convertida localmente
+        created_at: a.created_at
+      };
+    });
   },
 
   async registrarAfericao(payload: Types.CriarAfericaoPayload): Promise<void> {
