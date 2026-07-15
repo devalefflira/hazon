@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { temperaturaService } from './services/temperaturaService';
 import type { EquipamentoFrioDTO, AfericaoTemperaturaDTO } from './types/temperatura.types';
+import { TermometroScanner } from './components/TermometroScanner';
 
 interface TemperaturaProps {
   usuarioLogadoId: string;
@@ -34,6 +35,8 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
   // Estados Automáticos de Tempo Local
   const [dataRecebimento] = useState(new Date().toLocaleDateString('pt-BR'));
   const [horaRecebimento] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+
+  const [scannerAberto, setScannerAberto] = useState(false);
 
   async function carregarDados() {
     try {
@@ -129,10 +132,20 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
             <p className="text-center text-gray-400 text-xs font-bold py-10 animate-pulse">Sincronizando sensores térmicos...</p>
           ) : (
             <>
-              {/* SUB-VIEW 1: FORMULÁRIO DE NOVA AFERIÇÃO */}
+              {/* SUB-VIEW 1: FORMULÁRIO DE NOVA AFERIÇÃO (LEITURA INTEGRADA POR CÂMERA) */}
               {modo === 'nova-afericao' && (
-                <form onSubmit={handleSalvarAfericao} className="flex flex-col gap-3.5 bg-gray-50 p-4 rounded-3xl border border-gray-200 animate-scale-up">
-                  {/* AJUSTE: Inclusão da Hora Automática no grid superior */}
+                <div className="flex flex-col gap-3.5 bg-gray-50 p-4 rounded-3xl border border-gray-200 animate-scale-up">
+                  
+                  {scannerAberto && (
+                    <TermometroScanner
+                      onCaptura={(valor) => {
+                        setTemperaturaDigitada(String(valor));
+                        setScannerAberto(false);
+                      }}
+                      onFechar={() => setScannerAberto(false)}
+                    />
+                  )}
+
                   <div className="grid grid-cols-3 gap-2 bg-white p-3 rounded-2xl border border-gray-100 text-[10px] text-gray-500 font-bold">
                     <div>📅 Data: <span className="text-gray-700 font-black block mt-0.5">{dataRecebimento}</span></div>
                     <div>🕒 Hora: <span className="text-gray-700 font-black block mt-0.5">{horaRecebimento}</span></div>
@@ -154,24 +167,34 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
                     </select>
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Temperatura no Termômetro (°C)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={temperaturaDigitada}
-                      onChange={(e) => setTemperaturaDigitada(e.target.value)}
-                      placeholder="EX: -18.5"
-                      className="w-full h-11 text-xs bg-white border border-gray-200 px-4 rounded-xl font-bold text-gray-700 focus:outline-none"
-                    />
+                  {/* CAMPO DE VALOR IMPEDIDO DE DIGITAÇÃO MANUAL */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Temperatura Capturada</label>
+                    <div className="flex gap-2 w-full">
+                      <div className="flex-1 h-11 bg-white border border-gray-200 rounded-xl px-4 flex items-center font-mono font-black text-sm text-gray-800 shadow-2xs">
+                        {temperaturaDigitada ? `${temperaturaDigitada} °C` : '⚠️ AGUARDANDO LEITURA ÓPTICA...'}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setScannerAberto(true)}
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-black text-xs px-4 rounded-xl shadow-md active:scale-95 transition-all"
+                      >
+                        📷 LER TELA
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex gap-2 mt-1">
-                    <button type="submit" disabled={salvando || equipamentos.length === 0} className="flex-1 bg-[#09797a] text-white py-3.5 rounded-2xl text-xs font-black uppercase shadow-sm">Gravar Medição</button>
-                    <button type="button" onClick={() => setModo('lista-afericoes')} className="bg-gray-200 text-gray-500 text-xs font-bold px-4 rounded-2xl">Concluir</button>
-                  </div>
-                </form>
+                  <form onSubmit={handleSalvarAfericao} className="flex gap-2 mt-2 border-t border-gray-100 pt-3">
+                    <button 
+                      type="submit" 
+                      disabled={salvando || !temperaturaDigitada || equipamentos.length === 0} 
+                      className="flex-1 bg-[#09797a] text-white py-4 rounded-3xl text-xs font-black uppercase shadow-md disabled:opacity-30 transition-all"
+                    >
+                      Gravar Medição
+                    </button>
+                    <button type="button" onClick={() => { setTemperaturaDigitada(''); setModo('lista-afericoes'); }} className="bg-gray-200 text-gray-500 text-xs font-bold px-5 rounded-3xl">Concluir</button>
+                  </form>
+                </div>
               )}
 
               {/* SUB-VIEW 2: NOVO CADASTRO DE EQUIPAMENTO */}
@@ -283,4 +306,4 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
       </div>
     </div>
   );
-}
+} 
