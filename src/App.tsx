@@ -17,7 +17,8 @@ import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno
 import { Tarefas } from './pages/Tarefas';
 import Avarias from './pages/Avarias';
 import { ConfCega } from './pages/ConfCega';
-import Relatorios from './pages/Relatorios'; // <-- IMPORTAÇÃO INJETADA
+import Relatorios from './pages/Relatorios';
+import Temperatura from './pages/Temperatura'; // <-- IMPORTAÇÃO DO NOVO MÓDULO
 
 interface UsuarioLogado {
   id: string;
@@ -44,16 +45,17 @@ type TelaAtiva =
   | 'tarefas'
   | 'avarias'
   | 'conf-cega'
-  | 'relatorios'; // <-- TELA ADICIONADA AO CANIVETE DE ROTAS
+  | 'relatorios'
+  | 'temperatura'; // <-- ADICIONADO AO CANIVETE DE ROTAS
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
     'Usuarios', 'Fornecedores', 'Vendedores', 'Produtos', 'Inventario',
     'Nota de Falta', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias',
-    'Pedidos', 'Tarefas', 'Conf. Cega', 'Permissoes', 'Categorias'
+    'Pedidos', 'Tarefas', 'Conf. Cega', 'Permissoes', 'Categorias', 'Temperatura'
   ],
   'Gerencial': [
-    'Inventario', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias', 'Pedidos', 'Tarefas', 'Conf. Cega'
+    'Inventario', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias', 'Pedidos', 'Tarefas', 'Conf. Cega', 'Temperatura'
   ],
   'Operacional': [
     'Inventario', 'Nota de Falta', 'Avarias', 'Tarefas', 'Conf. Cega'
@@ -116,7 +118,8 @@ export default function App() {
         onNavegarParaTarefas={() => setTelaAtiva('tarefas')}
         onNavegarParaAvarias={() => setTelaAtiva('avarias')}
         onNavegarParaConfCega={() => setTelaAtiva('conf-cega')}
-        onNavegarParaRelatorios={() => setTelaAtiva('relatorios')} // <-- GATILHO PLUGADO
+        onNavegarParaRelatorios={() => setTelaAtiva('relatorios')}
+        onNavegarParaTemperatura={() => setTelaAtiva('temperatura')} // <-- DIRECIONAMENTO INJETADO
       />
     );
   }
@@ -153,10 +156,15 @@ export default function App() {
     return <ConfCega usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  // FIÇÃO DA TELA DE RELATÓRIOS
   if (telaAtiva === 'relatorios') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Relatorios onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
+  // FIÇÃO DA NOVA ROTA DO PROJETO DE TEMPERATURA
+  if (telaAtiva === 'temperatura') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Temperatura usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
   if (telaAtiva === 'inventario') {

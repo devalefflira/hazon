@@ -37,7 +37,8 @@ interface HomeProps {
   onNavegarParaTarefas: () => void;
   onNavegarParaAvarias: () => void;
   onNavegarParaConfCega: () => void;
-  onNavegarParaRelatorios: () => void; // <-- CONTRATO INJETADO NA HOME
+  onNavegarParaRelatorios: () => void;
+  onNavegarParaTemperatura: () => void; // <-- CONTRATO INJETADO NA HOME
 }
 
 export default function Home({
@@ -57,7 +58,8 @@ export default function Home({
   onNavegarParaTarefas,
   onNavegarParaAvarias,
   onNavegarParaConfCega,
-  onNavegarParaRelatorios, // <-- DESESTRUTURADO AQUI
+  onNavegarParaRelatorios,
+  onNavegarParaTemperatura, // <-- DESESTRUTURADO AQUI
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -76,6 +78,7 @@ export default function Home({
     { label: 'Pedidos', icon: iconPedidos },
     { label: 'Tarefas', icon: iconTarefas },
     { label: 'Conf. Cega', icon: iconConfCega },
+    { label: 'Temperatura', icon: iconInventario }, // <-- REAPROVEITADO ICONINVENTARIO OU INSERIR NOVO
     { label: 'Permissões', icon: iconPermissoes },
     { label: 'Categorias', icon: iconCategorias },
   ];
@@ -120,7 +123,8 @@ export default function Home({
       'Avarias': 'Avarias',
       'Pedidos': 'Pedidos',
       'Tarefas': 'Tarefas',
-      'Conf. Cega': 'Conf. Cega'
+      'Conf. Cega': 'Conf. Cega',
+      'Temperatura': 'Temperatura' // Módulo mapeado
     };
 
     const moduloChave = mapaModulos[label];
@@ -143,11 +147,12 @@ export default function Home({
     else if (label === 'Tarefas') onNavegarParaTarefas();
     else if (label === 'Avarias') onNavegarParaAvarias();
     else if (label === 'Conf. Cega') onNavegarParaConfCega();
-    else if (label === 'Relatórios') onNavegarParaRelatorios(); // <-- ROTA DISPARADA
+    else if (label === 'Relatórios') onNavegarParaRelatorios(); 
+    else if (label === 'Temperatura') onNavegarParaTemperatura(); // <-- ROTA DISPARADA COM SUCESSO
     else if (label === 'Nota de Falta') {
       if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
     } else {
-      alert(`O módulo "${label}" está liberado para o seu perfil e será construído em breve!`);
+      alert(`O módulo "${label}" está liberado e será construído em breve!`);
     }
   };
 
