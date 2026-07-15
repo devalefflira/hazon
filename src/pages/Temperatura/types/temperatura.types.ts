@@ -1,3 +1,5 @@
+// Arquivo: src/pages/Temperatura/types/temperatura.types.ts
+
 export interface EquipamentoFrioDTO {
   id: string;
   tipo_item: 'Ilha Horizontal' | 'Ilha Vertical' | 'Câmara Fria';
@@ -18,6 +20,7 @@ export interface AfericaoTemperaturaDTO {
   usuario_nome: string;
   temperatura_aferida: number;
   status_resultado: 'Conforme' | 'Limite de Tolerância' | 'Não Conforme';
+  foto_comprobatoria?: string | null; // <-- INJETADO
   data_registro: string;
   hora_registro: string;
   created_at: string;
@@ -35,4 +38,5 @@ export interface CriarAfericaoPayload {
   equipamento_id: string;
   usuario_id: string;
   temperatura_aferida: number;
+  foto_comprobatoria: string; // <-- OBRIGATÓRIO NA CRIAÇÃO
 }

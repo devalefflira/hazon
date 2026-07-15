@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { temperaturaService } from './services/temperaturaService';
 import type { EquipamentoFrioDTO, AfericaoTemperaturaDTO } from './types/temperatura.types';
-import { TermometroScanner } from './components/TermometroScanner';
+import { CapturaFotoModal } from './components/CapturaFotoModal';
 
 interface TemperaturaProps {
   usuarioLogadoId: string;
@@ -28,15 +28,15 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
   const [tTolerancia, setTTolerancia] = useState('');
   const [tInconforme, setTInconforme] = useState('');
 
-  // Form Nova Aferição
+  // Form Nova Aferição Manual + Evidência Visual
   const [equipamentoSelecionadoId, setEquipamentoSelecionadoId] = useState('');
   const [temperaturaDigitada, setTemperaturaDigitada] = useState('');
+  const [fotoBase64, setFotoBase64] = useState(''); // Armazena a evidência em base64 da sessão
+  const [cameraAberta, setCameraAberta] = useState(false);
 
   // Estados Automáticos de Tempo Local
   const [dataRecebimento] = useState(new Date().toLocaleDateString('pt-BR'));
   const [horaRecebimento] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-
-  const [scannerAberto, setScannerAberto] = useState(false);
 
   async function carregarDados() {
     try {
@@ -86,19 +86,25 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
 
   const handleSalvarAfericao = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!equipamentoSelecionadoId || temperaturaDigitada === '') return;
+    if (!equipamentoSelecionadoId || temperaturaDigitada === '' || !fotoBase64) {
+      alert('Preencha a temperatura e tire a foto de comprovação em tempo real.');
+      return;
+    }
     try {
       setSalvando(true);
       await temperaturaService.registrarAfericao({
         equipamento_id: equipamentoSelecionadoId,
         usuario_id: usuarioLogadoId,
-        temperatura_aferida: Number(temperaturaDigitada)
+        temperatura_aferida: Number(temperaturaDigitada),
+        foto_comprobatoria: fotoBase64 // Envia a foto salva na memória da sessão
       });
       setTemperaturaDigitada('');
+      setFotoBase64('');
       await carregarDados();
-      alert('🎯 Aferição registrada na sessão!');
+      alert('🎯 Aferição auditada e salva com sucesso!');
+      setModo('lista-afericoes');
     } catch (err) {
-      alert('Erro ao gravar medição.');
+      alert('Erro ao gravar medição auditada.');
     } finally {
       setSalvando(false);
     }
@@ -121,7 +127,7 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
 
         {/* CONTROLES SUPERIORES */}
         <div className="grid grid-cols-3 gap-2 mb-5 select-none">
-          <button type="button" onClick={() => setModo('nova-afericao')} className={`py-2 px-1 text-[9px] font-black rounded-xl uppercase transition-all shadow-xs ${modo === 'nova-afericao' ? 'bg-[#09797a] text-white' : 'bg-gray-100 text-gray-400'}`}>⚡ Nova Aferição</button>
+          <button type="button" onClick={() => { setModo('nova-afericao'); setTemperaturaDigitada(''); setFotoBase64(''); }} className={`py-2 px-1 text-[9px] font-black rounded-xl uppercase transition-all shadow-xs ${modo === 'nova-afericao' ? 'bg-[#09797a] text-white' : 'bg-gray-100 text-gray-400'}`}>⚡ Nova Aferição</button>
           <button type="button" onClick={() => setModo('novo-cadastro')} className={`py-2 px-1 text-[9px] font-black rounded-xl uppercase transition-all shadow-xs ${modo === 'novo-cadastro' ? 'bg-[#09797a] text-white' : 'bg-gray-100 text-gray-400'}`}>➕ Novo Cadastro</button>
           <button type="button" onClick={() => setModo('lista-equipamentos')} className={`py-2 px-1 text-[9px] font-black rounded-xl uppercase transition-all shadow-xs ${modo === 'lista-equipamentos' ? 'bg-[#09797a] text-white' : 'bg-gray-100 text-gray-400'}`}>📟 Aparelhos</button>
         </div>
@@ -132,17 +138,14 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
             <p className="text-center text-gray-400 text-xs font-bold py-10 animate-pulse">Sincronizando sensores térmicos...</p>
           ) : (
             <>
-              {/* SUB-VIEW 1: FORMULÁRIO DE NOVA AFERIÇÃO (LEITURA INTEGRADA POR CÂMERA) */}
+              {/* SUB-VIEW 1: FORMULÁRIO DE NOVA AFERIÇÃO MANUAL COV VALIDAÇÃO FOTOGRÁFICA OBRIGATÓRIA */}
               {modo === 'nova-afericao' && (
-                <div className="flex flex-col gap-3.5 bg-gray-50 p-4 rounded-3xl border border-gray-200 animate-scale-up">
+                <form onSubmit={handleSalvarAfericao} className="flex flex-col gap-3.5 bg-gray-50 p-4 rounded-3xl border border-gray-200 animate-scale-up">
                   
-                  {scannerAberto && (
-                    <TermometroScanner
-                      onCaptura={(valor) => {
-                        setTemperaturaDigitada(String(valor));
-                        setScannerAberto(false);
-                      }}
-                      onFechar={() => setScannerAberto(false)}
+                  {cameraAberta && (
+                    <CapturaFotoModal
+                      onFotoCapturada={(base64) => { setFotoBase64(base64); setCameraAberta(false); }}
+                      onFechar={() => setCameraAberta(false)}
                     />
                   )}
 
@@ -167,34 +170,50 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
                     </select>
                   </div>
 
-                  {/* CAMPO DE VALOR IMPEDIDO DE DIGITAÇÃO MANUAL */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Temperatura Capturada</label>
-                    <div className="flex gap-2 w-full">
-                      <div className="flex-1 h-11 bg-white border border-gray-200 rounded-xl px-4 flex items-center font-mono font-black text-sm text-gray-800 shadow-2xs">
-                        {temperaturaDigitada ? `${temperaturaDigitada} °C` : '⚠️ AGUARDANDO LEITURA ÓPTICA...'}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setScannerAberto(true)}
-                        className="bg-orange-500 hover:bg-orange-600 text-white font-black text-xs px-4 rounded-xl shadow-md active:scale-95 transition-all"
-                      >
-                        📷 LER TELA
-                      </button>
-                    </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Temperatura no Termômetro (°C)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      value={temperaturaDigitada}
+                      onChange={(e) => setTemperaturaDigitada(e.target.value)}
+                      placeholder="EX: -18.5"
+                      className="w-full h-11 text-xs bg-white border border-gray-200 px-4 rounded-xl font-bold text-gray-700 focus:outline-none"
+                    />
                   </div>
 
-                  <form onSubmit={handleSalvarAfericao} className="flex gap-2 mt-2 border-t border-gray-100 pt-3">
-                    <button 
-                      type="submit" 
-                      disabled={salvando || !temperaturaDigitada || equipamentos.length === 0} 
+                  {/* 📷 TRAVA DE FOTO COMPROBATÓRIA EM TEMPO REAL */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Foto Comprobatória (Obrigatória)</label>
+                    {fotoBase64 ? (
+                      <div className="relative w-full rounded-2xl overflow-hidden border border-emerald-200 bg-emerald-50 p-2 flex flex-col items-center gap-2">
+                        <img src={fotoBase64} alt="Evidência" className="w-full h-32 object-cover rounded-xl shadow-xs" />
+                        <span className="text-[10px] text-emerald-700 font-black uppercase">✔ FOTO REGISTRADA NA SESSÃO</span>
+                        <button type="button" onClick={() => setFotoBase64('')} className="absolute top-4 right-4 bg-black/70 text-white rounded-full p-1.5 text-xs font-bold leading-none">✕</button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCameraAberta(true)}
+                        className="w-full h-14 border-2 border-dashed border-orange-300 hover:border-[#09797a] bg-orange-50/50 rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-orange-800 uppercase tracking-wide transition-all"
+                      >
+                        📸 Bater Foto do Termômetro
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 mt-2 border-t border-gray-100 pt-3">
+                    <button
+                      type="submit"
+                      disabled={salvando || !temperaturaDigitada || !fotoBase64 || equipamentos.length === 0}
                       className="flex-1 bg-[#09797a] text-white py-4 rounded-3xl text-xs font-black uppercase shadow-md disabled:opacity-30 transition-all"
                     >
-                      Gravar Medição
+                      {salvando ? 'Salvando Auditoria...' : 'Gravar Medição'}
                     </button>
-                    <button type="button" onClick={() => { setTemperaturaDigitada(''); setModo('lista-afericoes'); }} className="bg-gray-200 text-gray-500 text-xs font-bold px-5 rounded-3xl">Concluir</button>
-                  </form>
-                </div>
+                    <button type="button" onClick={() => { setTemperaturaDigitada(''); setFotoBase64(''); setModo('lista-afericoes'); }} className="bg-gray-200 text-gray-500 text-xs font-bold px-4 rounded-3xl">Cancelar</button>
+                  </div>
+                </form>
               )}
 
               {/* SUB-VIEW 2: NOVO CADASTRO DE EQUIPAMENTO */}
@@ -272,28 +291,35 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
                 <div className="flex flex-col gap-2.5 max-h-[calc(100vh-210px)] overflow-y-auto">
                   <div className="flex justify-between items-center border-b border-gray-50 pb-1.5">
                     <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Últimos Registros do Termômetro</h3>
-                    <button type="button" onClick={() => setModo('nova-afericao')} className="text-[10px] text-[#09797a] font-black uppercase">💡 Bipar/Digitar</button>
+                    <button type="button" onClick={() => { setModo('nova-afericao'); setTemperaturaDigitada(''); setFotoBase64(''); }} className="text-[10px] text-[#09797a] font-black uppercase">⚡ Nova Aferição</button>
                   </div>
                   {afericoes.length === 0 ? (
                     <p className="text-center text-gray-400 text-xs font-medium py-10">Nenhuma aferição listada no livro de bordo.</p>
                   ) : (
                     afericoes.map(af => (
-                      <div key={af.id} className="p-3.5 bg-gray-50/60 border border-gray-200 rounded-3xl flex justify-between items-center gap-4 shadow-2xs">
-                        <div className="truncate max-w-[65%] flex flex-col gap-0.5">
-                          {/* AJUSTE: Adicionada a Hora de Registro tratada ao lado da data */}
-                          <span className="text-[9px] text-gray-400 font-mono font-black">
-                            {af.codigo_customizado} | {new Date(af.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')} às {af.hora_registro.substring(0, 5)}
-                          </span>
-                          <h4 className="text-xs font-black text-gray-700 leading-tight truncate uppercase">{af.equipamento_nome}</h4>
-                          <span className="text-[9px] text-gray-400 truncate">Auditor: {af.usuario_nome.toUpperCase()}</span>
+                      <div key={af.id} className="p-3.5 bg-gray-50/60 border border-gray-200 rounded-3xl flex flex-col gap-2 shadow-2xs">
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="truncate max-w-[65%] flex flex-col gap-0.5">
+                            <span className="text-[9px] text-gray-400 font-mono font-black">
+                              {af.codigo_customizado} | {new Date(af.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')} às {af.hora_registro.substring(0, 5)}
+                            </span>
+                            <h4 className="text-xs font-black text-gray-700 leading-tight truncate uppercase">{af.equipamento_nome}</h4>
+                            <span className="text-[9px] text-gray-400 truncate">Auditor: {af.usuario_nome.toUpperCase()}</span>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="text-sm font-mono font-black text-gray-800">{af.temperatura_aferida}°C</span>
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg border uppercase tracking-tight ${
+                              af.status_resultado === 'Conforme' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                              af.status_resultado === 'Limite de Tolerância' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-red-50 text-red-700 border-red-100'
+                            }`}>{af.status_resultado}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className="text-sm font-mono font-black text-gray-800">{af.temperatura_aferida}°C</span>
-                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg border uppercase tracking-tight ${
-                            af.status_resultado === 'Conforme' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                            af.status_resultado === 'Limite de Tolerância' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-red-50 text-red-700 border-red-100'
-                          }`}>{af.status_resultado}</span>
-                        </div>
+                        {/* Exibe miniatura da foto comprobatória se existir */}
+                        {af.foto_comprobatoria && (
+                          <div className="w-full h-16 rounded-xl overflow-hidden border border-gray-200 mt-1">
+                            <img src={af.foto_comprobatoria} alt="Comprovante" className="w-full h-full object-cover" />
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -306,4 +332,4 @@ export default function Temperatura({ usuarioLogadoId, onVoltarParaHome }: Tempe
       </div>
     </div>
   );
-} 
+}

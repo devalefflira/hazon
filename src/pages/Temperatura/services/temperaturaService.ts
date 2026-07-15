@@ -49,6 +49,7 @@ export const temperaturaService = {
       usuario_nome: a.usuarios?.nome || 'Operador',
       temperatura_aferida: Number(a.temperatura_aferida),
       status_resultado: a.status_resultado,
+      foto_comprobatoria: a.foto_comprobatoria, // Recupera a imagem
       data_registro: a.data_registro,
       hora_registro: a.hora_registro,
       created_at: a.created_at
@@ -56,7 +57,6 @@ export const temperaturaService = {
   },
 
   async registrarAfericao(payload: Types.CriarAfericaoPayload): Promise<void> {
-    // 1. Busca os parâmetros térmicos do equipamento selecionado
     const { data: equip, error: errEquip } = await supabase
       .from('temperatura_equipamentos')
       .select('*')
@@ -68,7 +68,6 @@ export const temperaturaService = {
     const temp = Number(payload.temperatura_aferida);
     let status: 'Conforme' | 'Limite de Tolerância' | 'Não Conforme' = 'Não Conforme';
 
-    // 2. Lógica de cruzamento adaptada para congelados/resfriados (proximidade do alvo)
     const diffConforme = Math.abs(temp - Number(equip.temp_conforme));
     const diffTolerancia = Math.abs(temp - Number(equip.temp_limite_tolerancia));
     const diffInconforme = Math.abs(temp - Number(equip.temp_nao_conforme));
@@ -79,7 +78,6 @@ export const temperaturaService = {
       status = 'Limite de Tolerância';
     }
 
-    // 3. Gera código incremental sequencial
     const { count } = await supabase
       .from('temperatura_afericoes')
       .select('*', { count: 'exact', head: true });
@@ -93,7 +91,8 @@ export const temperaturaService = {
         equipamento_id: payload.equipamento_id,
         usuario_id: payload.usuario_id,
         temperatura_aferida: temp,
-        status_resultado: status
+        status_resultado: status,
+        foto_comprobatoria: payload.foto_comprobatoria // Grava a string Base64 da imagem
       }]);
 
     if (error) throw error;
