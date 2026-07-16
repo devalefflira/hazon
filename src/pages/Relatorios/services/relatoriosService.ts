@@ -1,5 +1,6 @@
 import { supabase } from '../../../lib/supabaseClient';
 import type * as Types from '../types/relatorios.types';
+import type { FiltrosAuditoriaFrios } from '../types/relatorios.types';
 
 export const relatoriosService = {
   // 1. Controle de Validades
@@ -195,6 +196,53 @@ export const relatoriosService = {
         created_at: p.created_at
       };
     });
+  },
+
+  // 🆕 NOVA FUNÇÃO DE ENGENHARIA TÉRMICA INTEGRADA
+  async obterAuditoriaFrios(filtros: FiltrosAuditoriaFrios): Promise<any[]> {
+    let query = supabase
+      .from('temperatura_afericoes')
+      .select(`
+        *,
+        usuarios ( nome ),
+        temperatura_equipamentos ( nome, tipo_item, categoria_frio )
+      `);
+
+    if (filtros.status !== 'TODOS') {
+      query = query.eq('status_resultado', filtros.status);
+    }
+
+    if (filtros.equipamento_id !== 'TODOS') {
+      query = query.eq('equipamento_id', filtros.equipamento_id);
+    }
+
+    const hojeStr = new Date().toISOString().split('T')[0];
+    if (filtros.periodo === 'HOJE') {
+      query = query.eq('data_registro', hojeStr);
+    } else if (filtros.periodo === 'ONTEM') {
+      const ontemObj = new Date();
+      ontemObj.setDate(ontemObj.getDate() - 1);
+      const ontemStr = ontemObj.toISOString().split('T')[0];
+      query = query.eq('data_registro', ontemStr);
+    } else if (filtros.periodo === 'DATA_ESPECIFICA' && filtros.data_customizada) {
+      query = query.eq('data_registro', filtros.data_customizada);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false }) as any;
+    if (error) throw error;
+
+    return (data || []).map((a: any) => ({
+      id: a.id,
+      codigo_customizado: a.codigo_customizado,
+      equipamento_nome: a.temperatura_equipamentos?.nome || 'Equipamento Removido',
+      equipamento_tipo: a.temperatura_equipamentos?.tipo_item || 'N/A',
+      categoria_frio: a.temperatura_equipamentos?.categoria_frio || 'N/A',
+      usuario_nome: a.usuarios?.nome || 'Operador',
+      temperatura_aferida: Number(a.temperatura_aferida),
+      status_resultado: a.status_resultado,
+      data_registro: a.data_registro,
+      hora_registro: a.hora_registro
+    }));
   },
 
   // 7. Manifestos Concluídos (Conf. Cega)

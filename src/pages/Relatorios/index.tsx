@@ -6,7 +6,8 @@ interface RelatoriosProps {
   onVoltarParaHome: () => void;
 }
 
-type SubmoduloTipo = 'validade' | 'inventariados' | 'faltas' | 'cotacoes' | 'avarias' | 'pedidos' | 'manifestos';
+// 🆕 Tipo estendido para aceitar o submódulo térmico
+type SubmoduloTipo = 'validade' | 'inventariados' | 'faltas' | 'cotacoes' | 'avarias' | 'pedidos' | 'manifestos' | 'frios';
 
 export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
   const [submoduloAtivo, setSubmoduloAtivo] = useState<SubmoduloTipo>('validade');
@@ -17,6 +18,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
   const [dadosRelatorio, setDadosRelatorio] = useState<any[]>([]);
   const [relatorioGerado, setRelatorioGerado] = useState(false);
 
+  // 🆕 Lista atualizada incluindo a Auditoria de Frios
   const listaSubmodulos = [
     { id: 'validade', label: '🛡️ Controle de Validades' },
     { id: 'inventariados', label: '📊 Itens Inventariados' },
@@ -25,6 +27,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
     { id: 'avarias', label: '⚠️ Registro de Avarias' },
     { id: 'pedidos', label: '📦 Pedidos Formalizados' },
     { id: 'manifestos', label: '📄 Manifestos (Conf. Cega)' },
+    { id: 'frios', label: '❄️ Auditoria dos Frios' }, // Novo relatório integrado
   ];
 
   const handleProcessarRelatorio = async (e: React.FormEvent) => {
@@ -46,6 +49,15 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
       else if (submoduloAtivo === 'avarias') dados = await relatoriosService.obterAvarias(dataInicio, dataFim);
       else if (submoduloAtivo === 'pedidos') dados = await relatoriosService.obterPedidosFormalizados(dataInicio, dataFim);
       else if (submoduloAtivo === 'manifestos') dados = await relatoriosService.obterManifestosConcluidores(dataInicio, dataFim);
+      else if (submoduloAtivo === 'frios') {
+        // Dispara o mapeamento avançado de temperaturas que injetamos no serviço global
+        dados = await relatoriosService.obterAuditoriaFrios({
+          status: 'TODOS',
+          equipamento_id: 'TODOS',
+          periodo: 'DATA_ESPECIFICA',
+          data_customizada: dataInicio // Baseia-se na data inicial do filtro
+        });
+      }
 
       setDadosRelatorio(dados);
       setRelatorioGerado(true);
@@ -64,7 +76,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
   return (
     <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center">
       
-      {/* PAINEL DE FILTROS E SELEÇÃO (OCULTADO NA IMPRESSÃO PELO CSS 'print:hidden') */}
+      {/* PAINEL DE FILTROS E SELEÇÃO */}
       <div className="w-full max-w-4xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 print:hidden mb-5">
         
         {/* HEADER */}
@@ -85,7 +97,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
             <select
               value={submoduloAtivo}
               onChange={(e) => { setSubmoduloAtivo(e.target.value as SubmoduloTipo); setRelatorioGerado(false); }}
-              className="w-full h-11 text-xs bg-white border border-gray-200 px-3 rounded-xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
+              className="w-full h-11 text-xs bg-white border border-gray-200 px-3 rounded-xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 select-none"
             >
               {listaSubmodulos.map(s => <option key={s.id} value={s.id}>{s.label.toUpperCase()}</option>)}
             </select>
@@ -127,7 +139,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
       {relatorioGerado && (
         <div className="w-full max-w-[210mm] min-h-[297mm] bg-white shadow-2xl p-[15mm] flex flex-col border border-gray-300 rounded-sm relative text-black select-text overflow-x-auto">
           
-          {/* BOTÃO FLUTUANTE DE EXPORTAÇÃO (SÓ EXIBE NA TELA, DESAPARECE NO PDF) */}
+          {/* BOTÃO FLUTUANTE DE EXPORTAÇÃO */}
           <button
             onClick={handleDispararImpressao}
             className="absolute top-4 right-4 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md active:scale-95 transition-all print:hidden"
@@ -148,7 +160,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
             </div>
           </div>
 
-          {/* CORPO DO DOCUMENTO - CONTEÚDO DE ACORDO COM A ABA */}
+          {/* CORPO DO DOCUMENTO */}
           <div className="flex-1 w-full">
             {dadosRelatorio.length === 0 ? (
               <p className="text-center text-gray-400 text-xs font-bold py-20 uppercase tracking-widest border border-dashed border-gray-200 rounded-3xl">Nenhum registro encontrado no cruzamento deste período.</p>
@@ -224,10 +236,22 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
                         <th className="py-2 px-1">Fechamento</th>
                       </>
                     )}
+                    {/* 🆕 CABEÇALHO DA TABELA DE AUDITORIA DE FRIOS */}
+                    {submoduloAtivo === 'frios' && (
+                      <>
+                        <th className="py-2 px-1">Código</th>
+                        <th className="py-2 px-1">Data/Hora</th>
+                        <th className="py-2 px-1">Aparelho</th>
+                        <th className="py-2 px-1">Categoria</th>
+                        <th className="py-2 px-1">Auditor</th>
+                        <th className="py-2 px-1 text-right">Temperatura</th>
+                        <th className="py-2 px-1 text-right">Resultado</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 font-medium text-gray-600 uppercase">
-                  {dadosRelatorio.map((row, idx) => (
+                  {dadosRelatorio.map((row: any, idx) => (
                     <tr key={idx} className="hover:bg-gray-50/50 print:hover:bg-transparent">
                       {submoduloAtivo === 'validade' && (
                         <>
@@ -280,7 +304,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
                           <td className="py-2 px-1 text-right font-mono font-bold text-red-600">{row.quantidade} {row.produto_unidade_medida}</td>
                           <td className="py-2 px-1 text-gray-500">{row.motivo_descricao}</td>
                           <td className="py-2 px-1 font-bold text-purple-700">{row.destinacao}</td>
-                          <td className="py-2 px-1 max-w-xxs text-[9px] text-gray-400 normal-case italic">{row.observacao || '-'}</td>
+                          <td className="py-2 px-1 max-w-xs text-[9px] text-gray-400 normal-case italic">{row.observacao || '-'}</td>
                         </>
                       )}
                       {submoduloAtivo === 'pedidos' && (
@@ -292,7 +316,7 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
                           </td>
                           <td className="py-2 px-1 text-[9px] font-bold">{row.status}</td>
                           <td className="py-2 px-1"><span className={`inline-block text-[8px] font-black px-1.5 py-0.2 rounded border ${row.origem_pedido === 'COTAÇÃO' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-purple-50 text-purple-700 border-purple-100'}`}>{row.origem_pedido}</span></td>
-                          <td className="py-2 px-1 text-right font-mono font-bold text-[#09797a]">R$ {row.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-1 text-right font-mono font-bold text-[#09797a]">R$ {row.valor_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         </>
                       )}
                       {submoduloAtivo === 'manifestos' && (
@@ -303,6 +327,23 @@ export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
                           <td className="py-2 px-1 text-right font-mono font-bold text-[#09797a]">{row.prazo_entrega_dias} Dias</td>
                           <td className="py-2 px-1 text-center font-mono font-bold">{row.quantidade_itens_diferentes} Sku</td>
                           <td className="py-2 px-1 font-mono text-[9px] text-gray-400">{new Date(row.data_fechamento).toLocaleDateString('pt-BR')}</td>
+                        </>
+                      )}
+                      {/* 🆕 RENDERIZAÇÃO DAS LINHAS DE AUDITORIA DOS FRIOS */}
+                      {submoduloAtivo === 'frios' && (
+                        <>
+                          <td className="py-2 px-1 font-mono font-bold text-gray-700">{row.codigo_customizado}</td>
+                          <td className="py-2 px-1 font-mono">{new Date(row.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')} - {row.hora_registro?.substring(0, 5)}</td>
+                          <td className="py-2 px-1 font-bold text-gray-800">{row.equipamento_nome}</td>
+                          <td className="py-2 px-1 text-gray-400 text-[9px]">{row.categoria_frio}</td>
+                          <td className="py-2 px-1 text-gray-500">{row.usuario_nome}</td>
+                          <td className="py-2 px-1 text-right font-mono font-bold text-[#09797a] text-xs">{row.temperatura_aferida} °C</td>
+                          <td className="py-2 px-1 text-right font-bold font-mono">
+                            <span className={`inline-block text-[8px] font-black px-1.5 py-0.5 rounded border ${
+                              row.status_resultado === 'Conforme' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                              row.status_resultado === 'Limite de Tolerância' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-red-50 text-red-700 border-red-100'
+                            }`}>{row.status_resultado}</span>
+                          </td>
                         </>
                       )}
                     </tr>

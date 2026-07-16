@@ -82,3 +82,11 @@ export interface RelatorioManifestoDTO {
   conferente_nome: string;
   data_fechamento: string;
 }
+
+// Auditoria de Frios
+export interface FiltrosAuditoriaFrios {
+  status: string;        // 'TODOS' | 'Conforme' | 'Limite de Tolerância' | 'Não Conforme'
+  equipamento_id: string; // 'TODOS' | uuid
+  periodo: 'TODOS' | 'HOJE' | 'ONTEM' | 'DATA_ESPECIFICA';
+  data_customizada?: string;
+}
