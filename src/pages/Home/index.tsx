@@ -176,7 +176,7 @@ export default function Home({
 
         {/* SUBTITLE */}
         <div className="flex justify-between items-center w-full text-[#545454] font-medium text-xs mb-6 px-1">
-          <span>{saudacao}. O que vamos fazer agora?</span>
+          <span>{saudacao}. Qual o próximo passo?</span>
           <span>{dataHora}</span>
         </div>
 
