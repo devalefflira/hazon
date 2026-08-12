@@ -1,51 +1,75 @@
+// Arquivo: src/pages/Permissoes/services/permissoesService.ts
 import { supabase } from '../../../lib/supabaseClient';
 
+export const LISTA_MODULOS_SISTEMA: string[] = [
+  'Usuarios',
+  'Fornecedores',
+  'Vendedores',
+  'Produtos',
+  'Inventario',
+  'Nota de Falta',
+  'Dashboard',
+  'Relatorios',
+  'Cotacoes',
+  'Orcamentos',
+  'Avarias',
+  'Pedidos',
+  'Tarefas',
+  'Conf. Cega',
+  'Temperatura',
+  'Categorias',
+  'Permissoes'
+];
+
 export const permissoesService = {
-  // Busca os perfis (Administrador, Gerencial, etc.) para o dropdown superior
-  async listarPerfis() {
+  // 1. Listar usuários cadastrados
+  async listarUsuarios(): Promise<any[]> {
     const { data, error } = await supabase
-      .from('perfis')
-      .select('id, nome')
+      .from('usuarios')
+      .select('id, nome, email, setor')
       .order('nome', { ascending: true });
 
     if (error) throw error;
-    return data;
+    return data || [];
   },
 
-  // Busca os acessos liberados para um perfil específico
-  async buscarPermissoesPorPerfil(perfilId: string) {
+  // 2. Buscar permissões por usuário
+  async buscarPermissoesUsuario(usuarioId: string): Promise<string[]> {
     const { data, error } = await supabase
-      .from('perfis_permissoes')
-      .select('modulo, incluido')
-      .eq('perfil_id', perfilId);
+      .from('usuario_permissoes')
+      .select('modulo_nome, permitido')
+      .eq('usuario_id', usuarioId)
+      .eq('permitido', true);
 
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Erro ao buscar permissões do usuário:', error);
+      return [];
+    }
+
+    return (data || []).map((p: any) => p.modulo_nome);
   },
 
-  // Atualiza as permissões salvando o estado de cada chave liga/desliga
-  async salvarPermissoes(perfilId: string, permissoes: { modulo: string; incluido: boolean }[]) {
-    // Para garantir a consistência, removemos os registros antigos do perfil e reinserimos o bloco atualizado
-    const { error: deleteError } = await supabase
-      .from('perfis_permissoes')
+  // 3. Salvar permissões do usuário
+  async salvarPermissoesUsuario(usuarioId: string, modulosPermitidos: string[]): Promise<void> {
+    // Apaga permissões antigas do usuário
+    await supabase
+      .from('usuario_permissoes')
       .delete()
-      .eq('perfil_id', perfilId);
+      .eq('usuario_id', usuarioId);
 
-    if (deleteError) throw deleteError;
+    // Insere os novos módulos
+    if (modulosPermitidos.length > 0) {
+      const registros = modulosPermitidos.map((modulo) => ({
+        usuario_id: usuarioId,
+        modulo_nome: modulo,
+        permitido: true
+      }));
 
-    if (permissoes.length === 0) return;
+      const { error } = await supabase
+        .from('usuario_permissoes')
+        .insert(registros);
 
-    // Prepara o lote de inserção
-    const rows = permissoes.map(p => ({
-      perfil_id: perfilId,
-      modulo: p.modulo,
-      incluido: p.incluido
-    }));
-
-    const { error: insertError } = await supabase
-      .from('perfis_permissoes')
-      .insert(rows);
-
-    if (insertError) throw insertError;
+      if (error) throw error;
+    }
   }
 };

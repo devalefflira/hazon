@@ -1,159 +1,162 @@
+// Arquivo: src/pages/Usuarios/index.tsx
 import { useState, useEffect } from 'react';
 import { usuariosService } from './services/usuariosService';
 import CadastroUsuario from './components/CadastroUsuario';
-
-interface Usuario {
-  id: string;
-  nome: string;
-  setor: string;
-  email: string;
-  perfis: {
-    nome: string;
-  } | null;
-}
 
 interface UsuariosProps {
   onVoltarParaHome: () => void;
 }
 
 export default function Usuarios({ onVoltarParaHome }: UsuariosProps) {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [perfis, setPerfis] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [modalAberto, setModalAberto] = useState(false);
+  const [usuarioEdicao, setUsuarioEdicao] = useState<any | null>(null);
 
-  // Controle de estado para exibição do formulário ou da listagem
-  const [exibindoCadastro, setExibindoCadastro] = useState(false);
-  
-  // Estado do mecanismo de busca dinâmica (Search)
-  const [busca, setBusca] = useState('');
-
-  const carregarUsuarios = async () => {
+  const carregarDados = async () => {
     try {
       setLoading(true);
-      const dados = await usuariosService.listarUsuarios();
-      setUsuarios(dados as unknown as Usuario[] || []);
+      const [listaUsuarios, listaPerfis] = await Promise.all([
+        usuariosService.listarUsuarios(),
+        usuariosService.listarPerfis()
+      ]);
+      setUsuarios(listaUsuarios);
+      setPerfis(listaPerfis);
     } catch (err) {
-      setErro('Erro ao carregar listagem de usuários do Supabase.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    carregarUsuarios();
+    carregarDados();
   }, []);
 
-  // Filtro Dinâmico em Tempo Real (Filtra por Nome ou por Setor)
-  const usuariosFiltrados = usuarios.filter(usuario => 
-    usuario.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    usuario.setor.toLowerCase().includes(busca.toLowerCase())
-  );
+  const handleSalvarUsuario = async (payload: any) => {
+    if (usuarioEdicao) {
+      await usuariosService.atualizarUsuario(usuarioEdicao.id, payload);
+      alert('Usuário atualizado com sucesso!');
+    } else {
+      await usuariosService.criarUsuario(payload);
+      alert('Usuário cadastrado com sucesso!');
+    }
+    setModalAberto(false);
+    setUsuarioEdicao(null);
+    carregarDados();
+  };
 
-  const handleSucessoCadastro = () => {
-    setExibindoCadastro(false);
-    carregarUsuarios(); // Dá o refresh automático na lista após salvar
+  const handleExcluir = async (user: any) => {
+    if (user.email.toLowerCase() === 'aleff@hazon.com') {
+      alert('O usuário administrador principal (Aleff) não pode ser excluído.');
+      return;
+    }
+
+    if (confirm(`Deseja realmente excluir o usuário ${user.nome}?`)) {
+      try {
+        await usuariosService.excluirUsuario(user.id);
+        alert('Usuário excluído com sucesso!');
+        carregarDados();
+      } catch (err) {
+        alert('Erro ao excluir usuário.');
+      }
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
+    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
+      <div className="w-full max-w-3xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
         
-        {/* CABEÇALHO FIXO DO MÓDULO */}
-        <div className="flex items-center w-full mb-5 border-b border-gray-100 pb-4">
-          <button 
-            onClick={exibindoCadastro ? () => setExibindoCadastro(false) : onVoltarParaHome}
-            className="p-2 hover:bg-gray-100 rounded-full active:scale-90 transition-all mr-2"
+        {/* HEADER */}
+        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
+            <div>
+              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">USUÁRIOS</h1>
+              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Gerenciamento de Contas do Sistema</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setUsuarioEdicao(null);
+              setModalAberto(true);
+            }}
+            className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#09797a" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7m-7.5 7h16.5" />
-            </svg>
+            + Novo Usuário
           </button>
-          <h1 className="text-[#09797a] font-bold text-xl tracking-tight select-none">
-            {exibindoCadastro ? 'Cadastrar Usuário' : 'Gestão de Usuários'}
-          </h1>
         </div>
 
-        {/* MENSAGEM DE ERRO GLOBAL */}
-        {erro && (
-          <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl mb-4 border border-red-200 font-medium text-center">
-            {erro}
-          </div>
-        )}
-
-        {/* FLUXO 1: EXIBINDO FORMULÁRIO DE CADASTRO */}
-        {exibindoCadastro ? (
-          <CadastroUsuario 
-            onSucesso={handleSucessoCadastro} 
-            onCancelar={() => setExibindoCadastro(false)} 
-          />
-        ) : (
-          /* FLUXO 2: EXIBINDO LISTAGEM E BARRA DE PESQUISA */
-          <div className="flex flex-col flex-1 animate-fadeIn">
-            
-            {/* Barra de Pesquisa Mobile */}
-            <div className="w-full relative mb-4">
-              <input
-                type="text"
-                placeholder="🔎 Buscar por nome ou setor..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-2xl pl-4 pr-10 h-11 text-sm outline-none focus:border-[#09797a] focus:bg-white transition-all shadow-inner text-gray-700"
-              />
-              {busca && (
-                <button 
-                  onClick={() => setBusca('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold hover:text-gray-600 text-sm"
-                >
-                  ✕
-                </button>
-              )}
+        {/* LISTAGEM */}
+        <div className="flex-1 flex flex-col gap-2">
+          {loading ? (
+            <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando usuários...</div>
+          ) : usuarios.length === 0 ? (
+            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+              Nenhum usuário encontrado.
             </div>
-
-            {/* Listagem com Rolagem Isolada */}
-            <div className="w-full flex flex-col gap-2.5 overflow-y-auto max-h-102.5 pr-0.5 flex-1">
-              {loading ? (
-                <div className="flex flex-col justify-center items-center py-12 w-full">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#09797a]"></div>
-                </div>
-              ) : usuariosFiltrados.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-12 italic">Nenhum usuário correspondente encontrado.</p>
-              ) : (
-                usuariosFiltrados.map((user) => (
-                  <div 
-                    key={user.id} 
-                    className="w-full bg-white border border-gray-100 rounded-2xl p-3.5 flex flex-col gap-1.5 shadow-sm hover:border-gray-200 transition-all border-l-4 border-l-[#09797a]"
-                  >
-                    <div className="flex justify-between items-start w-full">
-                      <span className="font-bold text-sm text-gray-800 leading-tight">{user.nome}</span>
-                      {/* Tag de Perfil Relacional com cor de destaque */}
-                      <span className="bg-[#e07a5f]/10 text-[#e07a5f] text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-[#e07a5f]/20">
-                        {user.perfis?.nome || 'Sem Perfil'}
+          ) : (
+            <div className="flex flex-col gap-2">
+              {usuarios.map((u) => (
+                <div
+                  key={u.id}
+                  className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-black text-xs text-gray-800 uppercase">{u.nome}</h4>
+                      <span className="text-[9px] font-bold text-[#e07a5f] bg-orange-50 px-2 py-0.5 rounded-md uppercase">
+                        {u.perfis?.nome || 'Operador'}
                       </span>
                     </div>
-                    
-                    <div className="flex flex-col text-xs text-gray-500 font-medium">
-                      <span>🏢 Setor: <strong className="text-gray-700">{user.setor}</strong></span>
-                      <span className="truncate mt-0.5">✉️ {user.email}</span>
-                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                      E-mail: {u.email} | Setor: {u.setor}
+                    </p>
                   </div>
-                ))
-              )}
-            </div>
 
-            {/* BOTÃO FLUTUANTE DE ADICIONAR (+) ESTILO MATERIAL DESIGN */}
-            {!loading && (
-              <button
-                onClick={() => setExibindoCadastro(true)}
-                className="absolute bottom-6 right-6 w-14 h-14 bg-[#09797a] hover:bg-[#075f60] text-white rounded-full flex justify-center items-center font-light text-3xl shadow-lg active:scale-90 transition-all select-none z-10"
-                title="Cadastrar Novo Usuário"
-              >
-                +
-              </button>
-            )}
-          </div>
-        )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUsuarioEdicao(u);
+                        setModalAberto(true);
+                      }}
+                      className="px-3 py-1.5 bg-emerald-100 text-emerald-900 rounded-xl text-xs font-black uppercase"
+                    >
+                      Editar
+                    </button>
+                    {u.email.toLowerCase() !== 'aleff@hazon.com' && (
+                      <button
+                        type="button"
+                        onClick={() => handleExcluir(u)}
+                        className="px-3 py-1.5 bg-red-100 text-red-700 rounded-xl text-xs font-black uppercase"
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
       </div>
+
+      {/* MODAL DE CADASTRO / EDIÇÃO */}
+      {modalAberto && (
+        <CadastroUsuario
+          usuarioEdicao={usuarioEdicao}
+          perfis={perfis}
+          onSalvar={handleSalvarUsuario}
+          onCancelar={() => {
+            setModalAberto(false);
+            setUsuarioEdicao(null);
+          }}
+        />
+      )}
     </div>
   );
 }

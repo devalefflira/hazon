@@ -1,3 +1,4 @@
+// Arquivo: src/pages/Permissoes/index.tsx
 import { useState, useEffect } from 'react';
 import { permissoesService, LISTA_MODULOS_SISTEMA } from './services/permissoesService';
 

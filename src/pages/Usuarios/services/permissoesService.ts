@@ -1,3 +1,4 @@
+// Arquivo: src/pages/Permissoes/services/permissoesService.ts
 import { supabase } from '../../../lib/supabaseClient';
 
 export const LISTA_MODULOS_SISTEMA: string[] = [
@@ -21,7 +22,7 @@ export const LISTA_MODULOS_SISTEMA: string[] = [
 ];
 
 export const permissoesService = {
-  // 1. Listar todos os usuários cadastrados
+  // 1. Listar usuários cadastrados
   async listarUsuarios(): Promise<any[]> {
     const { data, error } = await supabase
       .from('usuarios')
@@ -50,11 +51,13 @@ export const permissoesService = {
 
   // 3. Salvar permissões do usuário
   async salvarPermissoesUsuario(usuarioId: string, modulosPermitidos: string[]): Promise<void> {
+    // Apaga permissões antigas do usuário
     await supabase
       .from('usuario_permissoes')
       .delete()
       .eq('usuario_id', usuarioId);
 
+    // Insere os novos módulos
     if (modulosPermitidos.length > 0) {
       const registros = modulosPermitidos.map((modulo) => ({
         usuario_id: usuarioId,
