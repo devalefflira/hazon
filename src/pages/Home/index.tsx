@@ -38,7 +38,8 @@ interface HomeProps {
   onNavegarParaAvarias: () => void;
   onNavegarParaConfCega: () => void;
   onNavegarParaRelatorios: () => void;
-  onNavegarParaTemperatura: () => void; // <-- CONTRATO INJETADO NA HOME
+  onNavegarParaTemperatura: () => void;
+  onNavegarParaOrcamentos?: () => void;
 }
 
 export default function Home({
@@ -59,7 +60,8 @@ export default function Home({
   onNavegarParaAvarias,
   onNavegarParaConfCega,
   onNavegarParaRelatorios,
-  onNavegarParaTemperatura, // <-- DESESTRUTURADO AQUI
+  onNavegarParaTemperatura,
+  onNavegarParaOrcamentos
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -74,11 +76,12 @@ export default function Home({
     { label: 'Dashboard', icon: iconDashboard },
     { label: 'Relatórios', icon: iconRelatorios },
     { label: 'Cotações', icon: iconCotacoes },
+    { label: 'Orçamentos', icon: iconRelatorios }, // 👈 Adicionado ao menu
     { label: 'Avarias', icon: iconAvarias },
     { label: 'Pedidos', icon: iconPedidos },
     { label: 'Tarefas', icon: iconTarefas },
     { label: 'Conf. Cega', icon: iconConfCega },
-    { label: 'Temperatura', icon: iconInventario }, // <-- REAPROVEITADO ICONINVENTARIO OU INSERIR NOVO
+    { label: 'Temperatura', icon: iconInventario },
     { label: 'Permissões', icon: iconPermissoes },
     { label: 'Categorias', icon: iconCategorias },
   ];
@@ -120,11 +123,12 @@ export default function Home({
       'Dashboard': 'Dashboard',
       'Relatórios': 'Relatorios',
       'Cotações': 'Cotacoes',
+      'Orçamentos': 'Orcamentos', // 👈 Mapeado no controle de permissões
       'Avarias': 'Avarias',
       'Pedidos': 'Pedidos',
       'Tarefas': 'Tarefas',
       'Conf. Cega': 'Conf. Cega',
-      'Temperatura': 'Temperatura' // Módulo mapeado
+      'Temperatura': 'Temperatura'
     };
 
     const moduloChave = mapaModulos[label];
@@ -143,12 +147,15 @@ export default function Home({
     else if (label === 'Produtos') onNavegarParaProdutos();
     else if (label === 'Inventário') onNavegarParaInventario();
     else if (label === 'Cotações') onNavegarParaCotacoes();         
+    else if (label === 'Orçamentos') { // 👈 Rota disparada
+      if (onNavegarParaOrcamentos) onNavegarParaOrcamentos();
+    }
     else if (label === 'Pedidos') onNavegarParaPedidos();
     else if (label === 'Tarefas') onNavegarParaTarefas();
     else if (label === 'Avarias') onNavegarParaAvarias();
     else if (label === 'Conf. Cega') onNavegarParaConfCega();
     else if (label === 'Relatórios') onNavegarParaRelatorios(); 
-    else if (label === 'Temperatura') onNavegarParaTemperatura(); // <-- ROTA DISPARADA COM SUCESSO
+    else if (label === 'Temperatura') onNavegarParaTemperatura();
     else if (label === 'Nota de Falta') {
       if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
     } else {

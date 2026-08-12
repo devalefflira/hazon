@@ -18,7 +18,8 @@ import { Tarefas } from './pages/Tarefas';
 import Avarias from './pages/Avarias';
 import ConfCega from './pages/ConfCega';
 import Relatorios from './pages/Relatorios';
-import Temperatura from './pages/Temperatura'; // <-- IMPORTAÇÃO DO NOVO MÓDULO
+import Temperatura from './pages/Temperatura';
+import Orcamentos from './pages/Orcamentos';
 
 interface UsuarioLogado {
   id: string;
@@ -46,19 +47,20 @@ type TelaAtiva =
   | 'avarias'
   | 'conf-cega'
   | 'relatorios'
-  | 'temperatura'; // <-- ADICIONADO AO CANIVETE DE ROTAS
+  | 'temperatura'
+  | 'orcamentos'; // 👈 1. Tipo adicionado no canivete de rotas
 
 export const MATRIZ_PERMISSOES: Record<string, string[]> = {
   'Administrador': [
     'Usuarios', 'Fornecedores', 'Vendedores', 'Produtos', 'Inventario',
     'Nota de Falta', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias',
-    'Pedidos', 'Tarefas', 'Conf. Cega', 'Permissoes', 'Categorias', 'Temperatura'
+    'Pedidos', 'Tarefas', 'Conf. Cega', 'Permissoes', 'Categorias', 'Temperatura', 'Orcamentos'
   ],
   'Gerencial': [
-    'Inventario', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias', 'Pedidos', 'Tarefas', 'Conf. Cega', 'Temperatura'
+    'Inventario', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias', 'Pedidos', 'Tarefas', 'Conf. Cega', 'Temperatura', 'Orcamentos'
   ],
   'Operacional': [
-    'Inventario', 'Nota de Falta', 'Avarias', 'Tarefas', 'Conf. Cega'
+    'Inventario', 'Nota de Falta', 'Avarias', 'Tarefas', 'Conf. Cega', 'Orcamentos'
   ]
 };
 
@@ -119,7 +121,8 @@ export default function App() {
         onNavegarParaAvarias={() => setTelaAtiva('avarias')}
         onNavegarParaConfCega={() => setTelaAtiva('conf-cega')}
         onNavegarParaRelatorios={() => setTelaAtiva('relatorios')}
-        onNavegarParaTemperatura={() => setTelaAtiva('temperatura')} // <-- DIRECIONAMENTO INJETADO
+        onNavegarParaTemperatura={() => setTelaAtiva('temperatura')}
+        onNavegarParaOrcamentos={() => setTelaAtiva('orcamentos')} // 👈 2. Injetado na Home
       />
     );
   }
@@ -130,6 +133,12 @@ export default function App() {
   if (usuario && telaAtiva === 'fornecedores') return <Fornecedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
+
+  // 👈 3. Rota validada com verificação do usuário logado
+  if (telaAtiva === 'orcamentos') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Orcamentos usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
 
   if (telaAtiva === 'cotacoes') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
@@ -161,7 +170,6 @@ export default function App() {
     return <Relatorios onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
-  // FIÇÃO DA NOVA ROTA DO PROJETO DE TEMPERATURA
   if (telaAtiva === 'temperatura') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Temperatura usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
