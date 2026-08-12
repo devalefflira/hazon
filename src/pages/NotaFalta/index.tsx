@@ -1,366 +1,356 @@
-import { useState, useEffect, useRef } from 'react';
+// Arquivo: src/pages/NotaFalta/index.tsx
+import { useState, useEffect } from 'react';
 import { notaFaltaService } from './services/notaFaltaService';
-import type { MotivoFalta, ProdutoFalta, NotaFaltaRegistro } from './services/notaFaltaService';
-
-interface UsuarioLogado {
-    id: string;
-    nome: string;
-    perfil: string;
-}
 
 interface NotaFaltaProps {
-    onVoltarParaHome: () => void;
-    usuarioLogado: UsuarioLogado | null;
+  onVoltarParaHome: () => void;
+  usuarioLogado?: any;
 }
 
-type SubTela = 'dashboard' | 'registrar';
-
 export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFaltaProps) {
-    // Controle de Fluxo de Telas
-    const [subTela, setSubTela] = useState<SubTela>('dashboard');
-    const [loading, setLoading] = useState(true);
-    const [erro, setErro] = useState('');
-    const [salvando, setSalvando] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [listaRupturas, setListaRupturas] = useState<any[]>([]);
+  const [statusFiltro, setStatusFiltro] = useState('TODOS');
 
-    // Repositórios de Dados do Banco
-    const [historicoFaltas, setHistoricoFaltas] = useState<NotaFaltaRegistro[]>([]);
-    const [motivos, setMotivos] = useState<MotivoFalta[]>([]);
+  // Modal de Cadastro
+  const [modalAberta, setModalAberta] = useState(false);
+  const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
+  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
+  const [motivos, setMotivos] = useState<any[]>([]);
+  const [motivoId, setMotivoId] = useState('');
 
-    // Estados dos Filtros da Tela Principal (Dashboard)
-    const [inputStatus, setInputStatus] = useState('');
-    const [filtroStatusAplicado, setFiltroStatusAplicado] = useState('');
+  // 🆕 ESTADOS PARA ESTOQUE BAIXO
+  const [quantidadeRestante, setQuantidadeRestante] = useState<number>(1);
+  const [unidadeRestante, setUnidadeRestante] = useState('UN');
 
-    // Estados do Formulário de Registro
-    const [buscaTermo, setBuscaTermo] = useState('');
-    const [produtosSugestoes, setProdutosSugestoes] = useState<ProdutoFalta[]>([]);
-    const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoFalta | null>(null);
-    const [motivoSelecionadoId, setMotivoSelecionadoId] = useState('');
-    const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const carregarRupturas = async () => {
+    try {
+      setLoading(true);
+      setErro(null);
+      const dados = await notaFaltaService.listarNotasFalta(statusFiltro);
+      setListaRupturas(dados);
+    } catch (err: any) {
+      console.error(err);
+      setErro('Falha ao conectar com o motor de rupturas do Supabase.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const inputBuscaRef = useRef<HTMLInputElement>(null);
+  const carregarMotivos = async () => {
+    try {
+      const dados = await notaFaltaService.listarMotivosFalta();
+      setMotivos(dados);
+      if (dados.length > 0) setMotivoId(dados[0].id);
+    } catch (err) {
+      console.error('Erro ao carregar motivos:', err);
+    }
+  };
 
-    // Carga das informações do Dashboard e tabelas auxiliares
-    const carregarModulo = async () => {
-        try {
-            setLoading(true);
-            setErro('');
-            const historico = await notaFaltaService.listarHistoricoFaltas();
-            const listaMotivos = await notaFaltaService.listarMotivosFalta();
-            setHistoricoFaltas(historico);
-            setMotivos(listaMotivos);
-        } catch (err) {
-            setErro('Falha ao conectar com o motor de rupturas do Supabase.');
-        } finally {
-            setLoading(false);
-        }
-    };
+  useEffect(() => {
+    carregarRupturas();
+    carregarMotivos();
+  }, [statusFiltro]);
 
-    useEffect(() => {
-        if (usuarioLogado?.id) {
-            carregarDashboardEAuxiliares();
-        }
-    }, [usuarioLogado]);
+  useEffect(() => {
+    if (!termoBuscaProduto.trim()) {
+      setProdutosEncontrados([]);
+      return;
+    }
 
-    const carregarDashboardEAuxiliares = () => {
-        carregarModulo();
-    };
+    const timer = setTimeout(async () => {
+      try {
+        const res = await notaFaltaService.buscarProdutoPorTermo(termoBuscaProduto);
+        setProdutosEncontrados(res);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 300);
 
-    // Debounce para Busca Híbrida de Produtos (EAN / Descrição)
-    useEffect(() => {
-        if (!buscaTermo.trim() || produtoSelecionado) {
-            setProdutosSugestoes([]);
-            setMostrarSugestoes(false);
-            return;
-        }
+    return () => clearTimeout(timer);
+  }, [termoBuscaProduto]);
 
-        const buscarProdutos = setTimeout(async () => {
-            try {
-                const resultados = await notaFaltaService.pesquisarProdutosHibrido(buscaTermo);
-                setProdutosSugestoes(resultados);
+  // Identifica se o motivo selecionado é Estoque Baixo
+  const motivoSelecionadoObj = motivos.find(m => m.id === motivoId);
+  const isEstoqueBaixo = motivoSelecionadoObj?.descricao?.toUpperCase().includes('BAIXO');
 
-                // Se houver apenas 1 resultado exato por código de barras, já seleciona direto
-                if (resultados.length === 1 && resultados[0].codigo_barras === buscaTermo.trim()) {
-                    handleSelecionarProduto(resultados[0]);
-                } else {
-                    setMostrarSugestoes(resultados.length > 0);
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }, 350);
+  const handleSalvarRuptura = async () => {
+    if (!produtoSelecionado) {
+      alert('Selecione um produto.');
+      return;
+    }
+    if (!motivoId) {
+      alert('Selecione o motivo da ruptura.');
+      return;
+    }
 
-        return () => clearTimeout(buscarProdutos);
-    }, [buscaTermo, produtoSelecionado]);
+    try {
+      setLoading(true);
+      const usuarioIdFinal = usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id || '00000000-0000-0000-0000-000000000000';
 
-    const handleSelecionarProduto = (prod: ProdutoFalta) => {
-        setProdutoSelecionado(prod);
-        setBuscaTermo(prod.descricao);
-        setMostrarSugestoes(false);
-    };
+      await notaFaltaService.cadastrarNotaFalta({
+        usuario_id: usuarioIdFinal,
+        produto_id: produtoSelecionado.id,
+        motivo_falta_id: motivoId,
+        quantidade_restante: isEstoqueBaixo ? quantidadeRestante : 0,
+        unidade_restante: isEstoqueBaixo ? unidadeRestante : 'UN'
+      });
 
-    const handleLimparProduto = () => {
-        setProdutoSelecionado(null);
-        setBuscaTermo('');
-        setProdutosSugestoes([]);
-        setTimeout(() => inputBuscaRef.current?.focus(), 50);
-    };
+      alert('Ruptura registrada com sucesso!');
+      setModalAberta(false);
+      setProdutoSelecionado(null);
+      setTermoBuscaProduto('');
+      setQuantidadeRestante(1);
+      carregarRupturas();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao registrar ruptura.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const handleRegistrarFalta = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!usuarioLogado || !produtoSelecionado || !motivoSelecionadoId) return;
-
-        try {
-            setSalvando(true);
-            setErro('');
-
-            await notaFaltaService.registrarNotaFalta({
-                usuario_id: usuarioLogado.id,
-                produto_id: produtoSelecionado.id,
-                setor_id: produtoSelecionado.setor_id,
-                subsetor_id: produtoSelecionado.subsetor_id,
-                motivo_falta_id: motivoSelecionadoId
-            });
-
-            // Reset inteligente para próxima bipada em sequência
-            setProdutoSelecionado(null);
-            setBuscaTermo('');
-            setMotivoSelecionadoId('');
-
-            // Feedback visual rápido e retorno do foco
-            inputBuscaRef.current?.focus();
-            carregarModulo();
-
-        } catch (err) {
-            setErro('Erro ao registrar a ruptura no banco.');
-        } finally {
-            setSalvando(false);
-        }
-    };
-
-    const handleSetaVoltar = () => {
-        if (subTela === 'registrar') {
-            setSubTela('dashboard');
-            carregarModulo();
-        } else {
-            onVoltarParaHome();
-        }
-    };
-
-    // Helpers de Formatação e fuso horário (-3h Brasília)
-    const formatarData = (d: string) => d.split('-').reverse().join('/');
-
-    const formatarHoraComAjuste = (timeStr: string) => {
-        if (!timeStr) return '00:00';
-        const [horas, minutos] = timeStr.split(':').map(Number);
-        let horasAjustadas = horas - 3;
-        if (horasAjustadas < 0) horasAjustadas += 24;
-        return `${String(horasAjustadas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
-    };
-
-    // Filtragem controlada pelos botões de ação do Dashboard
-    const faltasFiltradas = historicoFaltas.filter(item => {
-        return filtroStatusAplicado ? item.status_cotacao === filtroStatusAplicado : true;
-    });
-
-    return (
-        <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-            <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
-
-                {/* HEADER UNIFICADO */}
-                <div className="flex items-center w-full mb-4 border-b border-gray-100 pb-3 select-none">
-                    <button onClick={handleSetaVoltar} className="p-2 hover:bg-gray-100 rounded-full mr-1.5 transition-all">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#09797a" className="w-5 h-5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7m-7.5 7h16.5" />
-                        </svg>
-                    </button>
-                    <h1 className="text-[#09797a] font-black text-lg tracking-tight">Nota de Falta</h1>
-                </div>
-
-                {erro && (
-                    <div className="bg-red-50 text-red-600 text-xs p-2.5 rounded-xl text-center font-bold mb-3 animate-fadeIn">
-                        {erro}
-                    </div>
-                )}
-
-                {loading && subTela === 'dashboard' ? (
-                    <div className="flex flex-col flex-1 justify-center items-center py-12 gap-2">
-                        <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-[#09797a]"></div>
-                        <span className="text-[11px] text-gray-400 italic">Buscando rupturas na gôndola...</span>
-                    </div>
-                ) : (
-                    <div className="flex flex-col flex-1">
-
-                        {/* VISTA A: DASHBOARD PRINCIPAL */}
-                        {subTela === 'dashboard' && (
-                            <div className="flex flex-col flex-1 animate-fadeIn">
-                                <button
-                                    onClick={() => setSubTela('registrar')}
-                                    className="w-full h-11 bg-[#09797a] text-white rounded-xl text-xs font-extrabold shadow-sm active:scale-98 transition-all flex justify-center items-center gap-1.5 mb-4"
-                                >
-                                    📝 Registrar Nova Falta
-                                </button>
-
-                                {/* Filtro por Status Controlado por Ações */}
-                                <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl flex flex-col gap-2 mb-4">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider pl-0.5">Filtros de Pesquisa</span>
-                                    <select
-                                        value={inputStatus}
-                                        onChange={(e) => setInputStatus(e.target.value)}
-                                        className="w-full bg-white border text-[11px] font-semibold rounded-lg px-2 h-8 outline-none text-gray-600"
-                                    >
-                                        <option value="">Todos os Status de Cotação</option>
-                                        <option value="Pendente">Pendente</option>
-                                        <option value="Em Cotação">Em Cotação</option>
-                                        <option value="Finalizado">Finalizado</option>
-                                    </select>
-                                    <div className="grid grid-cols-2 gap-2 mt-0.5">
-                                        <button
-                                            onClick={() => { setInputStatus(''); setFiltroStatusAplicado(''); }}
-                                            className="h-7 bg-white border border-gray-300 text-gray-600 rounded-lg text-[10px] font-bold uppercase active:scale-95 transition-all"
-                                        >
-                                            🧹 Limpar
-                                        </button>
-                                        <button
-                                            onClick={() => setFiltroStatusAplicado(inputStatus)}
-                                            className="h-7 bg-[#09797a] text-white rounded-lg text-[10px] font-bold uppercase active:scale-95 transition-all shadow-xs"
-                                        >
-                                            🔍 Filtrar
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Grid de Itens Registrados */}
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider pl-1 mb-2 block">Produtos em Falta ({faltasFiltradas.length})</span>
-                                <div className="flex flex-col gap-2.5 max-h-72.5 overflow-y-auto pr-1">
-                                    {faltasFiltradas.length === 0 ? (
-                                        <div className="text-center py-10 text-xs text-gray-400 italic bg-gray-50 rounded-2xl border border-dashed">Nenhuma ruptura pendente de cotação.</div>
-                                    ) : (
-                                        faltasFiltradas.map((item) => (
-                                            <div key={item.id} className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-col gap-1.5 shadow-xs relative">
-                                                <div className="flex justify-between items-start">
-                                                    <span className="font-extrabold text-gray-800 text-xs truncate max-w-52.5">{item.produtos?.descricao}</span>
-                                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${item.status_cotacao === 'Pendente' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                                            item.status_cotacao === 'Em Cotação' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                        }`}>
-                                                        {item.status_cotacao}
-                                                    </span>
-                                                </div>
-                                                <div className="text-[10px] text-gray-400 font-bold flex flex-col gap-0.5 border-t border-gray-50 pt-1.5">
-                                                    <p>📍 Setor: {item.categorias_setores?.nome} / {item.categorias_subsetores?.nome}</p>
-                                                    <p>⚠️ Motivo: <span className="text-red-600 font-extrabold">{item.motivos_falta?.descricao}</span></p>
-                                                    <p className="text-[9px] font-mono text-gray-400 mt-0.5">👤 {item.usuarios?.nome} em {formatarData(item.data_registro)} às {formatarHoraComAjuste(item.hora_registro)}</p>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* VISTA B: FORMULÁRIO DE LANÇAMENTO COMPACTO */}
-                        {subTela === 'registrar' && (
-                            <form onSubmit={handleRegistrarFalta} className="flex flex-col gap-3.5 animate-fadeIn">
-                                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-2.5 text-[10px] font-bold text-gray-400 select-none flex justify-between">
-                                    <span>Operador: <span className="text-gray-600 uppercase">{usuarioLogado?.nome}</span></span>
-                                    <span>📅 Fluxo Ativo</span>
-                                </div>
-
-                                {/* Input de Busca Unificado com Dropdown Suspenso */}
-                                <div className="flex flex-col gap-1 relative">
-                                    <label className="text-[11px] font-bold text-gray-500 pl-1">Buscar Produto (EAN ou Nome)</label>
-                                    <div className="relative">
-                                        <input
-                                            ref={inputBuscaRef}
-                                            type="text"
-                                            placeholder="Bipe o EAN ou digite o termo..."
-                                            value={buscaTermo}
-                                            onChange={(e) => {
-                                                setBuscaTermo(e.target.value);
-                                                if (produtoSelecionado) setProdutoSelecionado(null);
-                                            }}
-                                            className="w-full bg-white border border-gray-300 rounded-xl px-3 h-11 text-xs outline-none focus:border-[#09797a] font-bold pr-9"
-                                            required
-                                        />
-                                        {produtoSelecionado && (
-                                            <button type="button" onClick={handleLimparProduto} className="absolute right-3 top-3.5 hover:bg-gray-100 rounded-full p-0.5">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#e07a5f" className="w-3.5 h-3.5">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Dropdown de Sugestões Flutuantes com Alta Z-Index */}
-                                    {mostrarSugestoes && produtosSugestoes.length > 0 && (
-                                        <div className="absolute left-0 right-0 top-14 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-42.5 overflow-y-auto p-1 flex flex-col gap-0.5 animate-fadeIn">
-                                            {produtosSugestoes.map((p) => (
-                                                <button
-                                                    key={p.id}
-                                                    type="button"
-                                                    onClick={() => handleSelecionarProduto(p)}
-                                                    className="w-full text-left px-2.5 py-2 hover:bg-gray-50 rounded-lg transition-all flex flex-col border-b border-gray-50 last:border-0"
-                                                >
-                                                    <span className="text-xs font-black text-gray-700 truncate">{p.descricao}</span>
-                                                    <span className="text-[9px] font-mono font-bold text-gray-400">EAN: {p.codigo_barras}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Preenchimento Automático do Vínculo de Categorias (Trava de Segurança) */}
-                                <div className="grid grid-cols-2 gap-2 bg-gray-50/50 p-3 rounded-2xl border border-gray-100 border-dashed">
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Setor Vinculado</span>
-                                        <span className="text-xs font-black text-gray-700 truncate mt-0.5">
-                                            {produtoSelecionado ? `📍 ${produtoSelecionado.categorias_setores?.nome}` : 'Aguardando EAN...'}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Subsetor</span>
-                                        <span className="text-xs font-black text-gray-600 truncate mt-0.5">
-                                            {produtoSelecionado ? `${produtoSelecionado.categorias_subsetores?.nome}` : 'Aguardando EAN...'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Seleção do Motivo da Falta */}
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-[11px] font-bold text-gray-500 pl-1">Motivo da Ruptura</label>
-                                    <select
-                                        value={motivoSelecionadoId}
-                                        onChange={(e) => setMotivoSelecionadoId(e.target.value)}
-                                        className="w-full bg-white border border-gray-300 rounded-xl px-3 h-11 text-xs font-bold outline-none focus:border-[#09797a] cursor-pointer text-gray-700"
-                                        required
-                                        disabled={!produtoSelecionado}
-                                    >
-                                        <option value="">Selecione o motivo comercial...</option>
-                                        {motivos.map(m => <option key={m.id} value={m.id}>{m.descricao}</option>)}
-                                    </select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2 mt-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => { setSubTela('dashboard'); carregarModulo(); }}
-                                        className="h-11 bg-white border border-gray-300 text-gray-600 text-xs font-bold rounded-xl active:scale-95 transition-all"
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={salvando || !produtoSelecionado || !motivoSelecionadoId}
-                                        className="h-11 bg-[#09797a] text-white text-xs font-bold rounded-xl active:scale-95 disabled:opacity-40 transition-all shadow-sm"
-                                    >
-                                        {salvando ? 'Registrando...' : 'Confirmar & Registrar'}
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-
-                    </div>
-                )}
+  return (
+    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center">
+      <div className="w-full max-w-2xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
+        
+        {/* HEADER */}
+        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
+            <div>
+              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">Nota de Falta</h1>
+              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Registro de Rupturas de Estoque</p>
             </div>
+          </div>
         </div>
-    );
+
+        {/* ALERTA DE ERRO */}
+        {erro && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-bold p-4 rounded-2xl text-center">
+            {erro}
+          </div>
+        )}
+
+        {/* BOTÃO NOVO REGISTRO */}
+        <button
+          type="button"
+          onClick={() => setModalAberta(true)}
+          className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all flex justify-center items-center gap-2"
+        >
+          📝 Registrar Nova Falta
+        </button>
+
+        {/* FILTROS DE PESQUISA */}
+        <div className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-2">
+          <span className="text-[10px] font-black text-gray-400 uppercase px-1">Filtros de Pesquisa</span>
+          <div className="flex gap-2">
+            <select
+              value={statusFiltro}
+              onChange={(e) => setStatusFiltro(e.target.value)}
+              className="flex-1 h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-700"
+            >
+              <option value="TODOS">Todos os Status de Cotação</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Em Cotação">Em Cotação</option>
+              <option value="Cotado">Cotado</option>
+            </select>
+            <button
+              type="button"
+              onClick={carregarRupturas}
+              className="bg-[#09797a] text-white px-4 rounded-xl text-xs font-black uppercase"
+            >
+              🔍 Filtrar
+            </button>
+          </div>
+        </div>
+
+        {/* LISTAGEM DE PRODUTOS EM FALTA */}
+        <div className="flex-1 flex flex-col gap-2">
+          <span className="text-[10px] font-black text-gray-400 uppercase px-1">Produtos em Falta ({listaRupturas.length})</span>
+          
+          {loading ? (
+            <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Consultando rupturas...</div>
+          ) : listaRupturas.length === 0 ? (
+            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+              Nenhuma ruptura pendente de cotação.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {listaRupturas.map((item) => {
+                const prod = item.produtos || {};
+                return (
+                  <div key={item.id} className="bg-gray-50 border border-gray-200 p-3.5 rounded-2xl flex justify-between items-center">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-mono font-bold bg-[#09797a]/10 text-[#09797a] px-2 py-0.5 rounded-lg">{item.codigo_customizado}</span>
+                        <span className="text-[10px] font-mono text-gray-400">Cód: {prod.codprod || 'N/A'}</span>
+                      </div>
+                      <h4 className="font-black text-xs text-gray-800 uppercase mt-1">{prod.descricao || 'PRODUTO REMOVIDO'}</h4>
+                      <p className="text-[10px] text-gray-400 font-medium">
+                        EAN: {prod.codbarra || 'SEM EAN'} | Dep: {prod.departamento || 'GERAL'} {prod.secao ? `› ${prod.secao}` : ''}
+                      </p>
+                      
+                      {/* MOTIVO E SALDO RESTANTE */}
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-gray-600 font-bold">Motivo: {item.motivos_falta?.descricao || 'Não informado'}</span>
+                        {Number(item.quantidade_restante) > 0 && (
+                          <span className="bg-amber-100 text-amber-900 text-[9px] font-black px-2 py-0.5 rounded-md font-mono">
+                            Saldo Restante: {item.quantidade_restante} {item.unidade_restante}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className={`inline-block text-[9px] font-black px-2 py-1 rounded-xl uppercase ${
+                        item.status_cotacao === 'Pendente' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {item.status_cotacao}
+                      </span>
+                      <span className="block text-[9px] font-mono text-gray-400 mt-1">
+                        {new Date(item.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* MODAL REGISTRO DE NOVA FALTA */}
+      {modalAberta && (
+        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 font-sans">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="text-[#09797a] font-black text-base uppercase">Registrar Ruptura de Estoque</h3>
+              <button type="button" onClick={() => setModalAberta(false)} className="text-gray-400 font-bold">✕</button>
+            </div>
+
+            {/* BUSCA DE PRODUTO */}
+            <div className="flex flex-col gap-1 relative">
+              <label className="text-[10px] font-black text-gray-400 uppercase px-1">Buscar Produto (CODPROD, EAN ou Nome)</label>
+              <input
+                type="text"
+                value={termoBuscaProduto}
+                onChange={(e) => {
+                  setTermoBuscaProduto(e.target.value);
+                  setProdutoSelecionado(null);
+                }}
+                placeholder="Bipe o EAN ou digite o termo..."
+                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
+              />
+
+              {/* DROPDOWN DE RESULTADOS */}
+              {produtosEncontrados.length > 0 && !produtoSelecionado && (
+                <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto z-10 divide-y divide-gray-100">
+                  {produtosEncontrados.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setProdutoSelecionado(p);
+                        setTermoBuscaProduto(`${p.codprod} - ${p.descricao}`);
+                        setUnidadeRestante(p.unidade || 'UN');
+                        setProdutosEncontrados([]);
+                      }}
+                      className="w-full text-left p-3 hover:bg-gray-50 flex flex-col text-xs font-bold text-gray-700 uppercase"
+                    >
+                      <span>{p.codprod} - {p.descricao}</span>
+                      <span className="text-[9px] font-mono text-gray-400 normal-case">EAN: {p.codbarra || 'N/A'} | Dep: {p.departamento || 'GERAL'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* PRODUTO SELECIONADO */}
+            {produtoSelecionado && (
+              <div className="bg-emerald-50/50 border border-emerald-200 p-3.5 rounded-2xl flex flex-col gap-1">
+                <span className="text-[9px] font-black text-emerald-800 uppercase">Produto Selecionado</span>
+                <p className="text-xs font-black text-gray-800 uppercase">{produtoSelecionado.descricao}</p>
+                <p className="text-[10px] text-gray-500 font-mono">
+                  EAN: {produtoSelecionado.codbarra || 'N/A'} | Cód: {produtoSelecionado.codprod} | Unid: {produtoSelecionado.unidade || 'UN'}
+                </p>
+              </div>
+            )}
+
+            {/* SELEÇÃO DO MOTIVO */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase px-1">Motivo da Ruptura</label>
+              <select
+                value={motivoId}
+                onChange={(e) => setMotivoId(e.target.value)}
+                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-2xl font-bold text-gray-700"
+              >
+                {motivos.map((m) => (
+                  <option key={m.id} value={m.id}>{m.descricao.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 🆕 CAMPOS CONDICIONAIS DE ESTOQUE BAIXO */}
+            {isEstoqueBaixo && (
+              <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-2xl flex flex-col gap-2 animate-scale-up">
+                <span className="text-[10px] font-black text-amber-900 uppercase">Informa de Saldo em Loja (Para o Comprador)</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-bold text-gray-500 uppercase px-1">Qtd Ainda Restante</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={quantidadeRestante}
+                      onChange={(e) => setQuantidadeRestante(Number(e.target.value))}
+                      className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-bold text-gray-500 uppercase px-1">Tipo de Unidade</label>
+                    <select
+                      value={unidadeRestante}
+                      onChange={(e) => setUnidadeRestante(e.target.value)}
+                      className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-800"
+                    >
+                      <option value="UN">UN - Unidade</option>
+                      <option value="CX">CX - Caixa</option>
+                      <option value="FD">FD - Fardo</option>
+                      <option value="SC">SC - Saco</option>
+                      <option value="KG">KG - Quilo</option>
+                      <option value="PCT">PCT - Pacote</option>
+                      <option value="LT">LT - Lata/Litro</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AÇÕES */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setModalAberta(false)}
+                className="px-5 py-3 rounded-2xl text-xs font-bold bg-gray-100 text-gray-500"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={loading || !produtoSelecionado}
+                onClick={handleSalvarRuptura}
+                className="px-6 py-3 rounded-2xl text-xs font-black uppercase bg-[#09797a] hover:bg-[#075f60] text-white shadow-md active:scale-95 transition-all disabled:opacity-40"
+              >
+                {loading ? 'Registrando...' : 'Confirmar & Registrar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

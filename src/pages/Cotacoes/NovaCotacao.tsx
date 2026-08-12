@@ -3,9 +3,10 @@ import { useState, useMemo } from 'react';
 import { cotacoesService } from './services/cotacoesService';
 import { useFaltasPendentes } from './hooks/useFaltasPendentes';
 import { useFornecedoresSugeridos } from './hooks/useFornecedoresSugeridos';
+import type { FaltaPendente } from './hooks/useFaltasPendentes';
 import { CardNotaFalta } from './components/CardNotaFalta';
 import { CardFornecedor } from './components/CardFornecedor';
-import type { ItemFaltaCotacaoDTO, FornecedorSugeridoDTO } from './types/cotacoes.types';
+import type { FornecedorSugeridoDTO } from './types/cotacoes.types';
 
 interface NovaCotacaoProps {
   compradorId: string;
@@ -27,9 +28,10 @@ export function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoPro
 
   const { faltas, loading: loadingFaltas } = useFaltasPendentes();
 
+  // Agrupa os departamentos dos itens em falta selecionados para sugerir fornecedores
   const setoresParaCotacao = useMemo(() => {
-    const itens = (faltas || []).filter((f: ItemFaltaCotacaoDTO) => itensSelecionados.has(f.id));
-    return Array.from(new Set(itens.map((i: ItemFaltaCotacaoDTO) => i.setor_id)));
+    const itens = (faltas || []).filter((f: FaltaPendente) => itensSelecionados.has(f.id));
+    return Array.from(new Set(itens.map((i: FaltaPendente) => i.produto.departamento)));
   }, [faltas, itensSelecionados]);
 
   const { fornecedores, loading: loadingFornecedores } = useFornecedoresSugeridos(setoresParaCotacao);
@@ -66,18 +68,16 @@ export function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoPro
 
       const listaItensIds = Array.from(itensSelecionados);
       
-      // 1. Mapeia os fornecedores gerando um par estável de Fornecedor + Token de acesso único
       const tokensMapeados = Array.from(fornecedoresSelecionados).map((fId: string) => {
         const f = (fornecedores || []).find((x: FornecedorSugeridoDTO) => x.fornecedor_id === fId);
         return {
           fornecedor_id: fId,
           vendedor_id: f?.vendedor_id || null,
           nome_fantasia: f?.nome_fantasia || 'Fornecedor',
-          token: gerarUUIDV4() // Gerado uma única vez por fornecedor
+          token: gerarUUIDV4()
         };
       });
 
-      // 2. Envia exatamente os mesmos tokens gerados para persistência no Supabase
       await cotacoesService.criarRodadaCotacao({
         comprador_id: compradorId,
         nota_falta_ids: listaItensIds,
@@ -88,7 +88,6 @@ export function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoPro
         }))
       });
 
-      // 3. Monta as URLs de visualização da tela usando exatamente as mesmas chaves do banco
       const baseUrl = window.location.origin;
       const linksMapped: LinkGerado[] = tokensMapeados.map(t => ({
         fornecedor: t.nome_fantasia,
@@ -128,26 +127,26 @@ export function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoPro
 
         <div className="flex-1 overflow-y-auto max-h-[calc(100vh-240px)] pb-4">
           {etapa === 1 && (
-            <>
+            <div className="flex flex-col gap-2">
               {loadingFaltas ? (
                 <p className="text-center text-gray-500 mt-10 text-sm font-medium">Carregando faltas...</p>
               ) : !faltas || faltas.length === 0 ? (
                 <p className="text-center text-gray-500 mt-10 text-sm">Nenhum item pendente.</p>
               ) : (
-                faltas.map((item: ItemFaltaCotacaoDTO) => (
+                faltas.map((item: FaltaPendente) => (
                   <CardNotaFalta
                     key={item.id}
-                    item={item}
+                    falta={item}
                     selecionado={itensSelecionados.has(item.id)}
                     onToggle={handleToggleItem}
                   />
                 ))
               )}
-            </>
+            </div>
           )}
 
           {etapa === 2 && (
-            <>
+            <div className="flex flex-col gap-2">
               {loadingFornecedores ? (
                 <p className="text-center text-gray-500 mt-10 text-sm font-medium">Buscando fornecedores...</p>
               ) : !fornecedores || fornecedores.length === 0 ? (
@@ -162,7 +161,7 @@ export function NovaCotacao({ compradorId, onVoltar, onSucesso }: NovaCotacaoPro
                   />
                 ))
               )}
-            </>
+            </div>
           )}
 
           {etapa === 3 && (

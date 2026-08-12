@@ -1,117 +1,143 @@
+// Arquivo: src/pages/Produtos/index.tsx
 import { useState, useEffect } from 'react';
 import { produtosService } from './services/produtosService';
-import { useCategorias } from '../../hooks/useCategorias';
-import CadastroProduto from './components/CadastroProduto';
+import { ImportarProdutosModal } from './components/ImportarProdutosModal';
+import type { ProdutoDTO } from './types/produtos.types';
 
-interface Produto {
-  id: string;
-  ean: string;
-  descricao: string;
-  setor: string;
-  unidade: string;
+interface ProdutosProps {
+  onVoltarParaHome: () => void;
 }
 
-export default function Produtos({ onVoltarParaHome }: { onVoltarParaHome: () => void }) {
-  const [produtos, setProdutos] = useState<Produto[]>([]);
+export default function Produtos({ onVoltarParaHome }: ProdutosProps) {
+  const [produtos, setProdutos] = useState<ProdutoDTO[]>([]);
   const [loading, setLoading] = useState(false);
-  const [busca, setBusca] = useState('');
-  const [setorFiltro, setSetorFiltro] = useState('');
-  const [exibindoCadastro, setExibindoCadastro] = useState(false);
-  
-  // Hook para carregar os setores para o filtro
-  const { setores } = useCategorias();
+  const [termoBusca, setTermoBusca] = useState('');
+  const [modalImportarAberto, setModalImportarAberto] = useState(false);
 
-  // Função principal de carga com filtros
-  const carregarProdutos = async (termo: string, setorId: string) => {
-    setLoading(true);
+  const carregarProdutos = async () => {
     try {
-      const response = await produtosService.listarProdutos(0, 50, { 
-        termo, 
-        setorId 
-      });
+      setLoading(true);
+      const response = await produtosService.listarProdutos(0, 100, { termo: termoBusca });
       setProdutos(response.data);
     } catch (err) {
-      console.error("Erro na busca:", err);
+      console.error(err);
+      alert('Erro ao carregar listagem de produtos.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Debounce para a busca
   useEffect(() => {
-    const handler = setTimeout(() => {
-      carregarProdutos(busca, setorFiltro);
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [busca, setorFiltro]);
+    carregarProdutos();
+  }, [termoBusca]);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-150 relative">
+    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center">
+      <div className="w-full max-w-5xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
         
-        {/* Cabeçalho Fixo */}
-        <div className="flex items-center w-full mb-5 border-b border-gray-100 pb-4">
-          <button onClick={exibindoCadastro ? () => setExibindoCadastro(false) : onVoltarParaHome} className="p-2 hover:bg-gray-100 rounded-full active:scale-90 transition-all mr-2">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#09797a" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7m-7.5 7h16.5" />
-            </svg>
-          </button>
-          <h1 className="text-[#09797a] font-bold text-xl tracking-tight select-none">
-            {exibindoCadastro ? 'Novo Cadastro' : 'Produtos'}
-          </h1>
+        {/* HEADER DA PÁGINA */}
+        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-3">
+            <button 
+              type="button" 
+              onClick={onVoltarParaHome} 
+              className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+            >
+              ←
+            </button>
+            <div>
+              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">Cadastro de Produtos</h1>
+              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Gestão do Catálogo de Mercadorias e Preços</p>
+            </div>
+          </div>
+
+          {/* BARRAS DE AÇÃO E BOTÃO DE IMPORTAÇÃO */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setModalImportarAberto(true)}
+              className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all flex items-center gap-2"
+            >
+              📥 Importar em Massa
+            </button>
+          </div>
         </div>
 
-        {exibindoCadastro ? (
-          <CadastroProduto 
-            onSucesso={() => { setExibindoCadastro(false); carregarProdutos(busca, setorFiltro); }} 
-            onCancelar={() => setExibindoCadastro(false)} 
+        {/* CAMPO DE PESQUISA RÁPIDA */}
+        <div className="w-full">
+          <input
+            type="text"
+            placeholder="Pesquisar por Descrição, Código Interno (CODPROD) ou Código de Barras..."
+            value={termoBusca}
+            onChange={(e) => setTermoBusca(e.target.value)}
+            className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
           />
-        ) : (
-          <div className="flex flex-col flex-1 animate-fadeIn">
-            {/* Filtros e Busca */}
-            <div className="flex flex-col gap-2 mb-4">
-              <input 
-                type="text" 
-                placeholder="🔎 Buscar por descrição ou EAN..." 
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 h-12 text-sm outline-none focus:border-[#09797a]"
-              />
-              <select 
-                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 h-11 text-xs font-bold text-gray-600 outline-none"
-                onChange={(e) => setSetorFiltro(e.target.value)}
-              >
-                <option value="">Todos os Setores</option>
-                {setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-              </select>
-            </div>
+        </div>
 
-            {/* Listagem */}
-            <div className="flex-1 overflow-y-auto max-h-[60vh] space-y-2 pr-1">
+        {/* TABELA DE PRODUTOS ATUALIZADA COM AS NOVAS COLUNAS */}
+        <div className="flex-1 overflow-x-auto border border-gray-200 rounded-3xl bg-gray-50/50">
+          <table className="w-full text-left border-collapse text-[11px]">
+            <thead>
+              <tr className="border-b border-gray-200 text-gray-500 font-black uppercase bg-gray-100/80">
+                <th className="py-3 px-3">Cód. Prod</th>
+                <th className="py-3 px-3">Descrição / EAN</th>
+                <th className="py-3 px-3">Unid</th>
+                <th className="py-3 px-3">Dep. / Secão / Categoria</th>
+                <th className="py-3 px-3 text-right">Custo Real</th>
+                <th className="py-3 px-3 text-right">P. Venda</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 font-medium text-gray-600 uppercase">
               {loading ? (
-                <div className="flex justify-center items-center py-10 text-xs text-gray-400">Carregando...</div>
+                <tr>
+                  <td colSpan={6} className="text-center py-10 text-gray-400 font-bold uppercase tracking-wider">
+                    Carregando Catálogo de Produtos...
+                  </td>
+                </tr>
               ) : produtos.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-10 italic">Nenhum produto encontrado.</p>
-              ) : produtos.map(p => (
-                <div key={p.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm border-l-4 border-l-[#09797a]">
-                  <p className="font-bold text-sm text-gray-800">{p.descricao}</p>
-                  <p className="text-[10px] text-gray-400 font-mono mt-1">EAN: {p.ean}</p>
-                  <div className="flex gap-2 mt-2">
-                    <span className="bg-gray-100 px-2 py-0.5 rounded text-[10px] font-bold text-gray-600 uppercase">{p.setor}</span>
-                    <span className="bg-[#09797a]/10 px-2 py-0.5 rounded text-[10px] font-bold text-[#09797a] uppercase">{p.unidade}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                <tr>
+                  <td colSpan={6} className="text-center py-10 text-gray-400 font-bold uppercase tracking-wider">
+                    Nenhum produto cadastrado ou encontrado.
+                  </td>
+                </tr>
+              ) : (
+                produtos.map((p) => (
+                  <tr key={p.id} className="hover:bg-white transition-colors">
+                    <td className="py-2.5 px-3 font-mono font-bold text-[#09797a]">{p.codprod}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="font-black text-gray-800 block">{p.descricao}</span>
+                      <span className="text-[9px] font-mono text-gray-400 font-normal">
+                        EAN: {p.codbarra || p.codigo_barras || 'SEM EAN'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 font-bold">{p.unidade || 'UN'}</td>
+                    <td className="py-2.5 px-3 text-[10px] text-gray-500">
+                      {p.departamento || 'GERAL'} 
+                      {p.secao ? ` › ${p.secao}` : ''}
+                      {p.categoria ? ` › ${p.categoria}` : ''}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-700">
+                      R$ {Number(p.custoreal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-700">
+                      R$ {Number(p.pvenda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-            {/* Botão Flutuante */}
-            <button 
-              onClick={() => setExibindoCadastro(true)}
-              className="absolute bottom-6 right-6 w-14 h-14 bg-[#09797a] text-white rounded-full shadow-lg text-3xl active:scale-90 transition-all flex items-center justify-center"
-            >+</button>
-          </div>
-        )}
       </div>
+
+      {/* MODAL FLUTUANTE DE IMPORTAÇÃO EM MASSA */}
+      {modalImportarAberto && (
+        <ImportarProdutosModal
+          onSucesso={carregarProdutos}
+          onFechar={() => setModalImportarAberto(false)}
+        />
+      )}
     </div>
   );
 }

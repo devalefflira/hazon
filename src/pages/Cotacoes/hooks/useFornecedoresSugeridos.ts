@@ -1,42 +1,57 @@
+// Arquivo: src/pages/Cotacoes/hooks/useFornecedoresSugeridos.ts
 import { useState, useEffect } from 'react';
-import { cotacoesService } from '../services/cotacoesService';
+import { supabase } from '../../../lib/supabaseClient';
 import type { FornecedorSugeridoDTO } from '../types/cotacoes.types';
 
-export function useFornecedoresSugeridos(setorIds: string[]) {
+export function useFornecedoresSugeridos(setoresIds: string[]) {
   const [fornecedores, setFornecedores] = useState<FornecedorSugeridoDTO[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // CORREÇÃO: Alterado de sectorIds para setorIds
-    if (!setorIds || setorIds.length === 0) {
-      setFornecedores([]);
-      return;
-    }
-    
-    async function carregar() {
+    const buscarFornecedores = async () => {
       try {
         setLoading(true);
-        const promessas = setorIds.map(id => cotacoesService.listarFornecedoresPorSetor(id));
-        const resultados = await Promise.all(promessas);
-        const listaPlana = resultados.flat();
-        
-        const map = new Map<string, FornecedorSugeridoDTO>();
-        listaPlana.forEach(f => map.set(f.fornecedor_id, f));
-        
-        setFornecedores(Array.from(map.values()));
+
+        const { data, error } = await supabase
+          .from('fornecedores')
+          .select(`
+            id,
+            razao_social,
+            nome_fantasia,
+            cnpj,
+            vendedores (
+              id,
+              nome,
+              telefone
+            )
+          `);
+
+        if (error) throw error;
+
+        // Formata os dados garantindo fallback de contato
+        const fornecedoresTratados: FornecedorSugeridoDTO[] = (data || []).map((f: any) => {
+          const vendedor = f.vendedores && f.vendedores.length > 0 ? f.vendedores[0] : null;
+          return {
+            fornecedor_id: f.id,
+            razao_social: f.razao_social,
+            nome_fantasia: f.nome_fantasia || f.razao_social,
+            cnpj: f.cnpj,
+            vendedor_id: vendedor?.id || null,
+            vendedor_nome: vendedor?.nome || 'Contato Principal',
+            vendedor_telefone: vendedor?.telefone || ''
+          };
+        });
+
+        setFornecedores(fornecedoresTratados);
       } catch (err) {
-        console.error(err);
+        console.error('Erro ao buscar fornecedores sugeridos:', err);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    carregar();
-  }, [setorIds]);
+    buscarFornecedores();
+  }, [JSON.stringify(setoresIds)]);
 
-  return { 
-    fornecedores, 
-    proveedores: fornecedores, 
-    loading 
-  };
+  return { fornecedores, loading };
 }

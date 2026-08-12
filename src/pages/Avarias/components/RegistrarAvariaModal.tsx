@@ -1,250 +1,239 @@
 // Arquivo: src/pages/Avarias/components/RegistrarAvariaModal.tsx
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../lib/supabaseClient';
 import { avariasService } from '../services/avariasService';
-import type { MotivoAvariaDTO, DestinacaoAvaria } from '../types/avarias.types';
 
 interface RegistrarAvariaModalProps {
-  usuarioId: string;
-  onFechar: () => void;
   onSucesso: () => void;
+  onFechar: () => void;
+  usuarioId?: string;
+  usuarioLogado?: any;
 }
 
-interface ProdutoFiltro {
-  id: string;
-  descricao: string;
-  codigo_barras: string;
-  sigla_unidade: string;
-}
+export function RegistrarAvariaModal({ onSucesso, onFechar, usuarioId, usuarioLogado }: RegistrarAvariaModalProps) {
+  const [termoBusca, setTermoBusca] = useState('');
+  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
 
-export function RegistrarAvariaModal({ usuarioId, onFechar, onSucesso }: RegistrarAvariaModalProps) {
-  const [motivos, setMotivos] = useState<MotivoAvariaDTO[]>([]);
-  const [loadingForm, setLoadingForm] = useState(true);
-  const [submetendo, setSubmetendo] = useState(false);
-
-  // Estados de Busca do Produto
-  const [busca, setBusca] = useState('');
-  const [produtosSugeridos, setProdutosSugeridos] = useState<ProdutoFiltro[]>([]);
-  const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoFiltro | null>(null);
-
-  // Campos do Registro
+  const [motivos, setMotivos] = useState<any[]>([]);
   const [motivoId, setMotivoId] = useState('');
-  const [quantidade, setQuantidade] = useState('');
-  const [destinacao, setDestinacao] = useState<DestinacaoAvaria>('Descarte');
+  const [quantidade, setQuantidade] = useState<number>(1);
+  const [destinacao, setDestinacao] = useState('Descarte');
   const [observacao, setObservacao] = useState('');
 
-  useEffect(() => {
-    async function inicializarModal() {
-      try {
-        setLoadingForm(true);
-        const listaMotivos = await avariasService.listarMotivos();
-        setMotivos(listaMotivos);
-        if (listaMotivos.length > 0) setMotivoId(listaMotivos[0].id);
-      } catch (err) {
-        console.error('Erro ao preparar playbook de avarias:', err);
-      } finally {
-        setLoadingForm(false);
-      }
-    }
-    inicializarModal();
-  }, []);
+  const [salvando, setSalvando] = useState(false);
 
-  // Procura reativa de produtos baseada no input de digitação/leitura
   useEffect(() => {
-    async function filtrarProdutos() {
-      if (busca.trim().length < 2) {
-        setProdutosSugeridos([]);
-        return;
-      }
+    const carregarMotivos = async () => {
       try {
-        const { data } = await supabase
-          .from('produtos')
-          .select(`
-            id, descricao, codigo_barras,
-            unidades_medida:unidade_medida_id ( sigla )
-          `)
-          .or(`codigo_barras.ilike.%${busca}%,descricao.ilike.%${busca}%`)
-          .limit(4);
-
-        const formatados = (data || []).map((p: any) => ({
-          id: p.id,
-          descricao: p.descricao,
-          codigo_barras: p.codigo_barras,
-          sigla_unidade: p.unidades_medida?.sigla || 'UN'
-        }));
-        setProdutosSugeridos(formatados);
+        const dados = await avariasService.listarMotivosAvaria();
+        setMotivos(dados);
+        if (dados.length > 0) setMotivoId(dados[0].id);
       } catch (err) {
         console.error(err);
       }
-    }
-    const timer = setTimeout(filtrarProdutos, 300);
-    return () => clearTimeout(timer);
-  }, [busca]);
+    };
+    carregarMotivos();
+  }, []);
 
-  const handleSalvarAvaria = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!termoBusca.trim() || produtoSelecionado) {
+      setProdutosEncontrados([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await avariasService.buscarProdutos(termoBusca);
+        setProdutosEncontrados(res);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [termoBusca, produtoSelecionado]);
+
+  const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!produtoSelecionado || !motivoId || Number(quantidade) <= 0) {
-      alert('Determine o produto, o motivo da quebra e uma quantidade válida.');
+
+    if (!produtoSelecionado) {
+      alert('Selecione um produto.');
       return;
     }
 
     try {
-      setSubmetendo(true);
-      await avariasService.registrarAvaria({
-        usuario_id: usuarioId,
+      setSalvando(true);
+
+      const usuarioIdFinal = usuarioId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id || '00000000-0000-0000-0000-000000000000';
+
+      await avariasService.cadastrarAvaria({
+        usuario_id: usuarioIdFinal,
         produto_id: produtoSelecionado.id,
         motivo_avaria_id: motivoId,
-        quantidade: Number(quantidade),
+        quantidade: Number(quantidade) || 1,
+        preco_custo_na_perda: Number(produtoSelecionado.custoreal) || 0,
         destinacao: destinacao,
-        observacao: observacao
+        observacao: observacao.trim()
       });
 
-      alert('📦 Quebra lançada e subtraída das disponibilidades operacionais!');
+      alert('Avaria registrada com sucesso!');
       onSucesso();
-    } catch (err: any) {
-      alert(`Falha no lançamento: ${err.message || err}`);
+      onFechar();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao registrar avaria.');
     } finally {
-      setSubmetendo(false);
+      setSalvando(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 font-sans backdrop-blur-sm">
-      <div className="w-full max-w-md bg-white rounded-4xl shadow-2xl px-5 py-6 flex flex-col max-h-[calc(100vh-40px)] animate-scale-up">
+    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 font-sans select-none">
+      <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
         
-        {/* HEADER */}
-        <div className="flex justify-between items-center pb-3 border-b border-gray-100 mb-4">
-          <h2 className="text-[#09797a] font-black text-base uppercase tracking-wide">Registrar Quebra / Avaria</h2>
-          <button type="button" onClick={onFechar} className="text-gray-400 font-bold hover:text-gray-600 text-lg p-1">✕</button>
+        <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+          <h3 className="text-[#09797a] font-black text-base uppercase">Registrar Perda / Avaria</h3>
+          <button type="button" onClick={onFechar} className="text-gray-400 font-bold">✕</button>
         </div>
 
-        {loadingForm ? (
-          <p className="text-center text-gray-400 font-bold text-xs py-12">Carregando parâmetros operacionais...</p>
-        ) : (
-          <form onSubmit={handleSalvarAvaria} className="flex-1 overflow-y-auto pr-0.5 flex flex-col gap-4">
-            
-            {/* BUSCA DE PRODUTO */}
-            <div className="flex flex-col gap-1 relative">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Identificar Produto</label>
-              {produtoSelecionado ? (
-                <div className="w-full bg-teal-50/50 border border-teal-200 rounded-2xl px-4 py-2.5 flex justify-between items-center animate-fade-in">
-                  <div className="truncate max-w-[85%]">
-                    <span className="text-[11px] font-black text-teal-800 uppercase block truncate">{produtoSelecionado.descricao}</span>
-                    <span className="text-[9px] text-gray-400 font-mono block">EAN: {produtoSelecionado.codigo_barras}</span>
-                  </div>
+        <form onSubmit={handleSalvar} className="flex flex-col gap-3">
+          
+          {/* BUSCA DE PRODUTO */}
+          <div className="flex flex-col gap-1 relative">
+            <label className="text-[10px] font-black text-gray-400 uppercase px-1">Buscar Produto (CODPROD, EAN ou Nome)</label>
+            <input
+              type="text"
+              value={termoBusca}
+              onChange={(e) => {
+                setTermoBusca(e.target.value);
+                setProdutoSelecionado(null);
+              }}
+              placeholder="Digite para buscar..."
+              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-800"
+            />
+
+            {produtosEncontrados.length > 0 && !produtoSelecionado && (
+              <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto z-20 divide-y divide-gray-100">
+                {produtosEncontrados.map((p) => (
                   <button
+                    key={p.id}
                     type="button"
-                    onClick={() => setProdutoSelecionado(null)}
-                    className="text-red-500 font-bold text-xs p-1"
+                    onClick={() => {
+                      setProdutoSelecionado(p);
+                      setTermoBusca(`${p.codprod} - ${p.descricao}`);
+                      setProdutosEncontrados([]);
+                    }}
+                    className="w-full text-left p-3 hover:bg-gray-50 flex flex-col text-xs font-bold text-gray-800 uppercase"
                   >
-                    ✕
+                    <span>{p.codprod} - {p.descricao}</span>
+                    <span className="text-[9px] font-mono text-gray-400 normal-case">
+                      Custo: R$ {Number(p.custoreal || 0).toFixed(2)} | Dep: {p.departamento || 'GERAL'}
+                    </span>
                   </button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
-                    placeholder="DIGITE O NOME OU LEIA O CÓDIGO DE BARRAS..."
-                    className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 uppercase"
-                  />
-                  {/* DROPDOWN DE RETORNO DO AUTOCOMPLETE */}
-                  {produtosSugeridos.length > 0 && (
-                    <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 shadow-xl rounded-2xl overflow-hidden z-10 flex flex-col">
-                      {produtosSugeridos.map((p) => (
-                        <div
-                          key={p.id}
-                          onClick={() => {
-                            setProdutoSelecionado(p);
-                            setProdutosSugeridos([]);
-                            setBusca('');
-                          }}
-                          className="px-4 py-2.5 hover:bg-teal-50/40 cursor-pointer border-b border-gray-50 last:border-0 text-left"
-                        >
-                          <span className="text-xs font-black text-gray-700 uppercase block truncate">{p.descricao}</span>
-                          <span className="text-[9px] text-gray-400 font-mono">EAN: {p.codigo_barras}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* SELETOR DE MOTIVO */}
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Motivo Encontrado</label>
-              <select
-                value={motivoId}
-                onChange={(e) => setMotivoId(e.target.value)}
-                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 uppercase"
-              >
-                {motivos.map(m => (
-                  <option key={m.id} value={m.id}>{m.descricao}</option>
                 ))}
-              </select>
-            </div>
-
-            {/* QUANTIDADE E DESTINAÇÃO */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Quantidade</label>
-                <div className="flex bg-gray-50 border border-gray-200 rounded-2xl px-4 items-center focus-within:border-[#09797a]">
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={quantidade}
-                    // CORREÇÃO: Método corrigido de setQuantity para setQuantidade
-                    onChange={(e) => setQuantidade(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full h-11 text-xs bg-transparent focus:outline-none font-bold text-gray-700"
-                  />
-                  <span className="text-[10px] font-black text-gray-400 uppercase ml-1">
-                    {produtoSelecionado ? produtoSelecionado.sigla_unidade : 'UN'}
-                  </span>
-                </div>
               </div>
+            )}
+          </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Destinação</label>
-                <select
-                  value={destinacao}
-                  onChange={(e) => setDestinacao(e.target.value as DestinacaoAvaria)}
-                  className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
-                >
-                  <option value="Descarte">DESCARTE</option>
-                  <option value="Devolução Fornecedor">DEVOLUÇÃO</option>
-                  <option value="Troca Comercial">TROCA COMERCIAL</option>
-                  <option value="Uso Interno">USO INTERNO</option>
-                </select>
+          {/* PRODUTO SELECIONADO */}
+          {produtoSelecionado && (
+            <div className="bg-emerald-50/60 border border-emerald-200 p-3 rounded-2xl flex justify-between items-center text-xs font-bold text-gray-800">
+              <div>
+                <span className="text-[9px] font-black text-emerald-800 block uppercase">Produto Confirmado</span>
+                <span>{produtoSelecionado.descricao}</span>
+                <span className="block text-[10px] font-mono text-gray-400 mt-0.5">
+                  Custo Unitário: R$ {Number(produtoSelecionado.custoreal || 0).toFixed(2)}
+                </span>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setProdutoSelecionado(null);
+                  setTermoBusca('');
+                }}
+                className="text-red-500 font-bold text-[10px] px-2 py-1 bg-white rounded-lg border border-red-100"
+              >
+                Trocar
+              </button>
             </div>
+          )}
 
-            {/* OBSERVAÇÃO */}
+          {/* CAMPOS DE QUANTIDADE E MOTIVO */}
+          <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Observações Complementares</label>
-              <textarea
-                rows={2}
-                value={observacao}
-                onChange={(e) => setObservacao(e.target.value)}
-                placeholder="EX: PRODUTO CAIU DA EMPILHADEIRA DURANTE A SEPARAÇÃO..."
-                className="w-full text-xs bg-gray-50 border border-gray-200 px-4 py-3 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 placeholder:text-gray-300 resize-none uppercase"
+              <label className="text-[10px] font-black text-gray-400 uppercase px-1">Quantidade Perdida</label>
+              <input
+                type="number"
+                min={0.01}
+                step="any"
+                required
+                value={quantidade}
+                onChange={(e) => setQuantidade(Number(e.target.value))}
+                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-2xl font-bold text-gray-800"
               />
             </div>
 
-            {/* BOTÃO MASTER */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase px-1">Motivo da Perda</label>
+              <select
+                value={motivoId}
+                onChange={(e) => setMotivoId(e.target.value)}
+                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-2xl font-bold text-gray-800"
+              >
+                {motivos.map((m) => (
+                  <option key={m.id} value={m.id}>{m.descricao.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* DESTINAÇÃO */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase px-1">Destinação do Produto</label>
+            <select
+              value={destinacao}
+              onChange={(e) => setDestinacao(e.target.value)}
+              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-2xl font-bold text-gray-800"
+            >
+              <option value="Descarte">Descarte / Lixo</option>
+              <option value="Devolução Fornecedor">Devolução ao Fornecedor</option>
+              <option value="Consumo Interno">Consumo Interno</option>
+              <option value="Doação">Doação</option>
+            </select>
+          </div>
+
+          {/* OBSERVAÇÃO */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase px-1">Observação Adicional</label>
+            <input
+              type="text"
+              placeholder="Ex: Caixa amassada no descarregamento"
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl font-bold text-gray-800"
+            />
+          </div>
+
+          {/* AÇÕES */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-2">
+            <button
+              type="button"
+              onClick={onFechar}
+              className="px-5 py-3 rounded-2xl text-xs font-bold bg-gray-100 text-gray-500"
+            >
+              Cancelar
+            </button>
             <button
               type="submit"
-              disabled={submetendo || !produtoSelecionado}
-              className="w-full bg-[#09797a] text-white py-4 rounded-3xl text-xs font-bold tracking-wide uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:scale-100 flex justify-center items-center mt-2"
+              disabled={salvando || !produtoSelecionado}
+              className="px-6 py-3 rounded-2xl text-xs font-black uppercase bg-[#09797a] hover:bg-[#075f60] text-white shadow-md active:scale-95 transition-all disabled:opacity-40"
             >
-              {submetendo ? 'Registrando Perda...' : 'Confirmar e Baixar Item'}
+              {salvando ? 'Gravando...' : 'Confirmar Perda'}
             </button>
+          </div>
 
-          </form>
-        )}
+        </form>
+
       </div>
     </div>
   );

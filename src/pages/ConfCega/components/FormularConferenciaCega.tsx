@@ -1,246 +1,292 @@
-// Arquivo: src/pages/ConfCega/components/FormularConferenciaCega.tsx
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../../lib/supabaseClient';
-import { conferenciasService } from '../services/conferenciasService';
-import type { ConferenciaMestreDTO, ConferenciaItemDTO } from '../types/conferencias.types';
+import { useState, useEffect } from 'react';
+import { confCegaService, type ConferenciaItemRegistro } from '../services/conferenciasService';
 
 interface FormularConferenciaCegaProps {
-  conferencia: ConferenciaMestreDTO;
+  conferencia?: any;
+  conferenciaMestreId?: string;
   onVoltar: () => void;
+  usuarioLogado?: any;
 }
 
-interface ProdutoBipado {
-  id: string;
-  descricao: string;
-  codigo_barras: string;
-  sigla_unidade: string;
-}
+export function FormularConferenciaCega({
+  conferencia,
+  conferenciaMestreId,
+  onVoltar
+}: FormularConferenciaCegaProps) {
+  // Resolve o ID do lote da conferência de forma flexível
+  const idMestreFinal = conferenciaMestreId || conferencia?.id || '';
 
-export function FormularConferenciaCega({ conferencia, onVoltar }: FormularConferenciaCegaProps) {
-  const [loadingItens, setLoadingItens] = useState(true);
-  const [itensContados, setItensContados] = useState<ConferenciaItemDTO[]>([]);
-  const [processandoBipe, setProcessandoBipe] = useState(false);
-  const [finalizando, setFinalizando] = useState(false);
+  const [itensConferidos, setItensConferidos] = useState<ConferenciaItemRegistro[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
-  // Estados de Coleta
-  const [codigoBipado, setCodigoBipado] = useState('');
-  const [quantidadeCaixas, setQuantidadeCaixas] = useState('1');
-  const [multiplicador, setMultiplicador] = useState('1');
-  const [produtoDetectado, setProdutoBipado] = useState<ProdutoBipado | null>(null);
+  // Estados de Bipagem / Entrada de Produto
+  const [termoBusca, setTermoBusca] = useState('');
+  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
+  const [quantidade, setQuantidade] = useState<number>(1);
+  const [observacao, setObservacao] = useState('');
+  const [salvando, setSalvando] = useState(false);
 
-  const inputBipeRef = useRef<HTMLInputElement>(null);
-
-  async function carregarItensJaContados() {
+  // 1. Carrega o histórico de itens conferidos no lote
+  const carregarItens = async () => {
+    if (!idMestreFinal) return;
     try {
-      setLoadingItens(true);
-      const dados = await conferenciasService.obterItensConferidos(conferencia.id);
-      setItensContados(dados);
-    } catch (err) {
+      setLoading(true);
+      setErro(null);
+      const dados = await confCegaService.listarItensConferidos(idMestreFinal);
+      setItensConferidos(dados);
+    } catch (err: any) {
       console.error(err);
+      setErro('Falha ao conectar com o banco de conferências do Supabase.');
     } finally {
-      setLoadingItens(false);
+      setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    carregarItensJaContados();
-  }, [conferencia.id]);
-
-  useEffect(() => {
-    if (!loadingItens && conferencia.status === 'Em Andamento' && !produtoDetectado) {
-      inputBipeRef.current?.focus();
-    }
-  }, [loadingItens, produtoDetectado, conferencia.status]);
-
-  // Multiplicação reativa em tempo real para a UX do conferente
-  const calcularTotalUnidades = () => {
-    const qtd = Number(quantidadeCaixas || 0);
-    const mult = Number(multiplicador || 0);
-    return (qtd * mult).toFixed(2).replace('.00', '');
   };
 
-  const handlePesquisarCodigo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!codigoBipado.trim() || processandoBipe) return;
+  useEffect(() => {
+    carregarItens();
+  }, [idMestreFinal]);
 
-    try {
-      setProcessandoBipe(true);
-      const { data, error } = await supabase
-        .from('produtos')
-        .select(`id, descricao, codigo_barras, unidades_medida:unidade_medida_id ( sigla )`)
-        .eq('codigo_barras', codigoBipado.trim())
-        .limit(1) as any;
+  // 2. Busca dinâmica por CODPROD, EAN ou Nome (Autocomplete/Bipagem)
+  useEffect(() => {
+    if (!termoBusca.trim() || produtoSelecionado) {
+      setProdutosEncontrados([]);
+      return;
+    }
 
-      if (error || !data || data.length === 0) {
-        alert('⚠️ ATENÇÃO: Produto não localizado na base Hazon!');
-        setCodigoBipado('');
-        return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await confCegaService.buscarProdutoPorTermo(termoBusca);
+        setProdutosEncontrados(res);
+      } catch (err) {
+        console.error(err);
       }
+    }, 250);
 
-      const p = data[0];
-      const siglaUnidade = p.unidades_medida ? (Array.isArray(p.unidades_medida) ? p.unidades_medida[0]?.sigla : p.unidades_medida.sigla) : 'UN';
+    return () => clearTimeout(timer);
+  }, [termoBusca, produtoSelecionado]);
 
-      setProdutoBipado({
-        id: p.id,
-        descricao: p.descricao,
-        codigo_barras: p.codigo_barras,
-        sigla_unidade: siglaUnidade || 'UN'
+  // 3. Grava a Bipagem/Conferência do Item
+  const handleGravarBipagem = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!produtoSelecionado) {
+      alert('Selecione ou bipe um produto válido.');
+      return;
+    }
+
+    if (!quantidade || quantidade <= 0) {
+      alert('Informe uma quantidade válida.');
+      return;
+    }
+
+    try {
+      setSalvando(true);
+
+      await confCegaService.registrarItemConferido({
+        conferencia_mestre_id: idMestreFinal,
+        produto_id: produtoSelecionado.id,
+        quantidade_conferida: Number(quantidade),
+        observacao: observacao.trim()
       });
+
+      // Reseta o formulário de entrada mantendo o foco no leitor
+      setProdutoSelecionado(null);
+      setTermoBusca('');
+      setQuantidade(1);
+      setObservacao('');
+      carregarItens();
     } catch (err) {
       console.error(err);
+      alert('Erro ao registrar item na conferência.');
     } finally {
-      setProcessandoBipe(false);
+      setSalvando(false);
     }
   };
-
-  const handleConfirmarVolumeItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const totalUN = Number(quantidadeCaixas) * Number(multiplicador);
-    if (!produtoDetectado || totalUN <= 0) return;
-
-    try {
-      setProcessandoBipe(true);
-      await conferenciasService.registrarOuIncrementarItem({
-        conferencia_mestre_id: conferencia.id,
-        produto_id: produtoDetectado.id,
-        quantidade_contada: totalUN
-      });
-
-      setProdutoBipado(null);
-      setCodigoBipado('');
-      setQuantidadeCaixas('1');
-      setMultiplicador('1');
-      await carregarItensJaContados();
-    } catch (err) {
-      alert('Erro ao computar volumes.');
-    } finally {
-      setProcessandoBipe(false);
-    }
-  };
-
-  const handleEncerrarConferenciaTotal = async () => {
-    if (itensContados.length === 0) return;
-    const conf = window.confirm('Finalizar conferência cega desta Nota Fiscal?');
-    if (!conf) return;
-
-    try {
-      setFinalizando(true);
-      await conferenciasService.finalizarConferencia(conferencia.id);
-      alert('📦 Recebimento lacrado! Prontificado para descarregamento no ERP externo.');
-      onVoltar();
-    } catch (err) {
-      alert('Erro ao finalizar recebimento.');
-    } finally {
-      setFinalizando(false);
-    }
-  };
-
-  const modoLeitura = conferencia.status === 'Concluída';
 
   return (
-    <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
-      <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col min-h-[calc(100vh-32px)] relative">
+    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
+      <div className="w-full max-w-2xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
         
         {/* HEADER */}
-        <div className="flex items-center gap-3 w-full mb-5 border-b border-gray-100 pb-4">
-          <button type="button" onClick={onVoltar} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
-          <div className="truncate max-w-[85%]">
-            <h1 className="text-[#09797a] font-black text-base uppercase leading-none">Coleta de Mercadoria</h1>
-            <span className="text-[9px] text-gray-400 font-mono font-bold mt-1 block">NF: {conferencia.numero_nota_fiscal} | {conferencia.fornecedor_nome_fantasia}</span>
+        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onVoltar}
+              className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+            >
+              ←
+            </button>
+            <div>
+              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">Conferência Cega</h1>
+              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">
+                Lote: <span className="font-mono text-gray-600">{idMestreFinal ? `${idMestreFinal.slice(0, 8)}...` : 'N/A'}</span>
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* CALCULADORA DE VOLUMES ÀS CEGAS */}
-        {!modoLeitura && (
-          <div className="mb-4 bg-gray-50 p-3 rounded-3xl border border-gray-200">
-            {produtoDetectado ? (
-              <form onSubmit={handleConfirmarVolumeItem} className="flex flex-col gap-3.5 animate-scale-up">
-                <div className="px-1">
-                  <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider block">Item Identificado</span>
-                  <span className="text-xs font-black text-gray-700 uppercase block truncate mt-0.5">{produtoDetectado.descricao}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-wider px-1">Qtd Embalagens (CX/FD/PC)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={quantidadeCaixas}
-                      onChange={(e) => setQuantidadeCaixas(e.target.value)}
-                      className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-wider px-1">Multiplicador (Itens por CX)</label>
-                    <input
-                      type="number"
-                      required
-                      value={multiplicador}
-                      onChange={(e) => setMultiplicador(e.target.value)}
-                      className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
-                    />
-                  </div>
-                </div>
-
-                {/* VISUALIZADOR REATIVO DO RESULTADO EM UN */}
-                <div className="bg-orange-50 border border-orange-100 p-3 rounded-2xl flex justify-between items-center text-xs text-orange-800 font-bold">
-                  <span>🔢 TOTAL EM UNIDADES:</span>
-                  <span className="text-base font-black font-mono">{calcularTotalUnidades()} {produtoDetectado.sigla_unidade}</span>
-                </div>
-
-                <div className="flex gap-2 w-full pt-1">
-                  <button type="submit" className="flex-1 bg-[#09797a] text-white text-xs font-black h-11 rounded-xl shadow-sm uppercase tracking-wider">Gravar Volume</button>
-                  <button type="button" onClick={() => { setProdutoBipado(null); setCodigoBipado(''); }} className="bg-gray-200 text-gray-500 text-xs font-bold px-4 h-11 rounded-xl">Cancelar</button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handlePesquisarCodigo} className="flex flex-col gap-1">
-                <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider px-1">Aguardando bipe do produto físico...</label>
-                <div className="flex bg-white border border-gray-200 rounded-xl px-3 items-center focus-within:border-[#09797a] h-11 mt-0.5">
-                  <input ref={inputBipeRef} type="text" value={codigoBipado} onChange={(e) => setCodigoBipado(e.target.value)} placeholder="LEIA O CÓDIGO DE BARRAS DO PRODUTO..." className="w-full text-xs font-bold text-gray-700 focus:outline-none bg-transparent uppercase" />
-                  <span className="text-xs">📷</span>
-                </div>
-              </form>
-            )}
+        {/* ALERTA DE ERRO */}
+        {erro && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-bold p-4 rounded-2xl text-center">
+            {erro}
           </div>
         )}
 
-        {/* FEED DE PRODUTOS COMPUTADOS */}
-        <div className="flex-1 overflow-y-auto max-h-[calc(100vh-270px)] pb-4 flex flex-col gap-2.5">
-          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1 border-b border-gray-50 pb-1">Conferência Física Acumulada</h3>
-          {itensContados.length === 0 ? (
-            <p className="text-center text-gray-400 text-xs font-medium py-10">Nenhum item computado.</p>
-          ) : (
-            itensContados.map((item) => (
-              <div key={item.id} className="p-3.5 bg-gray-50/50 border border-gray-200 rounded-2xl flex justify-between items-center gap-4 shadow-sm">
-                <div className="truncate max-w-[70%]">
-                  <h4 className="text-xs font-black text-gray-700 leading-tight truncate uppercase">{item.produto_descricao}</h4>
-                  <span className="text-[9px] text-gray-400 font-mono block mt-0.5">EAN: {item.produto_codigo_barras}</span>
-                </div>
-                <span className="text-xs font-black text-[#09797a] bg-white border border-gray-100 px-3 py-1.5 rounded-xl shrink-0 shadow-sm font-mono">
-                  {item.quantidade_contada} {item.produto_unidade_medida}
+        {/* FORMULÁRIO DE BIPAGEM / REGISTRO DE ITEM */}
+        <form onSubmit={handleGravarBipagem} className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
+          <span className="text-[10px] font-black text-gray-400 uppercase px-1">Registrar / Bipear Mercadoria</span>
+
+          {/* BUSCA / BIPE DE EAN OU CODPROD */}
+          <div className="flex flex-col gap-1 relative">
+            <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Código de Barras (EAN) ou Descrição</label>
+            <input
+              type="text"
+              autoFocus
+              value={termoBusca}
+              onChange={(e) => {
+                setTermoBusca(e.target.value);
+                setProdutoSelecionado(null);
+              }}
+              placeholder="Bipe o EAN ou digite para buscar..."
+              className="w-full h-11 text-xs bg-white border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-800"
+            />
+
+            {/* DROPDOWN DE RESULTADOS */}
+            {produtosEncontrados.length > 0 && !produtoSelecionado && (
+              <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto z-20 divide-y divide-gray-100">
+                {produtosEncontrados.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setProdutoSelecionado(p);
+                      setTermoBusca(`${p.codprod} - ${p.descricao}`);
+                      setProdutosEncontrados([]);
+                    }}
+                    className="w-full text-left p-3 hover:bg-emerald-50/50 flex flex-col text-xs font-bold text-gray-800 uppercase transition-colors"
+                  >
+                    <span>{p.codprod} - {p.descricao}</span>
+                    <span className="text-[9px] font-mono text-gray-400 normal-case">
+                      EAN: {p.codbarra || 'N/A'} | Unidade: {p.unidade || 'UN'} | Dep: {p.departamento || 'GERAL'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* CONFIRMAÇÃO DO PRODUTO SELECIONADO */}
+          {produtoSelecionado && (
+            <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-2xl flex justify-between items-center text-xs font-bold text-gray-800">
+              <div>
+                <span className="text-[9px] font-black text-emerald-800 block uppercase">Item Bipado/Confirmado</span>
+                <span>{produtoSelecionado.descricao}</span>
+                <span className="block text-[10px] font-mono text-gray-500 mt-0.5">
+                  Cód: {produtoSelecionado.codprod} | EAN: {produtoSelecionado.codbarra || 'N/A'} | Unid: {produtoSelecionado.unidade || 'UN'}
                 </span>
               </div>
-            ))
+              <button
+                type="button"
+                onClick={() => {
+                  setProdutoSelecionado(null);
+                  setTermoBusca('');
+                }}
+                className="text-red-500 font-bold text-[10px] px-2.5 py-1 bg-white rounded-lg border border-red-100"
+              >
+                Trocar
+              </button>
+            </div>
+          )}
+
+          {/* QUANTIDADE E OBSERVAÇÃO */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-1 flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Qtd Conferida</label>
+              <input
+                type="number"
+                min={0.01}
+                step="any"
+                required
+                value={quantidade}
+                onChange={(e) => setQuantidade(Number(e.target.value))}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+              />
+            </div>
+
+            <div className="col-span-2 flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Observação (Opcional)</label>
+              <input
+                type="text"
+                placeholder="Ex: Embalagem avariada"
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={salvando || !produtoSelecionado}
+            className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 mt-1"
+          >
+            {salvando ? 'Gravando Bipe...' : '+ Confirmar Bipe'}
+          </button>
+        </form>
+
+        {/* LISTAGEM DE ITENS JÁ CONFERIDOS */}
+        <div className="flex-1 flex flex-col gap-2">
+          <span className="text-[10px] font-black text-gray-400 uppercase px-1">
+            Itens Conferidos neste Lote ({itensConferidos.length})
+          </span>
+
+          {loading ? (
+            <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Consultando lote...</div>
+          ) : itensConferidos.length === 0 ? (
+            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+              Nenhuma mercadoria bipada neste lote até o momento.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 overflow-y-auto max-h-[40vh] pr-1">
+              {itensConferidos.map((item) => {
+                const prod = (item.produtos || {}) as Record<string, any>;
+                return (
+                  <div key={item.id} className="p-3 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded-md">
+                          Cód: {prod.codprod || 'N/A'}
+                        </span>
+                        {prod.codbarra && (
+                          <span className="text-[9px] font-mono text-gray-400">EAN: {prod.codbarra}</span>
+                        )}
+                      </div>
+                      <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                        {prod.descricao || 'PRODUTO NÃO ENCONTRADO'}
+                      </h4>
+                      {item.observacao && (
+                        <p className="text-[10px] text-amber-800 font-bold mt-0.5">Obs: {item.observacao}</p>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-mono font-black text-xs text-[#09797a] bg-emerald-100 px-2.5 py-1 rounded-xl block">
+                        {item.quantidade_conferida} {prod.unidade || 'UN'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {!modoLeitura && (
-          <div className="pt-4 border-t border-gray-100 mt-auto bg-white w-full">
-            <button
-              type="button"
-              disabled={finalizando || itensContados.length === 0}
-              onClick={handleEncerrarConferenciaTotal}
-              className="w-full bg-[#09797a] text-white py-4 rounded-3xl text-xs font-black uppercase tracking-wide shadow-md"
-            >
-              {finalizando ? 'Trancando Manifesto...' : 'Finalizar Recebimento Cego'}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
 }
+
+export default FormularConferenciaCega;
