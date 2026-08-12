@@ -16,7 +16,7 @@ import { Pedidos } from './pages/Pedidos';
 import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
 import { Tarefas } from './pages/Tarefas';
 import Avarias from './pages/Avarias';
-import { ConfCega } from './pages/ConfCega';
+import ConfCega from './pages/ConfCega';
 import Relatorios from './pages/Relatorios';
 import Temperatura from './pages/Temperatura'; // <-- IMPORTAÇÃO DO NOVO MÓDULO
 

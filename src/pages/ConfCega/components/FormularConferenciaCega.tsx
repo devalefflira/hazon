@@ -1,3 +1,4 @@
+// Arquivo: src/pages/ConfCega/components/FormularConferenciaCega.tsx
 import { useState, useEffect } from 'react';
 import { confCegaService, type ConferenciaItemRegistro } from '../services/conferenciasService';
 
@@ -13,22 +14,22 @@ export function FormularConferenciaCega({
   conferenciaMestreId,
   onVoltar
 }: FormularConferenciaCegaProps) {
-  // Resolve o ID do lote da conferência de forma flexível
   const idMestreFinal = conferenciaMestreId || conferencia?.id || '';
 
   const [itensConferidos, setItensConferidos] = useState<ConferenciaItemRegistro[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Estados de Bipagem / Entrada de Produto
+  // Estados de Bipagem
   const [termoBusca, setTermoBusca] = useState('');
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
   const [quantidade, setQuantidade] = useState<number>(1);
+  const [unidadeMedida, setUnidadeMedida] = useState<string>('UN');
   const [observacao, setObservacao] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [processandoAcao, setProcessandoAcao] = useState(false);
 
-  // 1. Carrega o histórico de itens conferidos no lote
   const carregarItens = async () => {
     if (!idMestreFinal) return;
     try {
@@ -48,7 +49,6 @@ export function FormularConferenciaCega({
     carregarItens();
   }, [idMestreFinal]);
 
-  // 2. Busca dinâmica por CODPROD, EAN ou Nome (Autocomplete/Bipagem)
   useEffect(() => {
     if (!termoBusca.trim() || produtoSelecionado) {
       setProdutosEncontrados([]);
@@ -67,7 +67,13 @@ export function FormularConferenciaCega({
     return () => clearTimeout(timer);
   }, [termoBusca, produtoSelecionado]);
 
-  // 3. Grava a Bipagem/Conferência do Item
+  const handleSelecionarProduto = (p: any) => {
+    setProdutoSelecionado(p);
+    setTermoBusca(`${p.codprod} - ${p.descricao}`);
+    setUnidadeMedida(p.unidade || 'UN');
+    setProdutosEncontrados([]);
+  };
+
   const handleGravarBipagem = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -88,13 +94,14 @@ export function FormularConferenciaCega({
         conferencia_mestre_id: idMestreFinal,
         produto_id: produtoSelecionado.id,
         quantidade_conferida: Number(quantidade),
+        unidade_medida: unidadeMedida,
         observacao: observacao.trim()
       });
 
-      // Reseta o formulário de entrada mantendo o foco no leitor
       setProdutoSelecionado(null);
       setTermoBusca('');
       setQuantidade(1);
+      setUnidadeMedida('UN');
       setObservacao('');
       carregarItens();
     } catch (err) {
@@ -102,6 +109,47 @@ export function FormularConferenciaCega({
       alert('Erro ao registrar item na conferência.');
     } finally {
       setSalvando(false);
+    }
+  };
+
+  // AÇÕES DO LOTE (CONCLUIR, PAUSAR, CANCELAR)
+  const handleFinalizarLote = async () => {
+    if (!confirm('Deseja concluir esta conferência?')) return;
+    try {
+      setProcessandoAcao(true);
+      await confCegaService.atualizarStatusConferencia(idMestreFinal, 'Concluida');
+      alert('Conferência finalizada com sucesso!');
+      onVoltar();
+    } catch (err) {
+      alert('Erro ao concluir conferência.');
+    } finally {
+      setProcessandoAcao(false);
+    }
+  };
+
+  const handlePausarLote = async () => {
+    try {
+      setProcessandoAcao(true);
+      await confCegaService.atualizarStatusConferencia(idMestreFinal, 'Pausada');
+      onVoltar();
+    } catch (err) {
+      alert('Erro ao pausar conferência.');
+    } finally {
+      setProcessandoAcao(false);
+    }
+  };
+
+  const handleCancelarLote = async () => {
+    if (!confirm('Tem certeza de que deseja cancelar esta conferência? Ela será removida da lista em curso.')) return;
+    try {
+      setProcessandoAcao(true);
+      await confCegaService.atualizarStatusConferencia(idMestreFinal, 'Cancelada');
+      alert('Conferência cancelada com sucesso!');
+      onVoltar();
+    } catch (err) {
+      alert('Erro ao cancelar conferência.');
+    } finally {
+      setProcessandoAcao(false);
     }
   };
 
@@ -114,7 +162,7 @@ export function FormularConferenciaCega({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onVoltar}
+              onClick={handlePausarLote}
               className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
             >
               ←
@@ -128,18 +176,16 @@ export function FormularConferenciaCega({
           </div>
         </div>
 
-        {/* ALERTA DE ERRO */}
         {erro && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-bold p-4 rounded-2xl text-center">
             {erro}
           </div>
         )}
 
-        {/* FORMULÁRIO DE BIPAGEM / REGISTRO DE ITEM */}
+        {/* FORMULÁRIO DE BIPAGEM */}
         <form onSubmit={handleGravarBipagem} className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
           <span className="text-[10px] font-black text-gray-400 uppercase px-1">Registrar / Bipear Mercadoria</span>
 
-          {/* BUSCA / BIPE DE EAN OU CODPROD */}
           <div className="flex flex-col gap-1 relative">
             <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Código de Barras (EAN) ou Descrição</label>
             <input
@@ -154,23 +200,18 @@ export function FormularConferenciaCega({
               className="w-full h-11 text-xs bg-white border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-800"
             />
 
-            {/* DROPDOWN DE RESULTADOS */}
             {produtosEncontrados.length > 0 && !produtoSelecionado && (
               <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto z-20 divide-y divide-gray-100">
                 {produtosEncontrados.map((p) => (
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => {
-                      setProdutoSelecionado(p);
-                      setTermoBusca(`${p.codprod} - ${p.descricao}`);
-                      setProdutosEncontrados([]);
-                    }}
+                    onClick={() => handleSelecionarProduto(p)}
                     className="w-full text-left p-3 hover:bg-emerald-50/50 flex flex-col text-xs font-bold text-gray-800 uppercase transition-colors"
                   >
                     <span>{p.codprod} - {p.descricao}</span>
                     <span className="text-[9px] font-mono text-gray-400 normal-case">
-                      EAN: {p.codbarra || 'N/A'} | Unidade: {p.unidade || 'UN'} | Dep: {p.departamento || 'GERAL'}
+                      EAN: {p.codbarra || 'N/A'} | Unidade Padrão: {p.unidade || 'UN'}
                     </span>
                   </button>
                 ))}
@@ -178,14 +219,13 @@ export function FormularConferenciaCega({
             )}
           </div>
 
-          {/* CONFIRMAÇÃO DO PRODUTO SELECIONADO */}
           {produtoSelecionado && (
             <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-2xl flex justify-between items-center text-xs font-bold text-gray-800">
               <div>
                 <span className="text-[9px] font-black text-emerald-800 block uppercase">Item Bipado/Confirmado</span>
                 <span>{produtoSelecionado.descricao}</span>
                 <span className="block text-[10px] font-mono text-gray-500 mt-0.5">
-                  Cód: {produtoSelecionado.codprod} | EAN: {produtoSelecionado.codbarra || 'N/A'} | Unid: {produtoSelecionado.unidade || 'UN'}
+                  Cód: {produtoSelecionado.codprod} | EAN: {produtoSelecionado.codbarra || 'N/A'}
                 </span>
               </div>
               <button
@@ -201,10 +241,10 @@ export function FormularConferenciaCega({
             </div>
           )}
 
-          {/* QUANTIDADE E OBSERVAÇÃO */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* QUANTIDADE, UNIDADE E OBSERVAÇÃO */}
+          <div className="grid grid-cols-4 gap-2">
             <div className="col-span-1 flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Qtd Conferida</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Qtd</label>
               <input
                 type="number"
                 min={0.01}
@@ -212,8 +252,26 @@ export function FormularConferenciaCega({
                 required
                 value={quantidade}
                 onChange={(e) => setQuantidade(Number(e.target.value))}
-                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-800 text-center"
               />
+            </div>
+
+            <div className="col-span-1 flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Unidade</label>
+              <select
+                value={unidadeMedida}
+                onChange={(e) => setUnidadeMedida(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-800 text-center uppercase"
+              >
+                <option value="UN">UN</option>
+                <option value="CX">CX</option>
+                <option value="FD">FD</option>
+                <option value="SC">SC</option>
+                <option value="KG">KG</option>
+                <option value="L">L</option>
+                <option value="PCT">PCT</option>
+                <option value="AM">AM</option>
+              </select>
             </div>
 
             <div className="col-span-2 flex flex-col gap-1">
@@ -250,9 +308,11 @@ export function FormularConferenciaCega({
               Nenhuma mercadoria bipada neste lote até o momento.
             </div>
           ) : (
-            <div className="flex flex-col gap-2 overflow-y-auto max-h-[40vh] pr-1">
+            <div className="flex flex-col gap-2 overflow-y-auto max-h-[30vh] pr-1">
               {itensConferidos.map((item) => {
                 const prod = (item.produtos || {}) as Record<string, any>;
+                const unidadeExibida = item.unidade_medida || prod.unidade || 'UN';
+
                 return (
                   <div key={item.id} className="p-3 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
                     <div>
@@ -274,7 +334,7 @@ export function FormularConferenciaCega({
 
                     <div className="text-right">
                       <span className="font-mono font-black text-xs text-[#09797a] bg-emerald-100 px-2.5 py-1 rounded-xl block">
-                        {item.quantidade_conferida} {prod.unidade || 'UN'}
+                        {item.quantidade_contada || item.quantidade_conferida} {unidadeExibida}
                       </span>
                     </div>
                   </div>
@@ -282,6 +342,36 @@ export function FormularConferenciaCega({
               })}
             </div>
           )}
+        </div>
+
+        {/* BARRA DE AÇÕES DO LOTE (FINALIZAR, PAUSAR, CANCELAR) */}
+        <div className="pt-3 border-t border-gray-100 flex gap-2">
+          <button
+            type="button"
+            disabled={processandoAcao}
+            onClick={handleCancelarLote}
+            className="flex-1 py-3 bg-red-50 text-red-600 hover:bg-red-100 rounded-2xl text-xs font-black uppercase transition-all"
+          >
+            Cancelar
+          </button>
+          
+          <button
+            type="button"
+            disabled={processandoAcao}
+            onClick={handlePausarLote}
+            className="flex-1 py-3 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-2xl text-xs font-black uppercase transition-all"
+          >
+            Pausar
+          </button>
+
+          <button
+            type="button"
+            disabled={processandoAcao || itensConferidos.length === 0}
+            onClick={handleFinalizarLote}
+            className="flex-2 py-3 bg-[#09797a] text-white hover:bg-[#075f60] rounded-2xl text-xs font-black uppercase shadow-md transition-all disabled:opacity-40"
+          >
+            Finalizar Lote
+          </button>
         </div>
 
       </div>
