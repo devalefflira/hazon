@@ -18,11 +18,11 @@ import iconTarefas from '../../assets/icones/icon-tarefas.svg';
 import iconConfCega from '../../assets/icones/icon-conf-cega.svg';
 import iconPermissoes from '../../assets/icones/icon-permissoes.svg';
 import iconCategorias from '../../assets/icones/icon-categorias.svg';
-import { MATRIZ_PERMISSOES } from '../../App';
 
 interface HomeProps {
   nomeUsuario: string;
   perfilUsuario: string;
+  permissoesDoUsuario?: string[];
   onLogout: () => void;
   onNavegarParaCategorias: () => void;
   onNavegarParaUsuarios: () => void;
@@ -45,6 +45,7 @@ interface HomeProps {
 export default function Home({
   nomeUsuario,
   perfilUsuario,
+  permissoesDoUsuario = [],
   onLogout,
   onNavegarParaCategorias,
   onNavegarParaUsuarios,
@@ -76,7 +77,7 @@ export default function Home({
     { label: 'Dashboard', icon: iconDashboard },
     { label: 'Relatórios', icon: iconRelatorios },
     { label: 'Cotações', icon: iconCotacoes },
-    { label: 'Orçamentos', icon: iconRelatorios }, // 👈 Adicionado ao menu
+    { label: 'Orçamentos', icon: iconRelatorios },
     { label: 'Avarias', icon: iconAvarias },
     { label: 'Pedidos', icon: iconPedidos },
     { label: 'Tarefas', icon: iconTarefas },
@@ -123,7 +124,7 @@ export default function Home({
       'Dashboard': 'Dashboard',
       'Relatórios': 'Relatorios',
       'Cotações': 'Cotacoes',
-      'Orçamentos': 'Orcamentos', // 👈 Mapeado no controle de permissões
+      'Orçamentos': 'Orcamentos',
       'Avarias': 'Avarias',
       'Pedidos': 'Pedidos',
       'Tarefas': 'Tarefas',
@@ -132,10 +133,12 @@ export default function Home({
     };
 
     const moduloChave = mapaModulos[label];
-    const modulosLiberados = MATRIZ_PERMISSOES[perfilUsuario] || [];
+    
+    // Perfil Administrador possui acesso total; demais perfis dependem da liberação individual
+    const temAcesso = perfilUsuario === 'Administrador' || (moduloChave && permissoesDoUsuario.includes(moduloChave));
 
-    if (moduloChave && !modulosLiberados.includes(moduloChave)) {
-      alert(`⚠️ Acesso Negado\nO seu perfil (${perfilUsuario}) não possui permissão para acessar o módulo de ${label}.`);
+    if (moduloChave && !temAcesso) {
+      alert(`⚠️ Acesso Negado\nO seu usuário não possui permissão para acessar o módulo de ${label}.`);
       return;
     }
 
@@ -147,7 +150,7 @@ export default function Home({
     else if (label === 'Produtos') onNavegarParaProdutos();
     else if (label === 'Inventário') onNavegarParaInventario();
     else if (label === 'Cotações') onNavegarParaCotacoes();         
-    else if (label === 'Orçamentos') { // 👈 Rota disparada
+    else if (label === 'Orçamentos') {
       if (onNavegarParaOrcamentos) onNavegarParaOrcamentos();
     }
     else if (label === 'Pedidos') onNavegarParaPedidos();

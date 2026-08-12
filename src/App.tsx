@@ -1,5 +1,6 @@
 // Arquivo: src/App.tsx
 import { useState, useEffect } from 'react';
+import { supabase } from './lib/supabaseClient';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import CategoriasHub from './pages/Categorias';
@@ -48,24 +49,11 @@ type TelaAtiva =
   | 'conf-cega'
   | 'relatorios'
   | 'temperatura'
-  | 'orcamentos'; // 👈 1. Tipo adicionado no canivete de rotas
-
-export const MATRIZ_PERMISSOES: Record<string, string[]> = {
-  'Administrador': [
-    'Usuarios', 'Fornecedores', 'Vendedores', 'Produtos', 'Inventario',
-    'Nota de Falta', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias',
-    'Pedidos', 'Tarefas', 'Conf. Cega', 'Permissoes', 'Categorias', 'Temperatura', 'Orcamentos'
-  ],
-  'Gerencial': [
-    'Inventario', 'Dashboard', 'Relatorios', 'Cotacoes', 'Avarias', 'Pedidos', 'Tarefas', 'Conf. Cega', 'Temperatura', 'Orcamentos'
-  ],
-  'Operacional': [
-    'Inventario', 'Nota de Falta', 'Avarias', 'Tarefas', 'Conf. Cega', 'Orcamentos'
-  ]
-};
+  | 'orcamentos';
 
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
+  const [permissoesUsuario, setPermissoesUsuario] = useState<string[]>([]);
   const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>('login');
   const [tokenAcesso, setTokenAcesso] = useState<string | null>(null);
 
@@ -83,13 +71,30 @@ export default function App() {
     }
   }, []);
 
-  const handleLoginSuccess = (usuarioLogado: UsuarioLogado) => {
+  // Busca permissões do usuário logado diretamente da tabela no Supabase
+  const handleLoginSuccess = async (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);
+
+    try {
+      const { data } = await supabase
+        .from('usuario_permissoes')
+        .select('modulo_nome')
+        .eq('usuario_id', usuarioLogado.id)
+        .eq('permitido', true);
+
+      const liberados = (data || []).map((p: { modulo_nome: string }) => p.modulo_nome);
+      setPermissoesUsuario(liberados);
+    } catch (err) {
+      console.error('Erro ao buscar permissões do usuário:', err);
+      setPermissoesUsuario([]);
+    }
+
     setTelaAtiva('home');
   };
 
   const handleLogout = () => {
     setUsuario(null);
+    setPermissoesUsuario([]);
     setTelaAtiva('login');
   };
 
@@ -106,6 +111,7 @@ export default function App() {
       <Home
         nomeUsuario={usuario.nome}
         perfilUsuario={usuario.perfil}
+        permissoesDoUsuario={permissoesUsuario}
         onLogout={handleLogout}
         onNavegarParaCategorias={() => setTelaAtiva('categorias')}
         onNavegarParaUsuarios={() => setTelaAtiva('usuarios')}
@@ -122,7 +128,7 @@ export default function App() {
         onNavegarParaConfCega={() => setTelaAtiva('conf-cega')}
         onNavegarParaRelatorios={() => setTelaAtiva('relatorios')}
         onNavegarParaTemperatura={() => setTelaAtiva('temperatura')}
-        onNavegarParaOrcamentos={() => setTelaAtiva('orcamentos')} // 👈 2. Injetado na Home
+        onNavegarParaOrcamentos={() => setTelaAtiva('orcamentos')}
       />
     );
   }
@@ -134,7 +140,6 @@ export default function App() {
   if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
   if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
 
-  // 👈 3. Rota validada com verificação do usuário logado
   if (telaAtiva === 'orcamentos') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Orcamentos usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
