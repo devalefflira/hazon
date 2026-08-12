@@ -21,6 +21,7 @@ import ConfCega from './pages/ConfCega';
 import Relatorios from './pages/Relatorios';
 import Temperatura from './pages/Temperatura';
 import Orcamentos from './pages/Orcamentos';
+import Clientes from './pages/Clientes';
 
 interface UsuarioLogado {
   id: string;
@@ -29,17 +30,17 @@ interface UsuarioLogado {
   setor?: string;
 }
 
-type TelaAtiva = 
-  | 'login' 
-  | 'home' 
-  | 'categorias' 
-  | 'usuarios' 
-  | 'permissoes' 
-  | 'fornecedores' 
-  | 'vendedores' 
-  | 'produtos' 
-  | 'inventario' 
-  | 'nota-falta' 
+type TelaAtiva =
+  | 'login'
+  | 'home'
+  | 'categorias'
+  | 'usuarios'
+  | 'permissoes'
+  | 'fornecedores'
+  | 'vendedores'
+  | 'produtos'
+  | 'inventario'
+  | 'nota-falta'
   | 'cotacoes'
   | 'responder_cotacao'
   | 'pedidos'
@@ -49,7 +50,8 @@ type TelaAtiva =
   | 'conf-cega'
   | 'relatorios'
   | 'temperatura'
-  | 'orcamentos';
+  | 'orcamentos'
+  | 'clientes'
 
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -106,6 +108,11 @@ export default function App() {
     return <FormalizarPedidoExterno token={tokenAcesso} />;
   }
 
+  if (telaAtiva === 'clientes') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Clientes onVoltarParaHome={() => setTelaAtiva('home')} />;
+  }
+
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -129,6 +136,7 @@ export default function App() {
         onNavegarParaRelatorios={() => setTelaAtiva('relatorios')}
         onNavegarParaTemperatura={() => setTelaAtiva('temperatura')}
         onNavegarParaOrcamentos={() => setTelaAtiva('orcamentos')}
+        onNavegarParaClientes={() => setTelaAtiva('clientes')}
       />
     );
   }
