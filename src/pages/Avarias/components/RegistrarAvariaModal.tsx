@@ -15,26 +15,38 @@ const DESTINACOES_OPCOES = [
   'Doação'
 ];
 
+// Lista de fallback caso a tabela do banco não retorne itens
+const MOTIVOS_PADRAO = [
+  { id: 'm1', descricao: 'Avaria (Geral)' },
+  { id: 'm2', descricao: 'Vencimento' },
+  { id: 'm3', descricao: 'Erros no Manuseio e Empilhamento' },
+  { id: 'm4', descricao: 'Quebra da Cadeia do Frio (Ruptura Térmica)' },
+  { id: 'm5', descricao: 'Embalagens Inadequadas ou Fragilizadas' },
+  { id: 'm6', descricao: 'Pragas Urbanas e Roedores' }
+];
+
 export default function RegistrarAvariaModal({
   motivos,
   onSalvar,
   onCancelar
 }: RegistrarAvariaModalProps) {
+  const listaMotivosFinal = motivos && motivos.length > 0 ? motivos : MOTIVOS_PADRAO;
+
   const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
 
-  const [motivoId, setMotivoId] = useState(motivos[0]?.id || '');
+  const [motivoId, setMotivoId] = useState(listaMotivosFinal[0]?.id || '');
   const [quantidade, setQuantidade] = useState<number | ''>(1);
   const [destinacao, setDestinacao] = useState(DESTINACOES_OPCOES[0]);
   const [observacao, setObservacao] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    if (motivos.length > 0 && !motivoId) {
-      setMotivoId(motivos[0].id);
+    if (listaMotivosFinal.length > 0 && !motivoId) {
+      setMotivoId(listaMotivosFinal[0].id);
     }
-  }, [motivos]);
+  }, [listaMotivosFinal]);
 
   // Autocomplete de produtos
   useEffect(() => {
@@ -136,7 +148,7 @@ export default function RegistrarAvariaModal({
                 onChange={(e) => setMotivoId(e.target.value)}
                 className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
               >
-                {motivos.map((m) => (
+                {listaMotivosFinal.map((m) => (
                   <option key={m.id} value={m.id}>{m.descricao.toUpperCase()}</option>
                 ))}
               </select>
