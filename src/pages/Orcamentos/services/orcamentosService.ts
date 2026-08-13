@@ -2,13 +2,28 @@
 import { supabase } from '../../../lib/supabaseClient';
 
 export const orcamentosService = {
-  // 1. Buscar produtos por termo
+  // 1. Buscar clientes cadastrados por termo
+  async buscarClientes(termo: string): Promise<any[]> {
+    if (!termo.trim()) return [];
+
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('id, nome, cpf_cnpj, contato_whatsapp, cidade, estado, endereco, numero, ponto_referencia, pasta')
+      .eq('ativo', true)
+      .or(`nome.ilike.%${termo}%,cpf_cnpj.ilike.%${termo}%,contato_whatsapp.ilike.%${termo}%`)
+      .limit(10);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // 2. Buscar produtos por termo
   async buscarProdutos(termo: string): Promise<any[]> {
     if (!termo.trim()) return [];
 
     const { data, error } = await supabase
       .from('produtos')
-      .select('*')
+      .select('id, codprod, descricao, codbarra, unidade, custoreal, pvenda')
       .or(`codbarra.ilike.%${termo}%,codprod.ilike.%${termo}%,descricao.ilike.%${termo}%`)
       .limit(10);
 
@@ -16,10 +31,11 @@ export const orcamentosService = {
     return data || [];
   },
 
-  // 2. Salvar ou Atualizar Orçamento Completo
+  // 3. Salvar ou Atualizar Orçamento Completo
   async salvarOrcamento(payload: {
     codigo_customizado?: string | null;
     usuario_id: string;
+    cliente_id?: string | null;
     cliente_nome: string;
     cidade: string;
     estado: string;
@@ -32,6 +48,7 @@ export const orcamentosService = {
     itens: Array<{
       produto_id: string;
       quantidade: number;
+      embalagem: number;
       unidade_medida: string;
       preco_custo_unitario: number;
       preco_venda_tabela: number;
@@ -47,19 +64,19 @@ export const orcamentosService = {
     let orcamentoMestreId = '';
 
     if (payload.codigo_customizado) {
-      // Atualiza registro mestre e limpa itens anteriores
       const { data: mestreExistente } = await supabase
         .from('orcamentos_mestre')
         .select('id')
         .eq('codigo_customizado', payload.codigo_customizado)
-        .single();
+        .maybeSingle();
 
       if (mestreExistente) {
         orcamentoMestreId = mestreExistente.id;
 
-        await supabase
+        const { error: errorUpdate } = await supabase
           .from('orcamentos_mestre')
           .update({
+            cliente_id: payload.cliente_id || null,
             cliente_nome: payload.cliente_nome,
             cidade: payload.cidade,
             estado: payload.estado,
@@ -73,6 +90,8 @@ export const orcamentosService = {
           })
           .eq('id', orcamentoMestreId);
 
+        if (errorUpdate) throw errorUpdate;
+
         await supabase
           .from('orcamento_itens')
           .delete()
@@ -81,12 +100,12 @@ export const orcamentosService = {
     }
 
     if (!orcamentoMestreId) {
-      // Cria novo mestre
       const { data: novoMestre, error: errorMestre } = await supabase
         .from('orcamentos_mestre')
         .insert([{
           codigo_customizado: codigoCustom,
           usuario_id: payload.usuario_id,
+          cliente_id: payload.cliente_id || null,
           cliente_nome: payload.cliente_nome,
           cidade: payload.cidade,
           estado: payload.estado,
@@ -106,11 +125,11 @@ export const orcamentosService = {
       orcamentoMestreId = novoMestre.id;
     }
 
-    // Insere os itens
     const itensInsert = payload.itens.map((item) => ({
       orcamento_mestre_id: orcamentoMestreId,
       produto_id: item.produto_id,
       quantidade: item.quantidade,
+      embalagem: item.embalagem || 1,
       unidade_medida: item.unidade_medida,
       preco_custo_unitario: item.preco_custo_unitario,
       preco_venda_tabela: item.preco_venda_tabela,
@@ -126,7 +145,7 @@ export const orcamentosService = {
     if (errorItens) throw errorItens;
   },
 
-  // 3. Listar Orçamentos com Itens e Relacionamentos
+  // 4. Listar Orçamentos
   async listarOrcamentos(): Promise<any[]> {
     const { data, error } = await supabase
       .from('orcamentos_mestre')
@@ -140,7 +159,10 @@ export const orcamentosService = {
       `)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Erro ao listar orçamentos:', error);
+      return [];
+    }
     return data || [];
   }
 };
