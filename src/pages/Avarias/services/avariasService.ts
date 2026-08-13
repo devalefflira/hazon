@@ -1,84 +1,56 @@
 // Arquivo: src/pages/Avarias/services/avariasService.ts
 import { supabase } from '../../../lib/supabaseClient';
-
-export interface AvariaRegistro {
-  id: string;
-  codigo_customizado: string;
-  quantidade: number;
-  preco_custo_na_perda: number;
-  destinacao: string;
-  observacao?: string;
-  data_registro: string;
-  hora_registro: string;
-  produtos?: {
-    id: string;
-    codprod: string;
-    descricao: string;
-    codbarra: string;
-    unidade: string;
-    departamento: string;
-    secao: string;
-  };
-  motivos_avaria?: {
-    id: string;
-    descricao: string;
-  };
-}
+import type { AvariaRecord, FiltrosAvariaPayload, NovaAvariaPayload } from '../types/avarias.types';
 
 export const avariasService = {
-  // 1. Listagem de avarias adaptada para a nova tabela de produtos
-  async listarAvarias(filtros?: { periodo?: string; motivoId?: string; destinacao?: string }): Promise<AvariaRegistro[]> {
+  // 1. Listar registros de Avarias
+  async listarAvarias(filtros?: FiltrosAvariaPayload): Promise<AvariaRecord[]> {
     let query = supabase
       .from('avarias')
       .select(`
-        id,
-        codigo_customizado,
-        quantidade,
-        preco_custo_na_perda,
-        destinacao,
-        observacao,
-        data_registro,
-        hora_registro,
-        produtos (
-          id,
-          codprod,
-          descricao,
-          codbarra,
-          unidade,
-          departamento,
-          secao
-        ),
-        motivos_avaria (
-          id,
-          descricao
-        )
-      `);
+        *,
+        produtos ( id, codprod, descricao, codbarra, unidade, custoreal ),
+        motivos_avaria ( id, descricao ),
+        usuarios ( id, nome )
+      `)
+      .order('created_at', { ascending: false });
 
-    if (filtros?.motivoId && filtros.motivoId !== 'TODOS') {
-      query = query.eq('motivo_avaria_id', filtros.motivoId);
+    if (filtros?.motivo_id) {
+      query = query.eq('motivo_avaria_id', filtros.motivo_id);
     }
 
-    if (filtros?.destinacao && filtros.destinacao !== 'TODAS') {
+    if (filtros?.destinacao) {
       query = query.eq('destinacao', filtros.destinacao);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query;
 
     if (error) {
-      console.error('Erro ao listar avarias no Supabase:', error);
+      console.error('Erro ao listar avarias:', error);
       throw error;
     }
 
-    return (data || []) as unknown as AvariaRegistro[];
+    return (data || []) as AvariaRecord[];
   },
 
-  // 2. Busca dinâmica de produtos para registrar avaria
+  // 2. Listar Motivos de Avaria
+  async listarMotivosAvaria(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('motivos_avaria')
+      .select('*')
+      .order('descricao', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // 3. Buscar produtos por autocomplete
   async buscarProdutos(termo: string): Promise<any[]> {
     if (!termo.trim()) return [];
 
     const { data, error } = await supabase
       .from('produtos')
-      .select('*')
+      .select('id, codprod, descricao, codbarra, unidade, custoreal')
       .or(`codbarra.ilike.%${termo}%,codprod.ilike.%${termo}%,descricao.ilike.%${termo}%`)
       .limit(10);
 
@@ -86,33 +58,11 @@ export const avariasService = {
     return data || [];
   },
 
-  // 3. Lista os motivos de avaria cadastrados
-  async listarMotivosAvaria(): Promise<any[]> {
-    const { data, error } = await supabase
-      .from('motivos_avaria')
-      .select('id, descricao')
-      .order('descricao', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  // Alias de compatibilidade para chamadas antigas
-  async listarMotivos(): Promise<any[]> {
-    return this.listarMotivosAvaria();
-  },
-
-  // 4. Gravação da avaria
-  async cadastrarAvaria(payload: {
-    usuario_id?: string | null;
-    produto_id: string;
-    motivo_avaria_id: string;
-    quantidade: number;
-    preco_custo_na_perda: number;
-    destinacao: string;
-    observacao?: string;
-  }): Promise<void> {
+  // 4. Registrar Nova Avaria
+  async registrarAvaria(payload: NovaAvariaPayload): Promise<void> {
     const codigoCustom = `AV${Math.floor(1000 + Math.random() * 9000)}`;
+    const dataAtual = new Date().toISOString().split('T')[0];
+    const horaAtual = new Date().toLocaleTimeString('pt-BR');
 
     const { error } = await supabase
       .from('avarias')
@@ -124,9 +74,19 @@ export const avariasService = {
         quantidade: payload.quantidade,
         preco_custo_na_perda: payload.preco_custo_na_perda,
         destinacao: payload.destinacao,
-        observacao: payload.observacao || null
+        observacao: payload.observacao || null,
+        data_registro: dataAtual,
+        hora_registro: horaAtual
       }]);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Erro ao registrar avaria:', error);
+      throw error;
+    }
+  },
+
+  // Alias para manter compatibilidade
+  async cadastrarAvaria(payload: NovaAvariaPayload): Promise<void> {
+    return this.registrarAvaria(payload);
   }
 };

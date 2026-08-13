@@ -3,238 +3,205 @@ import { useState, useEffect } from 'react';
 import { avariasService } from '../services/avariasService';
 
 interface RegistrarAvariaModalProps {
-  onSucesso: () => void;
-  onFechar: () => void;
-  usuarioId?: string;
-  usuarioLogado?: any;
+  motivos: any[];
+  onSalvar: (dados: any) => Promise<void>;
+  onCancelar: () => void;
 }
 
-export function RegistrarAvariaModal({ onSucesso, onFechar, usuarioId, usuarioLogado }: RegistrarAvariaModalProps) {
-  const [termoBusca, setTermoBusca] = useState('');
+const DESTINACOES_OPCOES = [
+  'Descarte',
+  'Troca Fornecedor',
+  'Consumo Interno',
+  'Doação'
+];
+
+export default function RegistrarAvariaModal({
+  motivos,
+  onSalvar,
+  onCancelar
+}: RegistrarAvariaModalProps) {
+  const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
 
-  const [motivos, setMotivos] = useState<any[]>([]);
-  const [motivoId, setMotivoId] = useState('');
-  const [quantidade, setQuantidade] = useState<number>(1);
-  const [destinacao, setDestinacao] = useState('Descarte');
+  const [motivoId, setMotivoId] = useState(motivos[0]?.id || '');
+  const [quantidade, setQuantidade] = useState<number | ''>(1);
+  const [destinacao, setDestinacao] = useState(DESTINACOES_OPCOES[0]);
   const [observacao, setObservacao] = useState('');
-
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    const carregarMotivos = async () => {
-      try {
-        const dados = await avariasService.listarMotivosAvaria();
-        setMotivos(dados);
-        if (dados.length > 0) setMotivoId(dados[0].id);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    carregarMotivos();
-  }, []);
+    if (motivos.length > 0 && !motivoId) {
+      setMotivoId(motivos[0].id);
+    }
+  }, [motivos]);
 
+  // Autocomplete de produtos
   useEffect(() => {
-    if (!termoBusca.trim() || produtoSelecionado) {
+    if (!termoBuscaProduto.trim() || produtoSelecionado) {
       setProdutosEncontrados([]);
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
-        const res = await avariasService.buscarProdutos(termoBusca);
+        const res = await avariasService.buscarProdutos(termoBuscaProduto);
         setProdutosEncontrados(res);
       } catch (err) {
         console.error(err);
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timer);
-  }, [termoBusca, produtoSelecionado]);
+  }, [termoBuscaProduto, produtoSelecionado]);
 
-  const handleSalvar = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!produtoSelecionado) {
       alert('Selecione um produto.');
+      return;
+    }
+    if (!motivoId) {
+      alert('Selecione o motivo da avaria.');
       return;
     }
 
     try {
       setSalvando(true);
-
-      const usuarioIdFinal = usuarioId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id || '00000000-0000-0000-0000-000000000000';
-
-      await avariasService.cadastrarAvaria({
-        usuario_id: usuarioIdFinal,
+      await onSalvar({
         produto_id: produtoSelecionado.id,
         motivo_avaria_id: motivoId,
-        quantidade: Number(quantidade) || 1,
-        preco_custo_na_perda: Number(produtoSelecionado.custoreal) || 0,
-        destinacao: destinacao,
+        quantidade: Number(quantidade || 1),
+        preco_custo_na_perda: Number(produtoSelecionado.custoreal || 0),
+        destinacao,
         observacao: observacao.trim()
       });
-
-      alert('Avaria registrada com sucesso!');
-      onSucesso();
-      onFechar();
     } catch (err) {
       console.error(err);
-      alert('Erro ao registrar avaria.');
     } finally {
       setSalvando(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 font-sans select-none">
-      <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
-        
-        <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-          <h3 className="text-[#09797a] font-black text-base uppercase">Registrar Perda / Avaria</h3>
-          <button type="button" onClick={onFechar} className="text-gray-400 font-bold">✕</button>
+    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
+      <form onSubmit={handleSubmit} className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+        <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+          <h3 className="text-[#09797a] font-black text-base uppercase">REGISTRAR AVARIA</h3>
+          <button type="button" onClick={onCancelar} className="text-gray-400 font-bold text-base">✕</button>
         </div>
 
-        <form onSubmit={handleSalvar} className="flex flex-col gap-3">
-          
-          {/* BUSCA DE PRODUTO */}
+        <div className="overflow-y-auto flex flex-col gap-3 pr-1 flex-1">
+          {/* BUSCA PRODUTO */}
           <div className="flex flex-col gap-1 relative">
-            <label className="text-[10px] font-black text-gray-400 uppercase px-1">Buscar Produto (CODPROD, EAN ou Nome)</label>
+            <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Buscar Produto *</label>
             <input
               type="text"
-              value={termoBusca}
+              required
+              value={termoBuscaProduto}
               onChange={(e) => {
-                setTermoBusca(e.target.value);
+                setTermoBuscaProduto(e.target.value);
                 setProdutoSelecionado(null);
               }}
-              placeholder="Digite para buscar..."
-              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl focus:outline-none focus:border-[#09797a] font-bold text-gray-800"
+              placeholder="Bipe o EAN ou digite o nome/código..."
+              className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
             />
 
             {produtosEncontrados.length > 0 && !produtoSelecionado && (
-              <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto z-20 divide-y divide-gray-100">
+              <div className="absolute top-15 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-40 overflow-y-auto z-20 divide-y divide-gray-100">
                 {produtosEncontrados.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => {
                       setProdutoSelecionado(p);
-                      setTermoBusca(`${p.codprod} - ${p.descricao}`);
+                      setTermoBuscaProduto(`${p.codprod} - ${p.descricao}`);
                       setProdutosEncontrados([]);
                     }}
-                    className="w-full text-left p-3 hover:bg-gray-50 flex flex-col text-xs font-bold text-gray-800 uppercase"
+                    className="w-full text-left p-3 hover:bg-emerald-50/50 flex flex-col text-xs font-bold text-gray-800 uppercase"
                   >
                     <span>{p.codprod} - {p.descricao}</span>
-                    <span className="text-[9px] font-mono text-gray-400 normal-case">
-                      Custo: R$ {Number(p.custoreal || 0).toFixed(2)} | Dep: {p.departamento || 'GERAL'}
-                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">Custo: R$ {p.custoreal || 0}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* PRODUTO SELECIONADO */}
-          {produtoSelecionado && (
-            <div className="bg-emerald-50/60 border border-emerald-200 p-3 rounded-2xl flex justify-between items-center text-xs font-bold text-gray-800">
-              <div>
-                <span className="text-[9px] font-black text-emerald-800 block uppercase">Produto Confirmado</span>
-                <span>{produtoSelecionado.descricao}</span>
-                <span className="block text-[10px] font-mono text-gray-400 mt-0.5">
-                  Custo Unitário: R$ {Number(produtoSelecionado.custoreal || 0).toFixed(2)}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setProdutoSelecionado(null);
-                  setTermoBusca('');
-                }}
-                className="text-red-500 font-bold text-[10px] px-2 py-1 bg-white rounded-lg border border-red-100"
-              >
-                Trocar
-              </button>
-            </div>
-          )}
-
-          {/* CAMPOS DE QUANTIDADE E MOTIVO */}
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase px-1">Quantidade Perdida</label>
-              <input
-                type="number"
-                min={0.01}
-                step="any"
-                required
-                value={quantidade}
-                onChange={(e) => setQuantidade(Number(e.target.value))}
-                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-2xl font-bold text-gray-800"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase px-1">Motivo da Perda</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Motivo da Avaria *</label>
               <select
                 value={motivoId}
                 onChange={(e) => setMotivoId(e.target.value)}
-                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-2xl font-bold text-gray-800"
+                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
               >
                 {motivos.map((m) => (
                   <option key={m.id} value={m.id}>{m.descricao.toUpperCase()}</option>
                 ))}
               </select>
             </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Quantidade *</label>
+              <input
+                type="number"
+                min={0.01}
+                step="any"
+                required
+                value={quantidade}
+                onWheel={(e) => e.currentTarget.blur()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuantidade(val === '' ? '' : Number(val));
+                }}
+                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+              />
+            </div>
           </div>
 
-          {/* DESTINAÇÃO */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase px-1">Destinação do Produto</label>
+            <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Destinação</label>
             <select
               value={destinacao}
               onChange={(e) => setDestinacao(e.target.value)}
-              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-2xl font-bold text-gray-800"
+              className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
             >
-              <option value="Descarte">Descarte / Lixo</option>
-              <option value="Devolução Fornecedor">Devolução ao Fornecedor</option>
-              <option value="Consumo Interno">Consumo Interno</option>
-              <option value="Doação">Doação</option>
+              {DESTINACOES_OPCOES.map((d) => (
+                <option key={d} value={d}>{d.toUpperCase()}</option>
+              ))}
             </select>
           </div>
 
-          {/* OBSERVAÇÃO */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase px-1">Observação Adicional</label>
-            <input
-              type="text"
-              placeholder="Ex: Caixa amassada no descarregamento"
+            <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Observação (Opcional)</label>
+            <textarea
+              rows={2}
+              placeholder="Detalhes adicionais..."
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-4 rounded-2xl font-bold text-gray-800"
+              className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 resize-none"
             />
           </div>
+        </div>
 
-          {/* AÇÕES */}
-          <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-2">
-            <button
-              type="button"
-              onClick={onFechar}
-              className="px-5 py-3 rounded-2xl text-xs font-bold bg-gray-100 text-gray-500"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={salvando || !produtoSelecionado}
-              className="px-6 py-3 rounded-2xl text-xs font-black uppercase bg-[#09797a] hover:bg-[#075f60] text-white shadow-md active:scale-95 transition-all disabled:opacity-40"
-            >
-              {salvando ? 'Gravando...' : 'Confirmar Perda'}
-            </button>
-          </div>
-
-        </form>
-
-      </div>
+        <div className="flex gap-2 pt-2 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={salvando || !produtoSelecionado}
+            className="flex-1 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+          >
+            {salvando ? 'Salvando...' : 'Salvar Avaria'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

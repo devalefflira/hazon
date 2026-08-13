@@ -13,13 +13,13 @@ export const notaFaltaService = {
     return data || [];
   },
 
-  // 2. Buscar produtos por termo
+  // 2. Buscar produtos por termo (EAN, CODPROD ou Descrição)
   async buscarProdutos(termo: string): Promise<any[]> {
     if (!termo.trim()) return [];
 
     const { data, error } = await supabase
       .from('produtos')
-      .select('*')
+      .select('id, codprod, descricao, codbarra, unidade')
       .or(`codbarra.ilike.%${termo}%,codprod.ilike.%${termo}%,descricao.ilike.%${termo}%`)
       .limit(10);
 
@@ -27,13 +27,13 @@ export const notaFaltaService = {
     return data || [];
   },
 
-  // 3. Salvar ou Atualizar Lote Completo de Notas de Falta
+  // 3. Salvar ou Atualizar Lote (Persiste no banco tanto em Pendente/Pausada quanto em Concluida)
   async salvarLoteNotasFalta(payload: {
     codigo_customizado?: string | null;
     responsavel_nome: string;
     secao_nome: string;
     usuario_id: string;
-    status: 'Pendente' | 'Concluida' | 'Pausada' | 'Cancelada';
+    status: 'Pendente' | 'Concluida';
     itens: Array<{
       produto_id: string;
       motivo_falta_id: string;
@@ -45,7 +45,7 @@ export const notaFaltaService = {
     const dataAtual = new Date().toISOString().split('T')[0];
     const horaAtual = new Date().toLocaleTimeString('pt-BR');
 
-    // Se estiver editando um lote existente, limpa os registros anteriores do banco
+    // Se estiver sobrescrevendo uma nota existente no banco, remove os itens antigos do lote antes de reinserir
     if (payload.codigo_customizado) {
       const { error: deleteError } = await supabase
         .from('notas_falta')
@@ -53,7 +53,7 @@ export const notaFaltaService = {
         .eq('codigo_customizado', payload.codigo_customizado);
 
       if (deleteError) {
-        console.error('Erro ao sobrescrever registros do lote existente:', deleteError);
+        console.error('Erro ao limpar lote existente:', deleteError);
       }
     }
 
@@ -65,7 +65,7 @@ export const notaFaltaService = {
       quantidade_restante: item.quantidade_restante,
       unidade_restante: item.unidade_restante,
       status_cotacao: payload.status,
-      setor_nome: payload.secao_nome, // 👈 Persiste o nome da seção
+      setor_nome: payload.secao_nome,
       data_registro: dataAtual,
       hora_registro: horaAtual
     }));
@@ -75,12 +75,12 @@ export const notaFaltaService = {
       .insert(registrosInsert);
 
     if (error) {
-      console.error('Erro ao registrar itens da nota de falta:', error);
+      console.error('Erro ao registrar nota de falta:', error);
       throw error;
     }
   },
 
-  // 4. Listar Notas
+  // 4. Listar todas as Notas do Banco
   async listarNotasFalta(): Promise<any[]> {
     const { data, error } = await supabase
       .from('notas_falta')

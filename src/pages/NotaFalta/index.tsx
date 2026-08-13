@@ -14,8 +14,6 @@ const SECOES_OPCOES = [
   'Hortifruti', 'Açougue', 'Padaria', 'Bazar', 'Pet/Agro Depósito'
 ];
 
-const LOCAL_STORAGE_RASCUNHO_KEY = 'hazon_nota_falta_rascunho';
-
 export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFaltaProps) {
   const [notasRaw, setNotasRaw] = useState<any[]>([]);
   const [motivos, setMotivos] = useState<any[]>([]);
@@ -24,12 +22,12 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
 
   // Modal 1: Identificação Inicial
   const [mostrarModalInicio, setMostrarModalInicio] = useState(false);
-  const [nomeResponsavel, setNomeResponsavel] = useState('');
   const [secaoSelecionada, setSecaoSelecionada] = useState(SECOES_OPCOES[0]);
 
   // Modal 2: Adicionar / Editar Itens da Nota
   const [emEdicaoNota, setEmEdicaoNota] = useState(false);
   const [codigoLoteAtual, setCodigoLoteAtual] = useState<string | null>(null);
+  const [nomeResponsavelAtual, setNomeResponsavelAtual] = useState('');
   const [itensEmLote, setItensEmLote] = useState<any[]>([]);
 
   // Campos do formulário do item individual
@@ -37,7 +35,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
   const [motivoId, setMotivoId] = useState('');
-  const [qtdRestante, setQtdRestante] = useState<number>(1);
+  const [qtdRestante, setQtdRestante] = useState<number | ''>(1);
   const [unidade, setUnidade] = useState<string>('UN');
   const [salvando, setSalvando] = useState(false);
 
@@ -84,25 +82,12 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
     return () => clearTimeout(timer);
   }, [termoBuscaProduto, produtoSelecionado]);
 
-  // Iniciar ou Restaurar Rascunho
-  const handleAbrirNovaFalta = () => {
-    const rascunhoSalvo = localStorage.getItem(LOCAL_STORAGE_RASCUNHO_KEY);
-    if (rascunhoSalvo) {
-      try {
-        const parsed = JSON.parse(rascunhoSalvo);
-        if (parsed && parsed.itens && parsed.itens.length > 0) {
-          setNomeResponsavel(parsed.responsavel_nome || '');
-          setSecaoSelecionada(parsed.secao_nome || SECOES_OPCOES[0]);
-          setCodigoLoteAtual(parsed.codigo_customizado || null);
-          setItensEmLote(parsed.itens);
-          setEmEdicaoNota(true);
-          return;
-        }
-      } catch (err) {
-        console.error('Erro ao ler rascunho:', err);
-      }
-    }
+  // Identifica se o motivo selecionado é "Estoque Zero"
+  const motivoSelecionadoObj = motivos.find((m) => m.id === motivoId);
+  const isEstoqueZero = motivoSelecionadoObj?.descricao?.toUpperCase().includes('ESTOQUE ZERO');
 
+  // Abrir Modal de Nova Falta
+  const handleAbrirNovaFalta = () => {
     setCodigoLoteAtual(null);
     setItensEmLote([]);
     setMostrarModalInicio(true);
@@ -110,10 +95,8 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
 
   const handleIniciarNovaFalta = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nomeResponsavel.trim()) {
-      alert('Informe o nome do responsável.');
-      return;
-    }
+    const nomeLogado = usuarioLogado?.nome || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.nome || 'RESPONSÁVEL';
+    setNomeResponsavelAtual(nomeLogado);
     setMostrarModalInicio(false);
     setCodigoLoteAtual(null);
     setEmEdicaoNota(true);
@@ -127,16 +110,18 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
       return;
     }
 
-    const motivoObj = motivos.find((m) => m.id === motivoId);
+    // Se for Estoque Zero, zera a quantidade e usa 'UN'
+    const finalQtd = isEstoqueZero ? 0 : Number(qtdRestante || 0);
+    const finalUnidade = isEstoqueZero ? 'UN' : unidade;
 
     const novoItem = {
       temp_id: Math.random().toString(),
       produto: produtoSelecionado,
       produto_id: produtoSelecionado.id,
       motivo_falta_id: motivoId,
-      motivo_descricao: motivoObj?.descricao || 'NÃO INFORMADO',
-      quantidade_restante: Number(qtdRestante),
-      unidade_restante: unidade
+      motivo_descricao: motivoSelecionadoObj?.descricao || 'NÃO INFORMADO',
+      quantidade_restante: finalQtd,
+      unidade_restante: finalUnidade
     };
 
     setItensEmLote((prev) => [...prev, novoItem]);
@@ -151,50 +136,24 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
     setItensEmLote((prev) => prev.filter((i) => i.temp_id !== tempId));
   };
 
-  const handlePausarLote = () => {
+  const handlePersistirLote = async (statusFinal: 'Pendente' | 'Concluida') => {
     if (itensEmLote.length === 0) {
-      setEmEdicaoNota(false);
-      return;
-    }
-
-    const rascunho = {
-      codigo_customizado: codigoLoteAtual,
-      responsavel_nome: nomeResponsavel,
-      secao_nome: secaoSelecionada,
-      itens: itensEmLote
-    };
-
-    localStorage.setItem(LOCAL_STORAGE_RASCUNHO_KEY, JSON.stringify(rascunho));
-    setEmEdicaoNota(false);
-    alert('Preenchimento pausado com sucesso! Clique em "Registrar Nova Falta" para retomar.');
-  };
-
-  const handleCancelarLote = () => {
-    if (confirm('Deseja cancelar o preenchimento desta nota? Os itens não salvos serão descartados.')) {
-      localStorage.removeItem(LOCAL_STORAGE_RASCUNHO_KEY);
-      setEmEdicaoNota(false);
-      setCodigoLoteAtual(null);
-      setItensEmLote([]);
-      setNomeResponsavel('');
-    }
-  };
-
-  const handleSalvarNotaConcluida = async () => {
-    if (itensEmLote.length === 0) {
-      alert('Adicione ao menos um item para registrar a nota.');
+      alert('Adicione ao menos um item para salvar ou pausar a nota.');
       return;
     }
 
     try {
       setSalvando(true);
-      const usuarioIdFinal = usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+      const usuarioObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
+      const usuarioIdFinal = usuarioObj?.id;
+      const respNomeFinal = nomeResponsavelAtual || usuarioObj?.nome || 'RESPONSÁVEL';
 
       await notaFaltaService.salvarLoteNotasFalta({
         codigo_customizado: codigoLoteAtual,
-        responsavel_nome: nomeResponsavel,
+        responsavel_nome: respNomeFinal,
         secao_nome: secaoSelecionada,
         usuario_id: usuarioIdFinal,
-        status: 'Concluida',
+        status: statusFinal,
         itens: itensEmLote.map((i) => ({
           produto_id: i.produto_id,
           motivo_falta_id: i.motivo_falta_id,
@@ -203,23 +162,35 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
         }))
       });
 
-      localStorage.removeItem(LOCAL_STORAGE_RASCUNHO_KEY);
-      alert('Nota de falta registrada e concluída com sucesso!');
+      alert(
+        statusFinal === 'Pendente'
+          ? `Nota de falta da seção ${secaoSelecionada} pausada e salva na aba Pendentes!`
+          : `Nota de falta da seção ${secaoSelecionada} concluída com sucesso!`
+      );
+
       setEmEdicaoNota(false);
       setCodigoLoteAtual(null);
       setItensEmLote([]);
-      setNomeResponsavel('');
       carregarDados();
     } catch (err) {
-      alert('Erro ao salvar nota de falta.');
+      console.error(err);
+      alert('Erro ao processar a nota de falta.');
     } finally {
       setSalvando(false);
     }
   };
 
+  const handleCancelarLote = () => {
+    if (confirm('Deseja cancelar o preenchimento desta nota? Os itens desta sessão serão descartados.')) {
+      setEmEdicaoNota(false);
+      setCodigoLoteAtual(null);
+      setItensEmLote([]);
+    }
+  };
+
   const handleClicarNoCard = (lote: any) => {
     if (abaAtiva === 'PENDENTES') {
-      setNomeResponsavel(lote.responsavel_nome || 'RESPONSÁVEL');
+      setNomeResponsavelAtual(lote.responsavel_nome || 'RESPONSÁVEL');
       setSecaoSelecionada(lote.secao_nome || SECOES_OPCOES[0]);
       setCodigoLoteAtual(lote.codigo);
       setItensEmLote(
@@ -239,7 +210,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
     }
   };
 
-  // Agrupamento dos registros do banco por lote
+  // Agrupamento por código customizado
   const lotesAgrupados = Object.values(
     notasRaw.reduce((acc: Record<string, any>, item: any) => {
       const chave = item.codigo_customizado || item.id;
@@ -250,7 +221,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
           data_registro: item.data_registro,
           hora_registro: item.hora_registro,
           responsavel_nome: item.usuarios?.nome || 'RESPONSÁVEL',
-          secao_nome: item.setor_nome || 'GERAL', // 👈 Lê a seção gravada
+          secao_nome: item.setor_nome || 'GERAL',
           status: item.status_cotacao || 'Pendente',
           itens: []
         };
@@ -260,8 +231,12 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
     }, {})
   );
 
-  const lotesPendentes = lotesAgrupados.filter((l) => l.status === 'Pendente' || l.status === 'Pausada' || l.status === 'EM_ANDAMENTO');
-  const lotesConcluidos = lotesAgrupados.filter((l) => l.status === 'Concluida' || l.status === 'CONCLUIDA');
+  const lotesPendentes = lotesAgrupados.filter(
+    (l) => l.status === 'Pendente' || l.status === 'Pausada' || l.status === 'EM_ANDAMENTO'
+  );
+  const lotesConcluidos = lotesAgrupados.filter(
+    (l) => l.status === 'Concluida' || l.status === 'CONCLUIDA'
+  );
 
   const listaExibida = abaAtiva === 'PENDENTES' ? lotesPendentes : lotesConcluidos;
 
@@ -360,25 +335,13 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
 
       </div>
 
-      {/* MODAL 1: IDENTIFICAÇÃO INICIAL */}
+      {/* MODAL 1: SELEÇÃO DA SEÇÃO */}
       {mostrarModalInicio && (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
           <form onSubmit={handleIniciarNovaFalta} className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
               <h3 className="text-[#09797a] font-black text-base uppercase">INICIAR NOTA DE FALTA</h3>
               <button type="button" onClick={() => setMostrarModalInicio(false)} className="text-gray-400 font-bold text-base">✕</button>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Informe seu Nome</label>
-              <input
-                type="text"
-                required
-                placeholder="DIGITE SEU NOME COMPLETO..."
-                value={nomeResponsavel}
-                onChange={(e) => setNomeResponsavel(e.target.value.toUpperCase())}
-                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:outline-none focus:border-[#09797a]"
-              />
             </div>
 
             <div className="flex flex-col gap-1">
@@ -412,9 +375,9 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
               <div>
                 <h3 className="text-[#09797a] font-black text-base uppercase">REGISTRAR RUPTURA DE ESTOQUE</h3>
-                <p className="text-[10px] text-gray-400 font-bold uppercase">Resp: {nomeResponsavel} | Seção: {secaoSelecionada}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Resp: {nomeResponsavelAtual} | Seção: {secaoSelecionada}</p>
               </div>
-              <button type="button" onClick={handlePausarLote} className="text-gray-400 font-bold text-base">✕</button>
+              <button type="button" onClick={() => handlePersistirLote('Pendente')} className="text-gray-400 font-bold text-base">✕</button>
             </div>
 
             {/* FORMULÁRIO DO ITEM */}
@@ -465,34 +428,41 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Qtd Ainda Restante</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    required
-                    value={qtdRestante}
-                    onChange={(e) => setQtdRestante(Number(e.target.value))}
-                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
-                  />
-                </div>
+              {/* OCULTA QUANTIDADE E TIPO DE UNIDADE CASO O MOTIVO SEJA "ESTOQUE ZERO" */}
+              {!isEstoqueZero && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Qtd Ainda Restante</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      required
+                      value={qtdRestante}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setQtdRestante(val === '' ? '' : Number(val));
+                      }}
+                      className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+                    />
+                  </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Tipo de Unidade</label>
-                  <select
-                    value={unidade}
-                    onChange={(e) => setUnidade(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center uppercase"
-                  >
-                    <option value="UN">UN - Unidade</option>
-                    <option value="CX">CX - Caixa</option>
-                    <option value="FD">FD - Fardo</option>
-                    <option value="KG">KG - Quilo</option>
-                  </select>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Tipo de Unidade</label>
+                    <select
+                      value={unidade}
+                      onChange={(e) => setUnidade(e.target.value)}
+                      className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center uppercase"
+                    >
+                      <option value="UN">UN - Unidade</option>
+                      <option value="CX">CX - Caixa</option>
+                      <option value="FD">FD - Fardo</option>
+                      <option value="KG">KG - Quilo</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <button
                 type="submit"
@@ -546,8 +516,9 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
 
               <button
                 type="button"
-                onClick={handlePausarLote}
-                className="flex-1 py-3 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-2xl text-xs font-black uppercase"
+                disabled={salvando || itensEmLote.length === 0}
+                onClick={() => handlePersistirLote('Pendente')}
+                className="flex-1 py-3 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-2xl text-xs font-black uppercase disabled:opacity-40"
               >
                 Pausar
               </button>
@@ -555,7 +526,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
               <button
                 type="button"
                 disabled={salvando || itensEmLote.length === 0}
-                onClick={handleSalvarNotaConcluida}
+                onClick={() => handlePersistirLote('Concluida')}
                 className="flex-2 py-3 bg-[#09797a] text-white hover:bg-[#075f60] rounded-2xl text-xs font-black uppercase shadow-md disabled:opacity-40"
               >
                 Salvar Nota
