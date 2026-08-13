@@ -169,9 +169,15 @@ export default function App() {
   }
 
   if (telaAtiva === 'avarias') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Avarias usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
-  }
+  if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+  return (
+    <Avarias 
+      onVoltarParaHome={() => setTelaAtiva('home')} 
+      usuarioLogado={usuario} 
+      usuarioLogadoId={usuario.id} 
+    />
+  );
+}
 
   if (telaAtiva === 'conf-cega') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;

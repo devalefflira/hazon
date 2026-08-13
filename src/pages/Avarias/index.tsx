@@ -5,10 +5,11 @@ import RegistrarAvariaModal from './components/RegistrarAvariaModal';
 
 interface AvariasProps {
   onVoltarParaHome: () => void;
+  usuarioLogado?: any;
   usuarioLogadoId?: string;
 }
 
-export default function Avarias({ onVoltarParaHome, usuarioLogadoId }: AvariasProps) {
+export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: AvariasProps) {
   const [avarias, setAvarias] = useState<any[]>([]);
   const [motivos, setMotivos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,7 +44,9 @@ export default function Avarias({ onVoltarParaHome, usuarioLogadoId }: AvariasPr
 
   const handleSalvarAvaria = async (payload: any) => {
     try {
-      const idUsuarioFinal = usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+      // Prioriza a prop usuarioLogado, usuarioLogadoId ou o LocalStorage
+      const idUsuarioFinal = usuarioLogado?.id || usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+      
       await avariasService.registrarAvaria({
         ...payload,
         usuario_id: idUsuarioFinal
@@ -54,6 +57,16 @@ export default function Avarias({ onVoltarParaHome, usuarioLogadoId }: AvariasPr
     } catch (err) {
       alert('Erro ao registrar avaria.');
     }
+  };
+
+  // Função auxiliar para formatar a hora (exibe apenas HH:mm)
+  const formatarHoraLimpa = (horaRaw?: string) => {
+    if (!horaRaw) return '';
+    const partes = horaRaw.split('.')[0].split(':'); // Remove milissegundos
+    if (partes.length >= 2) {
+      return `${partes[0]}:${partes[1]}`;
+    }
+    return horaRaw;
   };
 
   return (
@@ -119,13 +132,14 @@ export default function Avarias({ onVoltarParaHome, usuarioLogadoId }: AvariasPr
             <div className="flex flex-col gap-2">
               {avarias.map((item) => {
                 const prod = item.produtos || {};
-                const motivoDesc = item.motivos_falta?.descricao || item.motivos_avaria?.descricao || 'Avaria';
+                const motivoDesc = item.motivos_avaria?.descricao || item.motivos_falta?.descricao || 'Avaria';
                 const respNome = item.usuarios?.nome || 'SISTEMA';
 
                 const dataFmt = item.data_registro
                   ? new Date(item.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')
                   : new Date(item.created_at).toLocaleDateString('pt-BR');
 
+                const horaFmt = formatarHoraLimpa(item.hora_registro);
                 const totalPerda = Number(item.quantidade || 0) * Number(item.preco_custo_na_perda || 0);
 
                 return (
@@ -166,7 +180,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogadoId }: AvariasPr
                         - {totalPerda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                       <span className="text-[9px] font-mono font-bold text-gray-400 block mt-1">
-                        {dataFmt} {item.hora_registro ? `às ${item.hora_registro}` : ''}
+                        {dataFmt} {horaFmt ? `às ${horaFmt}` : ''}
                       </span>
                     </div>
                   </div>

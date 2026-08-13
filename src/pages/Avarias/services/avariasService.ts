@@ -58,29 +58,51 @@ export const avariasService = {
     return data || [];
   },
 
-  // 4. Registrar Nova Avaria
+  // 4. Registrar Nova Avaria (Gera Data e Hora no fuso horário local)
   async registrarAvaria(payload: NovaAvariaPayload): Promise<void> {
     const codigoCustom = `AV${Math.floor(1000 + Math.random() * 9000)}`;
-    const dataAtual = new Date().toISOString().split('T')[0];
-    const horaAtual = new Date().toLocaleTimeString('pt-BR');
+    
+    // Gera data e hora no Fuso Horário Local do Usuário (ex: Brasil/GMT-3)
+    const agora = new Date();
+    const dataAtual = agora.toLocaleDateString('sv-SE'); // Formato YYYY-MM-DD
+    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    // Trata IDs temporários de fallback caso o banco não estivesse povoado
+    let motivoIdFinal = payload.motivo_avaria_id;
+    if (motivoIdFinal.startsWith('m')) {
+      const { data: motivoBanco } = await supabase
+        .from('motivos_avaria')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (motivoBanco) {
+        motivoIdFinal = motivoBanco.id;
+      }
+    }
+
+    const objetoInsert: Record<string, any> = {
+      codigo_customizado: codigoCustom,
+      produto_id: payload.produto_id,
+      motivo_avaria_id: motivoIdFinal,
+      quantidade: payload.quantidade,
+      preco_custo_na_perda: payload.preco_custo_na_perda,
+      destinacao: payload.destinacao,
+      observacao: payload.observacao || null,
+      data_registro: dataAtual,
+      hora_registro: horaAtual
+    };
+
+    if (payload.usuario_id) {
+      objetoInsert.usuario_id = payload.usuario_id;
+    }
 
     const { error } = await supabase
       .from('avarias')
-      .insert([{
-        codigo_customizado: codigoCustom,
-        usuario_id: payload.usuario_id,
-        produto_id: payload.produto_id,
-        motivo_avaria_id: payload.motivo_avaria_id,
-        quantidade: payload.quantidade,
-        preco_custo_na_perda: payload.preco_custo_na_perda,
-        destinacao: payload.destinacao,
-        observacao: payload.observacao || null,
-        data_registro: dataAtual,
-        hora_registro: horaAtual
-      }]);
+      .insert([objetoInsert]);
 
     if (error) {
-      console.error('Erro ao registrar avaria:', error);
+      console.error('Erro detalhado ao registrar avaria:', error);
       throw error;
     }
   },
