@@ -41,6 +41,7 @@ interface HomeProps {
   onNavegarParaTemperatura: () => void;
   onNavegarParaOrcamentos?: () => void;
   onNavegarParaClientes?: () => void;
+  onNavegarParaOfertas?: () => void;
 }
 
 export default function Home({
@@ -64,7 +65,8 @@ export default function Home({
   onNavegarParaRelatorios,
   onNavegarParaTemperatura,
   onNavegarParaOrcamentos,
-  onNavegarParaClientes
+  onNavegarParaClientes,
+  onNavegarParaOfertas
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -87,7 +89,8 @@ export default function Home({
     { label: 'Temperatura', icon: iconInventario },
     { label: 'Permissões', icon: iconPermissoes },
     { label: 'Categorias', icon: iconCategorias },
-    { label: 'Clientes', icon: iconUsuarios }
+    { label: 'Clientes', icon: iconUsuarios },
+    { label: 'Ofertas', icon: iconCotacoes }
   ];
 
   useEffect(() => {
@@ -133,7 +136,8 @@ export default function Home({
       'Tarefas': 'Tarefas',
       'Conf. Cega': 'Conf. Cega',
       'Temperatura': 'Temperatura',
-      'Clientes': 'Clientes'
+      'Clientes': 'Clientes',
+      'Ofertas': 'Ofertas'
     };
 
     const moduloChave = mapaModulos[label];
@@ -157,8 +161,11 @@ export default function Home({
     else if (label === 'Orçamentos') {
       if (onNavegarParaOrcamentos) onNavegarParaOrcamentos();
     }
-    else if (label === 'Clientes') { 
+    else if (label === 'Clientes') {
       if (onNavegarParaClientes) onNavegarParaClientes();
+    }
+    else if (label === 'Ofertas') {
+      if (onNavegarParaOfertas) onNavegarParaOfertas();
     }
     else if (label === 'Pedidos') onNavegarParaPedidos();
     else if (label === 'Tarefas') onNavegarParaTarefas();

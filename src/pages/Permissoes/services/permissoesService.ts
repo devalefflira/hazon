@@ -1,8 +1,11 @@
 // Arquivo: src/pages/Permissoes/services/permissoesService.ts
 import { supabase } from '../../../lib/supabaseClient';
 
-export const LISTA_MODULOS_SISTEMA: string[] = [
+// Exemplo no permissoesService.ts:
+export const LISTA_MODULOS_SISTEMA = [
   'Usuarios',
+  'Categorias',
+  'Permissoes',
   'Fornecedores',
   'Vendedores',
   'Produtos',
@@ -17,8 +20,8 @@ export const LISTA_MODULOS_SISTEMA: string[] = [
   'Tarefas',
   'Conf. Cega',
   'Temperatura',
-  'Categorias',
-  'Permissoes'
+  'Clientes',
+  'Ofertas'
 ];
 
 export const permissoesService = {

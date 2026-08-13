@@ -22,6 +22,7 @@ import Relatorios from './pages/Relatorios';
 import Temperatura from './pages/Temperatura';
 import Orcamentos from './pages/Orcamentos';
 import Clientes from './pages/Clientes';
+import Ofertas from './pages/Ofertas';
 
 interface UsuarioLogado {
   id: string;
@@ -52,6 +53,7 @@ type TelaAtiva =
   | 'temperatura'
   | 'orcamentos'
   | 'clientes'
+  | 'ofertas';
 
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -113,6 +115,11 @@ export default function App() {
     return <Clientes onVoltarParaHome={() => setTelaAtiva('home')} />;
   }
 
+  if (telaAtiva === 'ofertas') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Ofertas onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
+  }
+
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
@@ -137,6 +144,7 @@ export default function App() {
         onNavegarParaTemperatura={() => setTelaAtiva('temperatura')}
         onNavegarParaOrcamentos={() => setTelaAtiva('orcamentos')}
         onNavegarParaClientes={() => setTelaAtiva('clientes')}
+        onNavegarParaOfertas={() => setTelaAtiva('ofertas')}
       />
     );
   }
@@ -169,15 +177,15 @@ export default function App() {
   }
 
   if (telaAtiva === 'avarias') {
-  if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-  return (
-    <Avarias 
-      onVoltarParaHome={() => setTelaAtiva('home')} 
-      usuarioLogado={usuario} 
-      usuarioLogadoId={usuario.id} 
-    />
-  );
-}
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Avarias
+        onVoltarParaHome={() => setTelaAtiva('home')}
+        usuarioLogado={usuario}
+        usuarioLogadoId={usuario.id}
+      />
+    );
+  }
 
   if (telaAtiva === 'conf-cega') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
