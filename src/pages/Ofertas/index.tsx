@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { ofertasService } from './services/ofertasService';
 import { gerarPdfOferta } from './utils/gerarPdfOferta';
+import { gerarPdfPlacas } from './utils/gerarPdfPlacas';
 
 interface OfertasProps {
   onVoltarParaHome: () => void;
@@ -21,10 +22,21 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
 
   // Abas Principais
   const [abaPrincipal, setAbaAtiva] = useState<'CRIADAS' | 'A_PRECIFICAR' | 'CONCLUIDAS'>('CRIADAS');
-  // Sub-abas de Criadas
   const [subAbaCriadas, setSubAbaCriadas] = useState<'EM_ANDAMENTO' | 'FINALIZADAS'>('EM_ANDAMENTO');
-  // Sub-abas de Concluídas
   const [subAbaConcluidas, setSubAbaConcluidas] = useState<'GERAR_PLACAS' | 'GERAR_RELATORIO'>('GERAR_RELATORIO');
+
+  // Sub-abas de Gerar Placas
+  const [subAbaPlacas, setSubAbaPlacas] = useState<'LAYOUT' | 'GERAR'>('LAYOUT');
+
+  // Gerenciamento de Layout
+  const [layoutsDisponiveis, setLayoutsDisponiveis] = useState<any[]>([
+    { id: 'lay-1', nome: 'Modelo Padrão BV Distribuidora', placasPorPagina: 2, imagemUrl: null }
+  ]);
+  const [layoutSelecionado, setLayoutSelecionado] = useState<any>(layoutsDisponiveis[0]);
+  const [placasPorPaginaConfig, setPlacasPorPaginaConfig] = useState<number>(2);
+
+  // Seleção de Oferta para Gerar Placas
+  const [ofertaParaPlaca, setOfertaParaPlaca] = useState<any | null>(null);
 
   // Modal: Nova Oferta
   const [modalNovaOferta, setModalNovaOferta] = useState(false);
@@ -33,7 +45,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
   const [itensEmEdicao, setItensEmEdicao] = useState<any[]>([]);
 
-  // Tela de Precificação (A Precificar)
+  // Precificação
   const [ofertaEmPrecificacao, setOfertaEmPrecificacao] = useState<any | null>(null);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -41,7 +53,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   const [tipoOfertaCustom, setTipoOfertaCustom] = useState('');
   const [precosOfertaMap, setPrecosOfertaMap] = useState<Record<string, number | ''>>({});
 
-  // Modal de Visualização da Oferta Criada / Finalizada
+  // Modal: Ver Detalhes
   const [ofertaVerDetalhes, setOfertaVerDetalhes] = useState<any | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -60,6 +72,26 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   useEffect(() => {
     carregarOfertas();
   }, []);
+
+  // Importar Imagem de Layout do Usuário (PNG/JPG)
+  const handleImportarLayout = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const novoLayout = {
+          id: `lay-${Date.now()}`,
+          nome: file.name.replace(/\.[^/.]+$/, ''),
+          placasPorPagina: 2,
+          imagemUrl: event.target?.result as string
+        };
+        setLayoutsDisponiveis((prev) => [...prev, novoLayout]);
+        setLayoutSelecionado(novoLayout);
+        alert('Layout de placa carregado com sucesso!');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Autocomplete de Produtos
   useEffect(() => {
@@ -104,7 +136,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     setItensEmEdicao((prev) => prev.filter((i) => i.temp_id !== tempId));
   };
 
-  // Salvar Oferta Criada (Pausar ou Finalizar)
   const handleSalvarOfertaCriada = async (statusFinal: 'Em Andamento' | 'Criada Finalizada') => {
     if (itensEmEdicao.length === 0) {
       alert('Adicione ao menos um produto.');
@@ -135,7 +166,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     }
   };
 
-  // Abrir tela de Precificação
   const handleAbrirPrecificacao = (oferta: any) => {
     setOfertaEmPrecificacao(oferta);
     setDataInicio(oferta.data_inicio || '');
@@ -150,14 +180,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     setPrecosOfertaMap(mapInicial);
   };
 
-  // Salvar Precificação (Muda de A Precificar para Concluída)
   const handleSalvarPrecificacao = async () => {
     if (!dataInicio || !dataFim) {
       alert('Informe o período inicial e final da oferta.');
-      return;
-    }
-    if (tipoOferta === 'Data Comemorativa' && !tipoOfertaCustom.trim()) {
-      alert('Informe o nome da Data Comemorativa.');
       return;
     }
 
@@ -195,10 +220,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     }
   };
 
-  // Filtros de Listagem
   const ofertasEmAndamento = ofertas.filter((o) => o.status === 'Em Andamento');
   const ofertasCriadasFinalizadas = ofertas.filter((o) => o.status === 'Criada Finalizada');
-  const ofertasAPrecificar = ofertasCriadasFinalizadas; // A Precificar reflete as criadas finalizadas
+  const ofertasAPrecificar = ofertasCriadasFinalizadas;
   const ofertasConcluidas = ofertas.filter((o) => o.status === 'Concluida');
 
   const agoraData = new Date().toLocaleDateString('pt-BR');
@@ -215,7 +239,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
             <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
             <div>
               <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">OFERTAS</h1>
-              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Gestão e Precificação de Campanhas</p>
+              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Gestão, Precificação e Impressão de Placas</p>
             </div>
           </div>
           <button
@@ -304,52 +328,43 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           </div>
         )}
 
-        {/* LISTAGEM CONFORME A ABA SELECIONADA */}
+        {/* LISTAGENS / CONTEÚDO */}
         <div className="flex-1 flex flex-col gap-2">
           {loading ? (
             <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando ofertas...</div>
           ) : abaPrincipal === 'CRIADAS' && subAbaCriadas === 'EM_ANDAMENTO' ? (
-            ofertasEmAndamento.length === 0 ? (
-              <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-                Nenhuma oferta em andamento.
-              </div>
-            ) : (
-              ofertasEmAndamento.map((ofe) => (
-                <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                      {ofe.codigo_customizado}
-                    </span>
-                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                      Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                    </h4>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      {ofe.data_registro} às {ofe.hora_registro}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCodigoEdicaoAtual(ofe.codigo_customizado);
-                      setItensEmEdicao(
-                        (ofe.oferta_itens || []).map((item: any) => ({
-                          temp_id: item.id || Math.random().toString(),
-                          produto_id: item.produto_id,
-                          codprod: item.produtos?.codprod,
-                          descricao: item.produtos?.descricao,
-                          preco_custo_real: item.preco_custo_real,
-                          preco_venda_tabela: item.preco_venda_tabela
-                        }))
-                      );
-                      setModalNovaOferta(true);
-                    }}
-                    className="px-3.5 py-1.5 bg-amber-100 text-amber-900 rounded-xl text-xs font-black uppercase"
-                  >
-                    Continuar
-                  </button>
+            ofertasEmAndamento.map((ofe) => (
+              <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                <div>
+                  <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                    {ofe.codigo_customizado}
+                  </span>
+                  <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                    Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                  </h4>
                 </div>
-              ))
-            )
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCodigoEdicaoAtual(ofe.codigo_customizado);
+                    setItensEmEdicao(
+                      (ofe.oferta_itens || []).map((item: any) => ({
+                        temp_id: item.id || Math.random().toString(),
+                        produto_id: item.produto_id,
+                        codprod: item.produtos?.codprod,
+                        descricao: item.produtos?.descricao,
+                        preco_custo_real: item.preco_custo_real,
+                        preco_venda_tabela: item.preco_venda_tabela
+                      }))
+                    );
+                    setModalNovaOferta(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-amber-100 text-amber-900 rounded-xl text-xs font-black uppercase"
+                >
+                  Continuar
+                </button>
+              </div>
+            ))
           ) : abaPrincipal === 'CRIADAS' && subAbaCriadas === 'FINALIZADAS' ? (
             ofertasCriadasFinalizadas.length === 0 ? (
               <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
@@ -380,73 +395,190 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               ))
             )
           ) : abaPrincipal === 'A_PRECIFICAR' ? (
-            ofertasAPrecificar.length === 0 ? (
-              <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-                Nenhuma oferta pendente de precificação.
-              </div>
-            ) : (
-              ofertasAPrecificar.map((ofe) => (
-                <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                      {ofe.codigo_customizado}
-                    </span>
-                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                      A Precificar | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                    </h4>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      Resp: {ofe.usuarios?.nome || 'SISTEMA'} - {ofe.data_registro}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleAbrirPrecificacao(ofe)}
-                    className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm"
-                  >
-                    Precificar
-                  </button>
+            ofertasAPrecificar.map((ofe) => (
+              <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                <div>
+                  <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                    {ofe.codigo_customizado}
+                  </span>
+                  <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                    A Precificar | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                  </h4>
                 </div>
-              ))
-            )
+                <button
+                  type="button"
+                  onClick={() => handleAbrirPrecificacao(ofe)}
+                  className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm"
+                >
+                  Precificar
+                </button>
+              </div>
+            ))
           ) : abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_RELATORIO' ? (
-            ofertasConcluidas.length === 0 ? (
-              <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-                Nenhuma oferta concluída ainda.
+            ofertasConcluidas.map((ofe) => (
+              <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                <div>
+                  <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                    {ofe.codigo_customizado}
+                  </span>
+                  <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                    Período: {ofe.data_inicio} até {ofe.data_fim}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [])}
+                  className="px-3.5 py-1.5 bg-[#09797a] text-white rounded-xl text-xs font-black uppercase shadow-sm"
+                >
+                  🖨️ PDF
+                </button>
               </div>
-            ) : (
-              ofertasConcluidas.map((ofe) => (
-                <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                        {ofe.codigo_customizado}
-                      </span>
-                      <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded uppercase">
-                        {ofe.tipo_oferta === 'Data Comemorativa' ? ofe.tipo_oferta_customizado : ofe.tipo_oferta}
-                      </span>
-                    </div>
-                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                      Período: {ofe.data_inicio} até {ofe.data_fim}
-                    </h4>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                    </p>
+            ))
+          ) : abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_PLACAS' ? (
+            
+            /* CONTEÚDO DE GERAR PLACAS (LAYOUT / GERAR) */
+            <div className="flex flex-col gap-4">
+              
+              {/* SUB-ABAS INTERNAS DE PLACAS */}
+              <div className="bg-emerald-50 border border-emerald-200 p-1 rounded-2xl flex text-xs font-black">
+                <button
+                  type="button"
+                  onClick={() => setSubAbaPlacas('LAYOUT')}
+                  className={`flex-1 py-2 rounded-xl uppercase transition-all ${
+                    subAbaPlacas === 'LAYOUT' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                  }`}
+                >
+                  1. Layout da Placa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubAbaPlacas('GERAR')}
+                  className={`flex-1 py-2 rounded-xl uppercase transition-all ${
+                    subAbaPlacas === 'GERAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                  }`}
+                >
+                  2. Gerar Impressão
+                </button>
+              </div>
+
+              {/* ABA 1: SELEÇÃO E IMPORTAÇÃO DE LAYOUT */}
+              {subAbaPlacas === 'LAYOUT' && (
+                <div className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black text-gray-700 uppercase">Layouts Cadastrados</span>
+                    <label className="bg-[#09797a] hover:bg-[#075f60] text-white px-3 py-1.5 rounded-xl text-xs font-black uppercase cursor-pointer transition-all shadow-sm">
+                      + Importar Layout (PNG/JPG)
+                      <input type="file" accept="image/*" onChange={handleImportarLayout} className="hidden" />
+                    </label>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-1">
+                    {layoutsDisponiveis.map((lay) => (
+                      <div
+                        key={lay.id}
+                        onClick={() => setLayoutSelecionado(lay)}
+                        className={`p-3 rounded-2xl border-2 cursor-pointer flex flex-col gap-2 transition-all ${
+                          layoutSelecionado?.id === lay.id ? 'border-[#09797a] bg-emerald-50/50' : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <div className="h-24 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200">
+                          {lay.imagemUrl ? (
+                            <img src={lay.imagemUrl} alt={lay.nome} className="h-full object-contain" />
+                          ) : (
+                            <span className="text-[10px] font-black text-gray-400 text-center px-2 uppercase">
+                              Template Modelo BV (2 por página)
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex justify-between items-center text-xs font-black">
+                          <span className="text-gray-800 uppercase truncate">{lay.nome}</span>
+                          {layoutSelecionado?.id === lay.id && <span className="text-[#09797a]">✓ Ativo</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [])}
-                    className="px-3.5 py-1.5 bg-[#09797a] text-white rounded-xl text-xs font-black uppercase shadow-sm"
+                    onClick={() => setSubAbaPlacas('GERAR')}
+                    className="w-full bg-[#09797a] text-white py-3 rounded-2xl text-xs font-black uppercase shadow-md mt-2"
                   >
-                    🖨️ PDF
+                    Avançar para Gerar Impressão →
                   </button>
                 </div>
-              ))
-            )
-          ) : (
-            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-              Gerar Placas será construído em breve conforme solicitado!
+              )}
+
+              {/* ABA 2: GERAR PLACAS */}
+              {subAbaPlacas === 'GERAR' && (
+                <div className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
+                  <div className="bg-white border border-emerald-200 p-3 rounded-2xl flex justify-between items-center text-xs font-bold text-gray-800">
+                    <div>
+                      <span className="text-[9px] text-gray-400 block uppercase">Layout Selecionado</span>
+                      <span>{layoutSelecionado?.nome || 'Padrão'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSubAbaPlacas('LAYOUT')}
+                      className="text-[#09797a] text-[10px] uppercase underline font-black"
+                    >
+                      Alterar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase">Selecione a Oferta Concluída</label>
+                      <select
+                        value={ofertaParaPlaca?.id || ''}
+                        onChange={(e) => {
+                          const encont = ofertasConcluidas.find((o) => o.id === e.target.value);
+                          setOfertaParaPlaca(encont || null);
+                        }}
+                        className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
+                      >
+                        <option value="">Selecione...</option>
+                        {ofertasConcluidas.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.codigo_customizado} - {o.tipo_oferta} ({o.oferta_itens?.length || 0} itens)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase">Placas Por Página A4</label>
+                      <select
+                        value={placasPorPaginaConfig}
+                        onChange={(e) => setPlacasPorPaginaConfig(Number(e.target.value))}
+                        className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+                      >
+                        <option value={1}>1 Placa por Folha (A4 Inteira)</option>
+                        <option value={2}>2 Placas por Folha (Meia A4 - Padrão)</option>
+                        <option value={4}>4 Placas por Folha (Quarto A4)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!ofertaParaPlaca}
+                    onClick={() =>
+                      gerarPdfPlacas(
+                        ofertaParaPlaca,
+                        ofertaParaPlaca.oferta_itens || [],
+                        layoutSelecionado?.imagemUrl,
+                        placasPorPaginaConfig
+                      )
+                    }
+                    className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3.5 rounded-2xl text-xs font-black uppercase shadow-md disabled:opacity-40 mt-2"
+                  >
+                    🖨️ Gerar PDF de Placas de Oferta
+                  </button>
+                </div>
+              )}
+
             </div>
-          )}
+          ) : null}
         </div>
 
       </div>
@@ -576,7 +708,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* TELA / MODAL DE PRECIFICAÇÃO (A PRECIFICAR) */}
+      {/* TELA DE PRECIFICAÇÃO */}
       {ofertaEmPrecificacao && (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
           <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
@@ -635,7 +767,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </div>
             )}
 
-            {/* TABELA DE PRECOS DE OFERTA */}
             <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 max-h-[35vh]">
               <table className="w-full text-left text-xs font-bold">
                 <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
