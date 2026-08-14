@@ -22,7 +22,8 @@ export const LISTA_MODULOS_SISTEMA = [
   'Temperatura',
   'Clientes',
   'Ofertas',
-  'Vencimentos'
+  'Vencimentos',
+  'Trocas'
 ];
 
 export const permissoesService = {

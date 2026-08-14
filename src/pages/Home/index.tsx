@@ -45,6 +45,7 @@ interface HomeProps {
   onNavegarParaClientes?: () => void;
   onNavegarParaOfertas?: () => void;
   onNavegarParaVencimentos?: () => void;
+  onNavegarParaTrocas?: () => void;
   onNavegarParaNotificacoes?: () => void;
 }
 
@@ -73,6 +74,7 @@ export default function Home({
   onNavegarParaClientes,
   onNavegarParaOfertas,
   onNavegarParaVencimentos,
+  onNavegarParaTrocas,
   onNavegarParaNotificacoes
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
@@ -92,6 +94,7 @@ export default function Home({
     { label: 'Cotações', icon: iconCotacoes },
     { label: 'Orçamentos', icon: iconRelatorios },
     { label: 'Avarias', icon: iconAvarias },
+    { label: 'Trocas', icon: iconAvarias },
     { label: 'Pedidos', icon: iconPedidos },
     { label: 'Tarefas', icon: iconTarefas },
     { label: 'Conf. Cega', icon: iconConfCega },
@@ -134,11 +137,9 @@ export default function Home({
         const idUser = usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
         const lista = await vencimentosService.listarTodosVencimentos(idUser);
         
-        // Itens a vencer em até 90 dias que ainda estão PENDENTES de visualização
         const pendentes = lista.filter((i) => i.diasParaVencer >= 0 && i.diasParaVencer <= 90 && i.statusLeitura === 'Pendente');
         setQtdNotificacoesPendentes(pendentes.length);
 
-        // Enquanto houver pendências, o alerta é exibido
         if (pendentes.length > 0) {
           setAlertaModalAberto(true);
         }
@@ -164,6 +165,7 @@ export default function Home({
       'Cotações': 'Cotacoes',
       'Orçamentos': 'Orcamentos',
       'Avarias': 'Avarias',
+      'Trocas': 'Trocas',
       'Pedidos': 'Pedidos',
       'Tarefas': 'Tarefas',
       'Conf. Cega': 'Conf. Cega',
@@ -193,6 +195,7 @@ export default function Home({
     else if (label === 'Clientes') { if (onNavegarParaClientes) onNavegarParaClientes(); }
     else if (label === 'Ofertas') { if (onNavegarParaOfertas) onNavegarParaOfertas(); }
     else if (label === 'Vencimentos') { if (onNavegarParaVencimentos) onNavegarParaVencimentos(); }
+    else if (label === 'Trocas') { if (onNavegarParaTrocas) onNavegarParaTrocas(); }
     else if (label === 'Pedidos') onNavegarParaPedidos();
     else if (label === 'Tarefas') onNavegarParaTarefas();
     else if (label === 'Avarias') onNavegarParaAvarias();

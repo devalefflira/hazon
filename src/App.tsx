@@ -25,6 +25,7 @@ import Clientes from './pages/Clientes';
 import Ofertas from './pages/Ofertas';
 import Vencimentos from './pages/Vencimentos';
 import Notificacoes from './pages/Notificacoes';
+import Trocas from './pages/Trocas';
 
 interface UsuarioLogado {
   id: string;
@@ -57,7 +58,8 @@ type TelaAtiva =
   | 'clientes'
   | 'ofertas'
   | 'vencimentos'
-  | 'notificacoes';
+  | 'notificacoes'
+  | 'trocas';
 
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -134,16 +136,21 @@ export default function App() {
     );
   }
 
- if (telaAtiva === 'notificacoes') {
-  if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-  return (
-    <Notificacoes
-      onVoltarParaHome={() => setTelaAtiva('home')}
-      onNavegarParaVencimentos={() => setTelaAtiva('vencimentos')}
-      usuarioLogado={usuario} // 👈 Passando objeto do usuário
-    />
-  );
-}
+  if (telaAtiva === 'trocas') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Trocas onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
+  }
+
+  if (telaAtiva === 'notificacoes') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Notificacoes
+        onVoltarParaHome={() => setTelaAtiva('home')}
+        onNavegarParaVencimentos={() => setTelaAtiva('vencimentos')}
+        usuarioLogado={usuario}
+      />
+    );
+  }
 
   if (usuario && telaAtiva === 'home') {
     return (
@@ -172,6 +179,7 @@ export default function App() {
         onNavegarParaClientes={() => setTelaAtiva('clientes')}
         onNavegarParaOfertas={() => setTelaAtiva('ofertas')}
         onNavegarParaVencimentos={() => setTelaAtiva('vencimentos')}
+        onNavegarParaTrocas={() => setTelaAtiva('trocas')}
         onNavegarParaNotificacoes={() => setTelaAtiva('notificacoes')}
       />
     );
