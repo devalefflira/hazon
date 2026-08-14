@@ -415,25 +415,52 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </div>
             ))
           ) : abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_RELATORIO' ? (
-            ofertasConcluidas.map((ofe) => (
-              <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                <div>
-                  <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                    {ofe.codigo_customizado}
-                  </span>
-                  <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                    Período: {ofe.data_inicio} até {ofe.data_fim}
-                  </h4>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [])}
-                  className="px-3.5 py-1.5 bg-[#09797a] text-white rounded-xl text-xs font-black uppercase shadow-sm"
-                >
-                  🖨️ PDF
-                </button>
+            ofertasConcluidas.length === 0 ? (
+              <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+                Nenhuma oferta concluída ainda.
               </div>
-            ))
+            ) : (
+              ofertasConcluidas.map((ofe) => (
+                <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                        {ofe.codigo_customizado}
+                      </span>
+                      <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded uppercase">
+                        {ofe.tipo_oferta === 'Data Comemorativa' ? ofe.tipo_oferta_customizado : ofe.tipo_oferta}
+                      </span>
+                    </div>
+                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                      Período: {ofe.data_inicio} até {ofe.data_fim}
+                    </h4>
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                    </p>
+                  </div>
+
+                  {/* OPÇÕES DE RELATÓRIO: COMPLETO OU ENCARTE */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
+                      className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-xs font-black uppercase transition-all"
+                      title="Relatório com Custo, Tabela e Oferta"
+                    >
+                      📄 Completo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'ENCARTE')}
+                      className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                      title="Relatório simplificado apenas com Descrição e Preço de Oferta"
+                    >
+                      🎨 Encarte
+                    </button>
+                  </div>
+                </div>
+              ))
+            )
           ) : abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_PLACAS' ? (
             
             /* CONTEÚDO DE GERAR PLACAS (LAYOUT / GERAR) */
