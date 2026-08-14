@@ -85,7 +85,7 @@ export const vencimentosService = {
       }, { onConflict: 'item_id,usuario_id' });
   },
 
-  // 4. Listar e Agregar Registros (Vencimentos + Inventário + Status de Leitura)
+  // 4. Listar e Agregar Registros (Vencimentos + Inventário + Conf. Cega)
   async listarTodosVencimentos(usuarioId?: string): Promise<VencimentoItem[]> {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -97,12 +97,11 @@ export const vencimentosService = {
 
     const mapaLeituras: Record<string, any> = {};
     (leituras || []).forEach((l: any) => {
-      // Guarda a leitura por item e usuário (ou geral)
       mapaLeituras[`${l.item_id}_${l.usuario_id}`] = l;
       mapaLeituras[l.item_id] = l;
     });
 
-    // 4.2. Busca da tabela de controle manual
+    // 4.2. Busca da tabela manual
     const { data: dadosManuais } = await supabase
       .from('vencimentos_controle')
       .select(`
@@ -116,6 +115,15 @@ export const vencimentosService = {
       .from('inventario_itens')
       .select(`
         id, produto_id, lote, data_validade, quantidade_contabilizada,
+        produtos ( id, codprod, descricao, codbarra, unidade )
+      `)
+      .not('data_validade', 'is', null);
+
+    // 4.4. Busca do módulo de Conferência Cega
+    const { data: dadosConfCega } = await supabase
+      .from('conferencia_itens')
+      .select(`
+        id, produto_id, lote, data_validade, quantidade_contada,
         produtos ( id, codprod, descricao, codbarra, unidade )
       `)
       .not('data_validade', 'is', null);
@@ -139,7 +147,7 @@ export const vencimentosService = {
         lote: item.lote || 'S/L',
         data_validade: item.data_validade,
         quantidade: Number(item.quantidade || 1),
-        origem: item.origem || 'Vencimentos',
+        origem: 'Vencimentos',
         diasParaVencer: dias,
         statusLeitura: leituraReg ? 'Visto' : 'Pendente',
         visualizadoPor: leituraReg?.usuarios?.nome,
@@ -167,6 +175,32 @@ export const vencimentosService = {
         data_validade: item.data_validade,
         quantidade: Number(item.quantidade_contabilizada || 1),
         origem: 'Inventário',
+        diasParaVencer: dias,
+        statusLeitura: leituraReg ? 'Visto' : 'Pendente',
+        visualizadoPor: leituraReg?.usuarios?.nome,
+        visualizadoEm: leituraReg ? `${leituraReg.data_visualizacao} às ${leituraReg.hora_visualizacao}` : undefined,
+        produtos: item.produtos
+      });
+    });
+
+    // Processa Conferência Cega
+    (dadosConfCega || []).forEach((item: any) => {
+      if (!item.data_validade) return;
+      const dataVal = new Date(item.data_validade + 'T00:00:00');
+      const difTempo = dataVal.getTime() - hoje.getTime();
+      const dias = Math.ceil(difTempo / (1000 * 60 * 60 * 24));
+
+      const chaveLeitura = usuarioId ? `${item.id}_${usuarioId}` : item.id;
+      const leituraReg = mapaLeituras[chaveLeitura] || (usuarioId ? mapaLeituras[item.id] : null);
+
+      listaUnificada.push({
+        id: item.id,
+        codigo_customizado: `CEG-${String(item.id).slice(0, 4).toUpperCase()}`,
+        produto_id: item.produto_id,
+        lote: item.lote || 'S/L',
+        data_validade: item.data_validade,
+        quantidade: Number(item.quantidade_contada || 1),
+        origem: 'Conf. Cega',
         diasParaVencer: dias,
         statusLeitura: leituraReg ? 'Visto' : 'Pendente',
         visualizadoPor: leituraReg?.usuarios?.nome,
