@@ -230,8 +230,8 @@ export default function Vencimentos({
                   key={item.id}
                   className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center hover:bg-emerald-50/20 transition-all"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="flex-1 pr-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
                         {item.codigo_customizado || 'VEN'}
                       </span>
@@ -250,10 +250,16 @@ export default function Vencimentos({
                       {prod.descricao || 'PRODUTO NÃO ENCONTRADO'}
                     </h4>
 
-                    <div className="flex items-center gap-3 text-[10px] text-gray-500 font-bold uppercase mt-1">
-                      <span>Lote: <strong className="text-gray-800">{item.lote}</strong></span>
-                      <span>Qtd: <strong className="text-gray-800">{item.quantidade} {prod.unidade || 'UN'}</strong></span>
-                      <span>Validade: <strong className="text-gray-800">{dataValFmt}</strong></span>
+                    <div className="flex items-center gap-3 text-[10px] text-gray-500 font-bold uppercase mt-1 flex-wrap">
+                      <span>LOTE: <strong className="text-gray-800">{item.lote}</strong></span>
+                      <span>QTD: <strong className="text-gray-800">{item.quantidade} {prod.unidade || 'UN'}</strong></span>
+                      <span>VALIDADE: <strong className="text-gray-800">{dataValFmt}</strong></span>
+                    </div>
+
+                    {/* IDENTIFICAÇÃO DO USUÁRIO, DATA E HORA */}
+                    <div className="text-[10px] text-gray-400 font-mono mt-1 flex items-center gap-1 font-bold">
+                      <span>👤 {item.usuarioNome || 'SISTEMA'},</span>
+                      <span>{item.dataHoraRegistro}</span>
                     </div>
                   </div>
 

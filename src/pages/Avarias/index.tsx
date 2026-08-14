@@ -145,44 +145,54 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
                 return (
                   <div
                     key={item.id}
-                    className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center"
+                    className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex flex-col gap-1.5"
                   >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-mono font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-md uppercase">
-                          {item.codigo_customizado}
-                        </span>
-                        <span className="text-[10px] font-mono font-bold text-gray-400">
-                          Cód: {prod.codprod || 'N/A'}
-                        </span>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-mono font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-md uppercase">
+                            {item.codigo_customizado}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-gray-400">
+                            Cód: {prod.codprod || 'N/A'}
+                          </span>
+                        </div>
+
+                        <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                          {prod.descricao || 'PRODUTO NÃO ENCONTRADO'}
+                        </h4>
+
+                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">
+                          Qtd: <strong className="text-gray-800">{item.quantidade} {item.produtos?.unidade || 'UN'}</strong> | Motivo: {motivoDesc}
+                        </p>
+
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[9px] font-mono font-bold text-gray-600 bg-gray-200/60 px-2 py-0.5 rounded uppercase">
+                            Destino: {item.destinacao}
+                          </span>
+                          <span className="text-[9px] font-mono font-bold text-gray-400">
+                            Resp: <strong className="text-gray-700">{respNome}</strong>
+                          </span>
+                        </div>
                       </div>
 
-                      <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                        {prod.descricao || 'PRODUTO NÃO ENCONTRADO'}
-                      </h4>
-
-                      <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">
-                        Qtd: <strong className="text-gray-800">{item.quantidade} {item.produtos?.unidade || 'UN'}</strong> | Motivo: {motivoDesc}
-                      </p>
-
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[9px] font-mono font-bold text-gray-600 bg-gray-200/60 px-2 py-0.5 rounded uppercase">
-                          Destino: {item.destinacao}
+                      <div className="text-right">
+                        <span className="font-mono font-black text-xs text-red-600 block">
+                          - {totalPerda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </span>
-                        <span className="text-[9px] font-mono font-bold text-gray-400">
-                          Resp: <strong className="text-gray-700">{respNome}</strong>
+                        <span className="text-[9px] font-mono font-bold text-gray-400 block mt-1">
+                          {dataFmt} {horaFmt ? `às ${horaFmt}` : ''}
                         </span>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="font-mono font-black text-xs text-red-600 block">
-                        - {totalPerda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </span>
-                      <span className="text-[9px] font-mono font-bold text-gray-400 block mt-1">
-                        {dataFmt} {horaFmt ? `às ${horaFmt}` : ''}
-                      </span>
-                    </div>
+                    {/* OBSERVAÇÃO (SE HOUVER) */}
+                    {item.observacao && item.observacao.trim() !== '' && (
+                      <div className="mt-0.5 bg-amber-50/80 border border-amber-200 text-amber-900 text-[10px] p-2 rounded-xl flex items-start gap-1 font-medium">
+                        <span className="font-black uppercase tracking-wide">Obs:</span>
+                        <span className="uppercase">{item.observacao}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}

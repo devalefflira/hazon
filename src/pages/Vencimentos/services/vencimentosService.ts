@@ -13,6 +13,8 @@ export interface VencimentoItem {
   statusLeitura?: 'Visto' | 'Pendente';
   visualizadoPor?: string;
   visualizadoEm?: string;
+  usuarioNome?: string;
+  dataHoraRegistro?: string;
   produtos?: {
     id: string;
     codprod: string;
@@ -24,6 +26,16 @@ export interface VencimentoItem {
     id: string;
     nome: string;
   };
+}
+
+function formatarDataHora(dataIsoOrDateString?: string): string {
+  if (!dataIsoOrDateString) return 'Data não informada';
+  const data = new Date(dataIsoOrDateString);
+  if (isNaN(data.getTime())) return dataIsoOrDateString;
+
+  const dataFmt = data.toLocaleDateString('pt-BR');
+  const horaFmt = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return `${dataFmt}, às ${horaFmt}`;
 }
 
 export const vencimentosService = {
@@ -105,25 +117,27 @@ export const vencimentosService = {
     const { data: dadosManuais } = await supabase
       .from('vencimentos_controle')
       .select(`
-        id, codigo_customizado, produto_id, lote, data_validade, quantidade, origem,
+        id, codigo_customizado, produto_id, lote, data_validade, quantidade, origem, created_at,
         produtos ( id, codprod, descricao, codbarra, unidade ),
         usuarios ( id, nome )
       `);
 
-    // 4.3. Busca do módulo de Inventário
+    // 4.3. Busca do módulo de Inventário com joins do inventário e usuário
     const { data: dadosInventario } = await supabase
       .from('inventario_itens')
       .select(`
         id, produto_id, lote, data_validade, quantidade_contabilizada,
+        inventarios ( id, created_at, data_registro, hora_registro, usuarios ( id, nome ) ),
         produtos ( id, codprod, descricao, codbarra, unidade )
       `)
       .not('data_validade', 'is', null);
 
-    // 4.4. Busca do módulo de Conferência Cega
+    // 4.4. Busca do módulo de Conferência Cega com joins de conferência e usuário
     const { data: dadosConfCega } = await supabase
       .from('conferencia_itens')
       .select(`
-        id, produto_id, lote, data_validade, quantidade_contada,
+        id, produto_id, lote, data_validade, quantidade_contada, created_at,
+        conferencias_mestre ( id, created_at, data_conferencia, hora_conferencia, usuarios ( id, nome ) ),
         produtos ( id, codprod, descricao, codbarra, unidade )
       `)
       .not('data_validade', 'is', null);
@@ -152,6 +166,8 @@ export const vencimentosService = {
         statusLeitura: leituraReg ? 'Visto' : 'Pendente',
         visualizadoPor: leituraReg?.usuarios?.nome,
         visualizadoEm: leituraReg ? `${leituraReg.data_visualizacao} às ${leituraReg.hora_visualizacao}` : undefined,
+        usuarioNome: item.usuarios?.nome || 'SISTEMA',
+        dataHoraRegistro: formatarDataHora(item.created_at),
         produtos: item.produtos,
         usuarios: item.usuarios
       });
@@ -167,6 +183,9 @@ export const vencimentosService = {
       const chaveLeitura = usuarioId ? `${item.id}_${usuarioId}` : item.id;
       const leituraReg = mapaLeituras[chaveLeitura] || (usuarioId ? mapaLeituras[item.id] : null);
 
+      const inv = item.inventarios || {};
+      const dataHoraRef = inv.created_at || (inv.data_registro ? `${inv.data_registro}T${inv.hora_registro || '00:00:00'}` : undefined);
+
       listaUnificada.push({
         id: item.id,
         codigo_customizado: `INV-${String(item.id).slice(0, 4).toUpperCase()}`,
@@ -179,6 +198,8 @@ export const vencimentosService = {
         statusLeitura: leituraReg ? 'Visto' : 'Pendente',
         visualizadoPor: leituraReg?.usuarios?.nome,
         visualizadoEm: leituraReg ? `${leituraReg.data_visualizacao} às ${leituraReg.hora_visualizacao}` : undefined,
+        usuarioNome: inv.usuarios?.nome || 'SISTEMA',
+        dataHoraRegistro: formatarDataHora(dataHoraRef),
         produtos: item.produtos
       });
     });
@@ -193,6 +214,9 @@ export const vencimentosService = {
       const chaveLeitura = usuarioId ? `${item.id}_${usuarioId}` : item.id;
       const leituraReg = mapaLeituras[chaveLeitura] || (usuarioId ? mapaLeituras[item.id] : null);
 
+      const conf = item.conferencias_mestre || {};
+      const dataHoraRef = item.created_at || conf.created_at || (conf.data_conferencia ? `${conf.data_conferencia}T${conf.hora_conferencia || '00:00:00'}` : undefined);
+
       listaUnificada.push({
         id: item.id,
         codigo_customizado: `CEG-${String(item.id).slice(0, 4).toUpperCase()}`,
@@ -205,6 +229,8 @@ export const vencimentosService = {
         statusLeitura: leituraReg ? 'Visto' : 'Pendente',
         visualizadoPor: leituraReg?.usuarios?.nome,
         visualizadoEm: leituraReg ? `${leituraReg.data_visualizacao} às ${leituraReg.hora_visualizacao}` : undefined,
+        usuarioNome: conf.usuarios?.nome || 'SISTEMA',
+        dataHoraRegistro: formatarDataHora(dataHoraRef),
         produtos: item.produtos
       });
     });
