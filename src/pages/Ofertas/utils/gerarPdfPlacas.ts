@@ -24,7 +24,7 @@ export function gerarPdfPlacas(
 
     const yInicio = indiceNaPagina * alturaPlaca;
 
-    // 1. Renderiza o Fundo Gráfico do Layout
+    // 1. Fundo Gráfico do Layout
     if (layoutImagemUrl) {
       try {
         doc.addImage(layoutImagemUrl, 'PNG', 0, yInicio, larguraA4, alturaPlaca);
@@ -32,7 +32,6 @@ export function gerarPdfPlacas(
         console.warn('Erro ao carregar imagem de layout:', e);
       }
     } else {
-      // Borda padrão de segurança
       doc.setDrawColor(9, 121, 122);
       doc.setLineWidth(1);
       doc.rect(5, yInicio + 5, larguraA4 - 10, alturaPlaca - 10);
@@ -42,37 +41,63 @@ export function gerarPdfPlacas(
     const descricaoProduto = (prod.descricao || 'PRODUTO').toUpperCase();
     const precoOferta = Number(item.preco_oferta || 0);
 
-    // Formata o Preço (Ex: R$ 17,99)
-    const precoFmt = precoOferta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    // Formata o número (ex: 2,19 ou 17,99)
+    const valorNumericoFmt = precoOferta.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
 
-    // ==========================================
-    // 2. DESCRIÇÃO DO PRODUTO: BOLD (PESO 700)
-    // ==========================================
+    // ========================================================
+    // 2. DESCRIÇÃO DO PRODUTO: BOLD (Tamanho proporcional)
+    // ========================================================
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.setTextColor(26, 26, 26); // Cinza escuro quase preto
+    doc.setFontSize(23);
+    doc.setTextColor(24, 39, 75); // Azul escuro / grafite (#18274b)
 
     const posDescricaoY = yInicio + alturaPlaca * 0.44;
     doc.text(descricaoProduto, larguraA4 / 2, posDescricaoY, {
       align: 'center',
-      maxWidth: 170
+      maxWidth: 175
     });
 
     // ========================================================
-    // 3. PREÇO EM VERMELHO: EXTRA BOLD / BLACK PESADO (PESO 900)
+    // 3. CIFRÃO (R$) + VALOR NUMÉRICO GIGANTE
     // ========================================================
+    const corVermelho = [225, 29, 29];   // Vermelho vibrante (#e11d1d)
+    const corContorno = [130, 10, 10];   // Bordô escuro para o contorno 3D (#820a0a)
+
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(44);          // Tamanho encorpado e de grande impacto
-    doc.setTextColor(201, 42, 42); // Tom vermelho destaque (#c92a2a)
 
-    // Traçado extra para engrossar ainda mais os números (efeito Extra Bold/Black 900)
-    doc.setDrawColor(201, 42, 42);
-    doc.setLineWidth(0.4);
+    // Configurações do bloco de preço
+    const posBasePrecoY = yInicio + alturaPlaca * 0.77;
 
-    const posPrecoY = yInicio + alturaPlaca * 0.72;
-    doc.text(precoFmt, larguraA4 / 2, posPrecoY, {
-      align: 'center',
-      renderingMode: 'fillThenStroke' // Preenche e reforça as bordas para deixar extra grossa
+    // Largura total para centralizar o conjunto "R$ + 2,19"
+    doc.setFontSize(42);
+    const larguraRS = doc.getTextWidth('R$');
+    
+    doc.setFontSize(82); // Tamanho gigante para os números
+    const larguraNumero = doc.getTextWidth(valorNumericoFmt);
+
+    const espacamento = 6;
+    const larguraConjunto = larguraRS + espacamento + larguraNumero;
+    const xInicioConjunto = (larguraA4 - larguraConjunto) / 2;
+
+    // Desenha o "R$"
+    doc.setFontSize(42);
+    doc.setTextColor(corVermelho[0], corVermelho[1], corVermelho[2]);
+    doc.setDrawColor(corContorno[0], corContorno[1], corContorno[2]);
+    doc.setLineWidth(0.6);
+    doc.text('R$', xInicioConjunto, posBasePrecoY - 4, {
+      renderingMode: 'fillThenStroke'
+    });
+
+    // Desenha o Número Gigante (ex: 2,19)
+    doc.setFontSize(82);
+    doc.setTextColor(corVermelho[0], corVermelho[1], corVermelho[2]);
+    doc.setDrawColor(corContorno[0], corContorno[1], corContorno[2]);
+    doc.setLineWidth(1.0); // Contorno reforçado no estilo cartaz de supermercado
+    doc.text(valorNumericoFmt, xInicioConjunto + larguraRS + espacamento, posBasePrecoY, {
+      renderingMode: 'fillThenStroke'
     });
 
     // Linha pontilhada separando placas na mesma folha A4
