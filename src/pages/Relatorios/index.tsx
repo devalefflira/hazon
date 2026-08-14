@@ -1,396 +1,233 @@
-// Arquivo: src/pages/Relatorios/index.tsx
-import { useState } from 'react';
-import { relatoriosService } from './services/relatoriosService';
+// src/pages/Relatorios/index.tsx
+import React, { useState } from "react";
+import { relatoriosService } from "./services/relatoriosService";
+import { gerarRelatorioVencimentos } from "./utils/generators/gerarRelatorioVencimentos";
+import { gerarRelatorioInventario } from "./utils/generators/gerarRelatorioInventario";
+import { gerarRelatorioNotasFalta } from "./utils/generators/gerarRelatorioNotasFalta";
+import { gerarRelatorioCotacoes } from "./utils/generators/gerarRelatorioCotacoes";
+import { gerarRelatorioOrcamentos } from "./utils/generators/gerarRelatorioOrcamentos";
+import { gerarRelatorioAvarias } from "./utils/generators/gerarRelatorioAvarias";
+import { gerarRelatorioTrocas } from "./utils/generators/gerarRelatorioTrocas";
+import { gerarRelatorioPedidos } from "./utils/generators/gerarRelatorioPedidos";
+import { gerarRelatorioTarefas } from "./utils/generators/gerarRelatorioTarefas";
+import { gerarRelatorioConfCega } from "./utils/generators/gerarRelatorioConfCega";
+import { gerarRelatorioTemperaturas } from "./utils/generators/gerarRelatorioTemperaturas";
+import { gerarRelatorioOfertas } from "./utils/generators/gerarRelatorioOfertas";
 
 interface RelatoriosProps {
-  onVoltarParaHome: () => void;
+  onVoltarParaHome?: () => void;
 }
 
-// 🆕 Tipo estendido para aceitar o submódulo térmico
-type SubmoduloTipo = 'validade' | 'inventariados' | 'faltas' | 'cotacoes' | 'avarias' | 'pedidos' | 'manifestos' | 'frios';
+interface SubmoduloOption {
+  id: string;
+  nome: string;
+  icone: string;
+}
 
-export default function Relatorios({ onVoltarParaHome }: RelatoriosProps) {
-  const [submoduloAtivo, setSubmoduloAtivo] = useState<SubmoduloTipo>('validade');
-  const [dataInicio, setDataInicio] = useState(new Date().toISOString().split('T')[0]);
-  const [dataFim, setDataFim] = useState(new Date().toISOString().split('T')[0]);
-  
-  const [loading, setLoading] = useState(false);
-  const [dadosRelatorio, setDadosRelatorio] = useState<any[]>([]);
-  const [relatorioGerado, setRelatorioGerado] = useState(false);
+const SUBMODULOS: SubmoduloOption[] = [
+  { id: "vencimentos", nome: "CONTROLE DE VALIDADES", icone: "🛡️" },
+  { id: "inventario", nome: "INVENTÁRIO", icone: "📦" },
+  { id: "notas_falta", nome: "NOTAS DE FALTA", icone: "⚠️" },
+  { id: "cotacoes", nome: "COTAÇÕES", icone: "💬" },
+  { id: "orcamentos", nome: "ORÇAMENTOS", icone: "📑" },
+  { id: "avarias", nome: "AVARIAS", icone: "❌" },
+  { id: "trocas", nome: "TROCAS", icone: "🔄" },
+  { id: "pedidos", nome: "PEDIDOS", icone: "🚚" },
+  { id: "tarefas", nome: "TAREFAS", icone: "✅" },
+  { id: "conf_cega", nome: "CONF. CEGA", icone: "🔍" },
+  { id: "temperatura", nome: "TEMPERATURAS", icone: "🌡️" },
+  { id: "ofertas", nome: "OFERTAS", icone: "🏷️" },
+];
 
-  // 🆕 Lista atualizada incluindo a Auditoria de Frios
-  const listaSubmodulos = [
-    { id: 'validade', label: '🛡️ Controle de Validades' },
-    { id: 'inventariados', label: '📊 Itens Inventariados' },
-    { id: 'faltas', label: '🔍 Notas de Falta' },
-    { id: 'cotacoes', label: '💼 Histórico de Cotações' },
-    { id: 'avarias', label: '⚠️ Registro de Avarias' },
-    { id: 'pedidos', label: '📦 Pedidos Formalizados' },
-    { id: 'manifestos', label: '📄 Manifestos (Conf. Cega)' },
-    { id: 'frios', label: '❄️ Auditoria dos Frios' }, // Novo relatório integrado
-  ];
+const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
+  const hoje = new Date().toISOString().split("T")[0];
+  const [submodulo, setSubmodulo] = useState<string>("vencimentos");
+  const [dataInicio, setDataInicio] = useState<string>(hoje);
+  const [dataFim, setDataFim] = useState<string>(hoje);
+  const [carregando, setCarregando] = useState<boolean>(false);
 
-  const handleProcessarRelatorio = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dataInicio || !dataFim) {
-      alert('Determine o intervalo de datas.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setRelatorioGerado(false);
-      let dados: any[] = [];
-
-      if (submoduloAtivo === 'validade') dados = await relatoriosService.obterControleValidades(dataInicio, dataFim);
-      else if (submoduloAtivo === 'inventariados') dados = await relatoriosService.obterItensInventariados(dataInicio, dataFim);
-      else if (submoduloAtivo === 'faltas') dados = await relatoriosService.obterNotasFalta(dataInicio, dataFim);
-      else if (submoduloAtivo === 'cotacoes') dados = await relatoriosService.obterCotacoes(dataInicio, dataFim);
-      else if (submoduloAtivo === 'avarias') dados = await relatoriosService.obterAvarias(dataInicio, dataFim);
-      else if (submoduloAtivo === 'pedidos') dados = await relatoriosService.obterPedidosFormalizados(dataInicio, dataFim);
-      else if (submoduloAtivo === 'manifestos') dados = await relatoriosService.obterManifestosConcluidores(dataInicio, dataFim);
-      else if (submoduloAtivo === 'frios') {
-        // Dispara o mapeamento avançado de temperaturas que injetamos no serviço global
-        dados = await relatoriosService.obterAuditoriaFrios({
-          status: 'TODOS',
-          equipamento_id: 'TODOS',
-          periodo: 'DATA_ESPECIFICA',
-          data_customizada: dataInicio // Baseia-se na data inicial do filtro
-        });
-      }
-
-      setDadosRelatorio(dados);
-      setRelatorioGerado(true);
-    } catch (err) {
-      console.error(err);
-      alert('Falha ao processar os dados analíticos.');
-    } finally {
-      setLoading(false);
+  const handleVoltar = () => {
+    if (onVoltarParaHome) {
+      onVoltarParaHome();
+    } else {
+      window.history.back();
     }
   };
 
-  const handleDispararImpressao = () => {
-    window.print();
+  const handleGerarRelatorio = async () => {
+    try {
+      setCarregando(true);
+      const dtInicioFmt = new Date(dataInicio).toLocaleDateString("pt-BR");
+      const dtFimFmt = new Date(dataFim).toLocaleDateString("pt-BR");
+
+      switch (submodulo) {
+        case "vencimentos": {
+          const dados = await relatoriosService.buscarVencimentos(dataInicio, dataFim);
+          gerarRelatorioVencimentos(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "inventario": {
+          const dados = await relatoriosService.buscarInventarios(dataInicio, dataFim);
+          gerarRelatorioInventario(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "notas_falta": {
+          const dados = await relatoriosService.buscarNotasFalta(dataInicio, dataFim);
+          gerarRelatorioNotasFalta(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "cotacoes": {
+          const dados = await relatoriosService.buscarCotacoes(dataInicio, dataFim);
+          gerarRelatorioCotacoes(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "orcamentos": {
+          const dados = await relatoriosService.buscarOrcamentos(dataInicio, dataFim);
+          gerarRelatorioOrcamentos(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "avarias": {
+          const dados = await relatoriosService.buscarAvarias(dataInicio, dataFim);
+          gerarRelatorioAvarias(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "trocas": {
+          const dados = await relatoriosService.buscarTrocas(dataInicio, dataFim);
+          gerarRelatorioTrocas(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "pedidos": {
+          const dados = await relatoriosService.buscarPedidos(dataInicio, dataFim);
+          gerarRelatorioPedidos(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "tarefas": {
+          const dados = await relatoriosService.buscarTarefas(dataInicio, dataFim);
+          gerarRelatorioTarefas(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "conf_cega": {
+          const dados = await relatoriosService.buscarConferencias(dataInicio, dataFim);
+          gerarRelatorioConfCega(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "temperatura": {
+          const dados = await relatoriosService.buscarTemperaturas(dataInicio, dataFim);
+          gerarRelatorioTemperaturas(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+        case "ofertas": {
+          const dados = await relatoriosService.buscarOfertas(dataInicio, dataFim);
+          gerarRelatorioOfertas(dados, dtInicioFmt, dtFimFmt);
+          break;
+        }
+      }
+    } catch (err: any) {
+      alert("Erro ao buscar dados do relatório: " + (err.message || "Erro inesperado"));
+    } finally {
+      setCarregando(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center">
-      
-      {/* PAINEL DE FILTROS E SELEÇÃO */}
-      <div className="w-full max-w-4xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 print:hidden mb-5">
-        
-        {/* HEADER */}
-        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
-            <div>
-              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">Relatórios Gerenciais</h1>
-              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Suporte à Auditoria e Tomada de Decisão</p>
-            </div>
+    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-start">
+      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-sm border border-slate-200 p-8">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={handleVoltar}
+            className="p-2 hover:bg-slate-100 rounded-full text-teal-800 transition"
+            title="Voltar"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+          </button>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-teal-900 uppercase">
+              Relatórios Gerenciais
+            </h1>
+            <p className="text-sm font-medium text-slate-500">
+              Suporte à Auditoria e Tomada de Decisão
+            </p>
           </div>
         </div>
 
-        {/* FORMULÁRIO OPERACIONAL */}
-        <form onSubmit={handleProcessarRelatorio} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end bg-gray-50 p-4 rounded-3xl border border-gray-200">
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Selecione o Submódulo Analítico</label>
-            <select
-              value={submoduloAtivo}
-              onChange={(e) => { setSubmoduloAtivo(e.target.value as SubmoduloTipo); setRelatorioGerado(false); }}
-              className="w-full h-11 text-xs bg-white border border-gray-200 px-3 rounded-xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700 select-none"
-            >
-              {listaSubmodulos.map(s => <option key={s.id} value={s.id}>{s.label.toUpperCase()}</option>)}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Data Inicial</label>
-            <input
-              type="date"
-              required
-              value={dataInicio}
-              onChange={(e) => { setDataInicio(e.target.value); setRelatorioGerado(false); }}
-              className="w-full h-11 text-xs bg-white border border-gray-200 px-4 rounded-xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Data Final</label>
-            <input
-              type="date"
-              required
-              value={dataFim}
-              onChange={(e) => { setDataFim(e.target.value); setRelatorioGerado(false); }}
-              className="w-full h-11 text-xs bg-white border border-gray-200 px-4 rounded-xl focus:outline-none focus:border-[#09797a] font-bold text-gray-700"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full md:col-span-4 bg-[#09797a] text-white py-3.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
-          >
-            {loading ? 'Processando Base Relacional...' : 'Gerar Relatório A4'}
-          </button>
-        </form>
-      </div>
-
-      {/* 📄 FOLHA DE IMPRESSÃO MODELO A4 (DINÂMICA) */}
-      {relatorioGerado && (
-        <div className="w-full max-w-[210mm] min-h-[297mm] bg-white shadow-2xl p-[15mm] flex flex-col border border-gray-300 rounded-sm relative text-black select-text overflow-x-auto">
-          
-          {/* BOTÃO FLUTUANTE DE EXPORTAÇÃO */}
-          <button
-            onClick={handleDispararImpressao}
-            className="absolute top-4 right-4 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md active:scale-95 transition-all print:hidden"
-          >
-            🖨️ Exportar PDF / Imprimir
-          </button>
-
-          {/* CABEÇALHO OFICIAL DO DOCUMENTO A4 */}
-          <div className="flex justify-between items-start border-b-2 border-[#09797a] pb-4 mb-6 w-full">
+        {/* Card Formulário */}
+        <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {/* Seletor do Módulo */}
             <div>
-              <h2 className="text-[#09797a] text-xl font-black tracking-tight uppercase">HAZON ERP</h2>
-              <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Módulo de Governança e Inteligência Analítica</p>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Selecione o Submódulo Analítico
+              </label>
+              <select
+                value={submodulo}
+                onChange={(e) => setSubmodulo(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer"
+              >
+                {SUBMODULOS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.icone} {opt.nome}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="text-right text-[10px] font-mono text-gray-500">
-              <div>Emitido em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
-              <div>Período: {new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR')} a {new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
-              <div className="font-bold text-[#09797a] mt-0.5">RELATÓRIO: {listaSubmodulos.find(s => s.id === submoduloAtivo)?.label.substring(3).toUpperCase()}</div>
+
+            {/* Data Inicial */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Data Inicial
+              </label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+              />
+            </div>
+
+            {/* Data Final */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Data Final
+              </label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+              />
             </div>
           </div>
 
-          {/* CORPO DO DOCUMENTO */}
-          <div className="flex-1 w-full">
-            {dadosRelatorio.length === 0 ? (
-              <p className="text-center text-gray-400 text-xs font-bold py-20 uppercase tracking-widest border border-dashed border-gray-200 rounded-3xl">Nenhum registro encontrado no cruzamento deste período.</p>
+          {/* Botão de Ação */}
+          <button
+            onClick={handleGerarRelatorio}
+            disabled={carregando}
+            className="w-full bg-teal-800 hover:bg-teal-900 active:scale-[0.99] text-white font-bold py-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 tracking-wider text-sm uppercase disabled:opacity-50"
+          >
+            {carregando ? (
+              <>
+                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                Processando Relatório...
+              </>
             ) : (
-              <table className="w-full text-left border-collapse text-[10px]">
-                <thead>
-                  <tr className="border-b-2 border-gray-300 text-gray-700 font-black uppercase bg-gray-50">
-                    {submoduloAtivo === 'validade' && (
-                      <>
-                        <th className="py-2 px-1">EAN / Produto</th>
-                        <th className="py-2 px-1">Lote</th>
-                        <th className="py-2 px-1">Validade</th>
-                        <th className="py-2 px-1">Captura</th>
-                        <th className="py-2 px-1 text-right">Qtd</th>
-                        <th className="py-2 px-1 text-right">Status (Dias)</th>
-                      </>
-                    )}
-                    {submoduloAtivo === 'inventariados' && (
-                      <>
-                        <th className="py-2 px-1">Inventário</th>
-                        <th className="py-2 px-1">Produto (EAN)</th>
-                        <th className="py-2 px-1">Local</th>
-                        <th className="py-2 px-1 text-right">Qtd</th>
-                        <th className="py-2 px-1">Data / Hora</th>
-                        <th className="py-2 px-1">Conferente</th>
-                      </>
-                    )}
-                    {submoduloAtivo === 'faltas' && (
-                      <>
-                        <th className="py-2 px-1">Cód</th>
-                        <th className="py-2 px-1">Produto</th>
-                        <th className="py-2 px-1">Setor / Subsetor</th>
-                        <th className="py-2 px-1">Motivo</th>
-                        <th className="py-2 px-1">Status Cotação</th>
-                        <th className="py-2 px-1">Data</th>
-                      </>
-                    )}
-                    {submoduloAtivo === 'cotacoes' && (
-                      <>
-                        <th className="py-2 px-1">ID Cotação</th>
-                        <th className="py-2 px-1">Comprador</th>
-                        <th className="py-2 px-1">Status</th>
-                        <th className="py-2 px-1">Forn. Qtd</th>
-                        <th className="py-2 px-1">Cenário Escolhido / Justificativa</th>
-                      </>
-                    )}
-                    {submoduloAtivo === 'avarias' && (
-                      <>
-                        <th className="py-2 px-1">Código</th>
-                        <th className="py-2 px-1">Produto / EAN</th>
-                        <th className="py-2 px-1 text-right">Qtd</th>
-                        <th className="py-2 px-1">Motivo</th>
-                        <th className="py-2 px-1">Destinação</th>
-                        <th className="py-2 px-1">Obs</th>
-                      </>
-                    )}
-                    {submoduloAtivo === 'pedidos' && (
-                      <>
-                        <th className="py-2 px-1">Pedido</th>
-                        <th className="py-2 px-1">Fornecedor / Vendedor</th>
-                        <th className="py-2 px-1">Status</th>
-                        <th className="py-2 px-1">Rastreio Origem</th>
-                        <th className="py-2 px-1 text-right">Valor Total</th>
-                      </>
-                    )}
-                    {submoduloAtivo === 'manifestos' && (
-                      <>
-                        <th className="py-2 px-1">Manifesto</th>
-                        <th className="py-2 px-1">Nota Fiscal</th>
-                        <th className="py-2 px-1">Fornecedor</th>
-                        <th className="py-2 px-1 text-right">Prazo (Dias)</th>
-                        <th className="py-2 px-1 text-right">Itens Diferentes</th>
-                        <th className="py-2 px-1">Fechamento</th>
-                      </>
-                    )}
-                    {/* 🆕 CABEÇALHO DA TABELA DE AUDITORIA DE FRIOS */}
-                    {submoduloAtivo === 'frios' && (
-                      <>
-                        <th className="py-2 px-1">Código</th>
-                        <th className="py-2 px-1">Data/Hora</th>
-                        <th className="py-2 px-1">Aparelho</th>
-                        <th className="py-2 px-1">Categoria</th>
-                        <th className="py-2 px-1">Auditor</th>
-                        <th className="py-2 px-1 text-right">Temperatura</th>
-                        <th className="py-2 px-1 text-right">Resultado</th>
-                      </>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 font-medium text-gray-600 uppercase">
-                  {dadosRelatorio.map((row: any, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50/50 print:hover:bg-transparent">
-                      {submoduloAtivo === 'validade' && (
-                        <>
-                          <td className="py-2 px-1 font-bold text-gray-800">{row.produto_descricao}<span className="block text-[8px] font-mono text-gray-400 font-normal">EAN: {row.codigo_barras}</span></td>
-                          <td className="py-2 px-1 font-mono">{row.lote}</td>
-                          <td className="py-2 px-1 font-mono">{new Date(row.data_validade + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                          <td className="py-2 px-1 text-[9px]">{row.local_captura_nome}</td>
-                          <td className="py-2 px-1 text-right font-bold text-[#09797a] font-mono">{row.quantidade_contabilizada}</td>
-                          <td className={`py-2 px-1 text-right font-mono font-bold ${row.dias_para_vencer <= 0 ? 'text-red-600' : row.dias_para_vencer <= 15 ? 'text-orange-500' : 'text-gray-500'}`}>
-                            {row.dias_para_vencer <= 0 ? `VENCIDO (${row.dias_para_vencer})` : `${row.dias_para_vencer} DIAS`}
-                          </td>
-                        </>
-                      )}
-                      {submoduloAtivo === 'inventariados' && (
-                        <>
-                          <td className="py-2 px-1 font-mono font-bold text-gray-700">{row.codigo_inventario}</td>
-                          <td className="py-2 px-1">{row.produto_descricao}<span className="block text-[8px] font-mono text-gray-400">EAN: {row.codigo_barras}</span></td>
-                          <td className="py-2 px-1 text-[9px]">{row.local_coleta_nome}</td>
-                          <td className="py-2 px-1 text-right font-bold font-mono text-[#09797a]">{row.quantidade_coleta}</td>
-                          <td className="py-2 px-1 font-mono text-[9px]">{new Date(row.data_coleta + 'T00:00:00').toLocaleDateString('pt-BR')} - {row.hora_coleta.substring(0,5)}</td>
-                          <td className="py-2 px-1 text-gray-500 text-[9px]">{row.conferente_nome}</td>
-                        </>
-                      )}
-                      {submoduloAtivo === 'faltas' && (
-                        <>
-                          <td className="py-2 px-1 font-mono font-bold">{row.codigo_customizado}</td>
-                          <td className="py-2 px-1 font-bold text-gray-700">{row.produto_descricao}<span className="block text-[8px] font-mono text-gray-400">EAN: {row.codigo_barras}</span></td>
-                          <td className="py-2 px-1 text-[9px] text-gray-400">{row.setor_nome} / {row.subsetor_nome}</td>
-                          <td className="py-2 px-1 text-gray-500">{row.motivo_descricao}</td>
-                          <td className="py-2 px-1 font-bold text-orange-600 text-[9px]">{row.status_cotacao}</td>
-                          <td className="py-2 px-1 font-mono">{new Date(row.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                        </>
-                      )}
-                      {submoduloAtivo === 'cotacoes' && (
-                        <>
-                          <td className="py-2 px-1 font-mono font-bold text-[#09797a]">#{row.codigo_cotacao_id}</td>
-                          <td className="py-2 px-1 font-bold">{row.comprador_nome}</td>
-                          <td className="py-2 px-1 font-bold text-[9px]">{row.status}</td>
-                          <td className="py-2 px-1 font-mono text-center">{row.quantidade_fornecedores} Frm</td>
-                          <td className="py-2 px-1 max-w-xs leading-normal">
-                            <span className="block font-black text-gray-700 text-[9px]">{row.cenario_escolhido}</span>
-                            <span className="text-[9px] text-gray-400 block normal-case italic mt-0.5">Obs: {row.justificativa_escolha}</span>
-                          </td>
-                        </>
-                      )}
-                      {submoduloAtivo === 'avarias' && (
-                        <>
-                          <td className="py-2 px-1 font-mono font-bold">{row.codigo_customizado}</td>
-                          <td className="py-2 px-1">{row.produto_descricao}<span className="block text-[8px] font-mono text-gray-400">EAN: {row.codigo_barras}</span></td>
-                          <td className="py-2 px-1 text-right font-mono font-bold text-red-600">{row.quantidade} {row.produto_unidade_medida}</td>
-                          <td className="py-2 px-1 text-gray-500">{row.motivo_descricao}</td>
-                          <td className="py-2 px-1 font-bold text-purple-700">{row.destinacao}</td>
-                          <td className="py-2 px-1 max-w-xs text-[9px] text-gray-400 normal-case italic">{row.observacao || '-'}</td>
-                        </>
-                      )}
-                      {submoduloAtivo === 'pedidos' && (
-                        <>
-                          <td className="py-2 px-1 font-mono font-bold text-gray-700">{row.codigo_customizado}</td>
-                          <td className="py-2 px-1">
-                            <span className="font-bold text-gray-800 block">{row.fornecedor_nome}</span>
-                            <span className="text-[8px] text-gray-400 block">Vend: {row.vendedor_nome}</span>
-                          </td>
-                          <td className="py-2 px-1 text-[9px] font-bold">{row.status}</td>
-                          <td className="py-2 px-1"><span className={`inline-block text-[8px] font-black px-1.5 py-0.2 rounded border ${row.origem_pedido === 'COTAÇÃO' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-purple-50 text-purple-700 border-purple-100'}`}>{row.origem_pedido}</span></td>
-                          <td className="py-2 px-1 text-right font-mono font-bold text-[#09797a]">R$ {row.valor_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        </>
-                      )}
-                      {submoduloAtivo === 'manifestos' && (
-                        <>
-                          <td className="py-2 px-1 font-mono font-bold text-gray-700">{row.codigo_customizado}</td>
-                          <td className="py-2 px-1 font-mono font-bold text-gray-800">{row.numero_nota_fiscal}</td>
-                          <td className="py-2 px-1 font-bold text-gray-600">{row.fornecedor_nome}</td>
-                          <td className="py-2 px-1 text-right font-mono font-bold text-[#09797a]">{row.prazo_entrega_dias} Dias</td>
-                          <td className="py-2 px-1 text-center font-mono font-bold">{row.quantidade_itens_diferentes} Sku</td>
-                          <td className="py-2 px-1 font-mono text-[9px] text-gray-400">{new Date(row.data_fechamento).toLocaleDateString('pt-BR')}</td>
-                        </>
-                      )}
-                      {/* 🆕 RENDERIZAÇÃO DAS LINHAS DE AUDITORIA DOS FRIOS */}
-                      {submoduloAtivo === 'frios' && (
-                        <>
-                          <td className="py-2 px-1 font-mono font-bold text-gray-700">{row.codigo_customizado}</td>
-                          <td className="py-2 px-1 font-mono">{new Date(row.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')} - {row.hora_registro?.substring(0, 5)}</td>
-                          <td className="py-2 px-1 font-bold text-gray-800">{row.equipamento_nome}</td>
-                          <td className="py-2 px-1 text-gray-400 text-[9px]">{row.categoria_frio}</td>
-                          <td className="py-2 px-1 text-gray-500">{row.usuario_nome}</td>
-                          <td className="py-2 px-1 text-right font-mono font-bold text-[#09797a] text-xs">{row.temperatura_aferida} °C</td>
-                          <td className="py-2 px-1 text-right font-bold font-mono">
-                            <span className={`inline-block text-[8px] font-black px-1.5 py-0.5 rounded border ${
-                              row.status_resultado === 'Conforme' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                              row.status_resultado === 'Limite de Tolerância' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-red-50 text-red-700 border-red-100'
-                            }`}>{row.status_resultado}</span>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                Gerar Relatório A4
+              </>
             )}
-          </div>
-
-          {/* RODAPÉ DO DOCUMENTO A4 */}
-          <div className="border-t border-gray-200 pt-3 mt-6 text-center text-[8px] text-gray-400 font-bold font-mono uppercase tracking-widest w-full flex justify-between">
-            <span>Hazon ERP - Sistema de Auditoria Interna</span>
-            <span>Página 1 de 1</span>
-          </div>
-
+          </button>
         </div>
-      )}
-
-      {/* ESTILO INJETADO MASTER DE IMPRESSÃO CSS PRINT */}
-      <style>{`
-        @media print {
-          body {
-            background: white !important;
-            color: black !important;
-          }
-          .print\\:hidden, #root > div > div:not(.max-w-\\[210mm\\]) {
-            display: none !important;
-          }
-          div.min-h-screen {
-            background: white !important;
-            padding: 0 !important;
-          }
-          div.max-w-\\[210mm\\] {
-            box-shadow: none !important;
-            border: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            width: 100% !important;
-            max-w: none !important;
-          }
-          @page {
-            size: portrait;
-            margin: 12mm;
-          }
-        }
-      `}</style>
-
+      </div>
     </div>
   );
-}
+};
+
+export default Relatorios;

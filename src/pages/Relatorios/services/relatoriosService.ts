@@ -1,286 +1,127 @@
-import { supabase } from '../../../lib/supabaseClient';
-import type * as Types from '../types/relatorios.types';
-import type { FiltrosAuditoriaFrios } from '../types/relatorios.types';
+// src/pages/Relatorios/services/relatoriosService.ts
+import { supabase } from "../../../lib/supabaseClient";
 
 export const relatoriosService = {
-  // 1. Controle de Validades
-  async obterControleValidades(dataInicio: string, dataFim: string): Promise<Types.RelatorioValidadeDTO[]> {
+  async buscarInventarios(inicio: string, fim: string) {
     const { data, error } = await supabase
-      .from('inventario_itens')
-      .select(`
-        lote, data_validade, quantidade_contabilizada,
-        produtos ( codigo_barras, descricao ),
-        locais_captura ( nome )
-      `)
-      .gte('data_validade', dataInicio)
-      .lte('data_validade', dataFim)
-      .order('data_validade', { ascending: true }) as any;
-
+      .from("inventario_itens")
+      .select("*, inventarios!inner(*), produtos(*), locais_captura(*), status_validade(*)")
+      .gte("inventarios.data_registro", inicio)
+      .lte("inventarios.data_registro", fim);
     if (error) throw error;
-
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    return (data || []).map((i: any) => {
-      const validade = new Date(i.data_validade + 'T00:00:00');
-      const diffTime = validade.getTime() - hoje.getTime();
-      const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      return {
-        codigo_barras: i.produtos?.codigo_barras || 'N/A',
-        produto_descricao: i.produtos?.descricao || 'Produto não cadastrado',
-        lote: i.lote || 'NÃO INFORMADO',
-        data_validade: i.data_validade,
-        quantidade_contabilizada: Number(i.quantidade_contabilizada || 0),
-        local_captura_nome: i.locais_captura?.nome || 'Depósito Central',
-        dias_para_vencer: diffDias
-      };
-    });
+    return data || [];
   },
 
-  // 2. Itens Inventariados
-  async obterItensInventariados(dataInicio: string, dataFim: string): Promise<Types.RelatorioInventariadoDTO[]> {
+  async buscarNotasFalta(inicio: string, fim: string) {
     const { data, error } = await supabase
-      .from('inventario_itens')
-      .select(`
-        quantidade_contabilizada,
-        inventarios ( codigo_customizado, data_registro, hora_registro, usuarios ( nome ) ),
-        produtos ( codigo_barras, descricao ),
-        locais_captura ( nome )
-      `)
-      .gte('inventarios.data_registro', dataInicio)
-      .lte('inventarios.data_registro', dataFim) as any;
-
+      .from("notas_falta")
+      .select("*, produtos(*), motivos_falta(*)")
+      .gte("data_registro", inicio)
+      .lte("data_registro", fim)
+      .order("data_registro", { ascending: false });
     if (error) throw error;
-
-    // Filtro defensivo na memória para sanar junções cruzadas nulas
-    const filtrados = (data || []).filter((i: any) => i.inventarios !== null);
-
-    return filtrados.map((i: any) => ({
-      codigo_inventario: i.inventarios?.codigo_customizado || 'N/A',
-      codigo_barras: i.produtos?.codigo_barras || 'N/A',
-      produto_descricao: i.produtos?.descricao || 'Produto não cadastrado',
-      local_coleta_nome: i.locais_captura?.nome || 'Geral',
-      quantidade_coleta: Number(i.quantidade_contabilizada || 0),
-      data_coleta: i.inventarios?.data_registro || '',
-      hora_coleta: i.inventarios?.hora_registro || '',
-      conferente_nome: i.inventarios?.usuarios?.nome || 'Operador'
-    }));
+    return data || [];
   },
 
-  // 3. Notas de Falta
-  async obterNotasFalta(dataInicio: string, dataFim: string): Promise<Types.RelatorioNotaFaltaDTO[]> {
+  async buscarCotacoes(inicio: string, fim: string) {
     const { data, error } = await supabase
-      .from('notas_falta')
-      .select(`
-        codigo_customizado, status_cotacao, data_registro,
-        produtos ( codigo_barras, descricao ),
-        categorias_setores ( nome ),
-        categorias_subsetores ( nome ),
-        motivos_falta ( descricao ),
-        usuarios ( nome )
-      `)
-      .gte('data_registro', dataInicio)
-      .lte('data_registro', dataFim)
-      .order('created_at', { ascending: false }) as any;
-
+      .from("cotacoes_mestre")
+      .select("*, comprador:usuarios(*)")
+      .gte("created_at", `${inicio}T00:00:00Z`)
+      .lte("created_at", `${fim}T23:59:59Z`);
     if (error) throw error;
-
-    return (data || []).map((n: any) => ({
-      codigo_customizado: n.codigo_customizado,
-      codigo_barras: n.produtos?.codigo_barras || 'N/A',
-      produto_descricao: n.produtos?.descricao || 'Desconhecido',
-      setor_nome: n.categorias_setores?.nome || 'Geral',
-      subsetor_nome: n.categorias_subsetores?.nome || 'Geral',
-      motivo_descricao: n.motivos_falta?.descricao || 'Não informado',
-      status_cotacao: n.status_cotacao,
-      data_registro: n.data_registro,
-      operador_nome: n.usuarios?.nome || 'Operador'
-    }));
+    return data || [];
   },
 
-  // 4. Cotações
-  async obterCotacoes(dataInicio: string, dataFim: string): Promise<Types.RelatorioCotacaoDTO[]> {
+  async buscarOrcamentos(inicio: string, fim: string) {
     const { data, error } = await supabase
-      .from('cotacoes_mestre')
-      .select(`
-        id, status, cenario_escolhido, justificativa_escolha, created_at,
-        usuarios ( nome ),
-        cotacoes_fornecedores_vinculados ( id )
-      `)
-      .gte('created_at', `${dataInicio}T00:00:00`)
-      .lte('created_at', `${dataFim}T23:59:59`)
-      .order('created_at', { ascending: false }) as any;
-
+      .from("orcamentos_mestre")
+      .select("*, cliente:clientes(*)")
+      .gte("data_registro", inicio)
+      .lte("data_registro", fim);
     if (error) throw error;
-
-    return (data || []).map((c: any) => ({
-      codigo_cotacao_id: c.id.substring(0, 8).toUpperCase(),
-      comprador_nome: c.usuarios?.nome || 'Comprador',
-      status: c.status,
-      cenario_escolhido: c.cenario_escolhido || 'NÃO DEFINIDO',
-      justificativa_escolha: c.justificativa_escolha || 'Sem observações anotadas.',
-      quantidade_fornecedores: Array.isArray(c.cotacoes_fornecedores_vinculados) ? c.cotacoes_fornecedores_vinculados.length : 0,
-      created_at: c.created_at
-    }));
+    return data || [];
   },
 
-  // 5. Avarias
-  async obterAvarias(dataInicio: string, dataFim: string): Promise<Types.RelatorioAvariaDTO[]> {
+  async buscarAvarias(inicio: string, fim: string) {
     const { data, error } = await supabase
-      .from('avarias')
-      .select(`
-        codigo_customizado, quantidade, destinacao, observacao, data_registro,
-        produtos ( codigo_barras, descricao, unidades_medida:unidade_medida_id ( sigla ) ),
-        motivos_avaria ( descricao ),
-        usuarios ( nome )
-      `)
-      .gte('data_registro', dataInicio)
-      .lte('data_registro', dataFim)
-      .order('data_registro', { ascending: false }) as any;
-
+      .from("avarias")
+      .select("*, produtos(*), motivos_avaria(*)")
+      .gte("data_registro", inicio)
+      .lte("data_registro", fim);
     if (error) throw error;
-
-    return (data || []).map((a: any) => {
-      const prod = a.produtos;
-      const sigla = prod?.unidades_medida ? (Array.isArray(prod.unidades_medida) ? prod.unidades_medida[0]?.sigla : prod.unidades_medida.sigla) : 'UN';
-
-      return {
-        codigo_customizado: a.codigo_customizado,
-        codigo_barras: prod?.codigo_barras || 'N/A',
-        produto_descricao: prod?.descricao || 'Produto removido',
-        quantidade: Number(a.quantidade || 0),
-        produto_unidade_medida: sigla || 'UN',
-        motivo_descricao: a.motivos_avaria?.descricao || 'Quebra operacional',
-        destinacao: a.destinacao,
-        observacao: a.observacao,
-        operador_nome: a.usuarios?.nome || 'Operador',
-        data_registro: a.data_registro
-      };
-    });
+    return data || [];
   },
 
-  // 6. Pedidos Formalizados
-  async obterPedidosFormalizados(dataInicio: string, dataFim: string): Promise<Types.RelatorioPedidoDTO[]> {
+  async buscarTrocas(inicio: string, fim: string) {
     const { data, error } = await supabase
-      .from('pedidos_mestre')
-      .select(`
-        codigo_customizado, status, formalizado_em, created_at, cotacao_mestre_id,
-        fornecedores:fornecedor_id ( nome_fantasia ),
-        vendedores:vendedor_id ( nome ),
-        usuarios ( nome ),
-        pedido_itens ( preco_unitario, quantidade_solicitada )
-      `)
-      .gte('created_at', `${dataInicio}T00:00:00`)
-      .lte('created_at', `${dataFim}T23:59:59`)
-      .order('created_at', { ascending: false }) as any;
-
+      .from("trocas")
+      .select("*, avarias(*, produtos(*)), fornecedores(*), recebido_por_usuario:usuarios(*)")
+      .gte("created_at", `${inicio}T00:00:00Z`)
+      .lte("created_at", `${fim}T23:59:59Z`);
     if (error) throw error;
-
-    return (data || []).map((p: any) => {
-      // Calcula o valor total calculando o somatório dos itens do pedido
-      const itens = p.pedido_itens || [];
-      const total = itens.reduce((acc: number, item: any) => acc + (Number(item.preco_unitario || 0) * Number(item.quantidade_solicitada || 0)), 0);
-
-      // Rastreia a origem do pedido: se não tiver cotacao_mestre_id, veio da Conf. Cega
-      const origem: 'COTAÇÃO' | 'CONF. CEGA' = p.cotacao_mestre_id ? 'COTAÇÃO' : 'CONF. CEGA';
-
-      return {
-        codigo_customizado: p.codigo_customizado,
-        fornecedor_nome: p.fornecedores?.nome_fantasia || 'FORNECEDOR DIRETO',
-        vendedor_nome: p.vendedores?.nome || 'Direto',
-        comprador_nome: p.usuarios?.nome || 'Módulo de Compras',
-        status: p.status,
-        valor_total: total,
-        origem_pedido: origem,
-        created_at: p.created_at
-      };
-    });
+    return data || [];
   },
 
-  // 🆕 NOVA FUNÇÃO DE ENGENHARIA TÉRMICA INTEGRADA
-  async obterAuditoriaFrios(filtros: FiltrosAuditoriaFrios): Promise<any[]> {
-    let query = supabase
-      .from('temperatura_afericoes')
-      .select(`
-        *,
-        usuarios ( nome ),
-        temperatura_equipamentos ( nome, tipo_item, categoria_frio )
-      `);
-
-    if (filtros.status !== 'TODOS') {
-      query = query.eq('status_resultado', filtros.status);
-    }
-
-    if (filtros.equipamento_id !== 'TODOS') {
-      query = query.eq('equipamento_id', filtros.equipamento_id);
-    }
-
-    const hojeStr = new Date().toISOString().split('T')[0];
-    if (filtros.periodo === 'HOJE') {
-      query = query.eq('data_registro', hojeStr);
-    } else if (filtros.periodo === 'ONTEM') {
-      const ontemObj = new Date();
-      ontemObj.setDate(ontemObj.getDate() - 1);
-      const ontemStr = ontemObj.toISOString().split('T')[0];
-      query = query.eq('data_registro', ontemStr);
-    } else if (filtros.periodo === 'DATA_ESPECIFICA' && filtros.data_customizada) {
-      query = query.eq('data_registro', filtros.data_customizada);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false }) as any;
+  async buscarPedidos(inicio: string, fim: string) {
+    const { data, error } = await supabase
+      .from("pedidos_mestre")
+      .select("*, fornecedores(*), vendedores(*), comprador:usuarios(*)")
+      .gte("created_at", `${inicio}T00:00:00Z`)
+      .lte("created_at", `${fim}T23:59:59Z`);
     if (error) throw error;
-
-    return (data || []).map((a: any) => ({
-      id: a.id,
-      codigo_customizado: a.codigo_customizado,
-      equipamento_nome: a.temperatura_equipamentos?.nome || 'Equipamento Removido',
-      equipamento_tipo: a.temperatura_equipamentos?.tipo_item || 'N/A',
-      categoria_frio: a.temperatura_equipamentos?.categoria_frio || 'N/A',
-      usuario_nome: a.usuarios?.nome || 'Operador',
-      temperatura_aferida: Number(a.temperatura_aferida),
-      status_resultado: a.status_resultado,
-      data_registro: a.data_registro,
-      hora_registro: a.hora_registro
-    }));
+    return data || [];
   },
 
-  // 7. Manifestos Concluídos (Conf. Cega)
-  async obterManifestosConcluidores(dataInicio: string, dataFim: string): Promise<Types.RelatorioManifestoDTO[]> {
+  async buscarTarefas(inicio: string, fim: string) {
     const { data, error } = await supabase
-      .from('conferencias_mestre')
-      .select(`
-        id, codigo_customizado, numero_nota_fiscal, data_emissao_nota, data_conferencia, updated_at,
-        usuarios ( nome ),
-        fornecedores:fornecedor_id ( nome_fantasia ),
-        conferencia_itens ( id )
-      `)
-      .eq('status', 'Concluída')
-      .gte('data_conferencia', dataInicio)
-      .lte('data_conferencia', dataFim)
-      .order('data_conferencia', { ascending: false }) as any;
-
+      .from("tarefas_mestre")
+      .select("*, responsavel:usuarios!tarefas_mestre_resp_fkey(*)")
+      .gte("created_at", `${inicio}T00:00:00Z`)
+      .lte("created_at", `${fim}T23:59:59Z`);
     if (error) throw error;
+    return data || [];
+  },
 
-    return (data || []).map((c: any) => {
-      // Diferença entre Data do Recebimento e Data de Emissão da Nota
-      let diffDias = 0;
-      if (c.data_emissao_nota && c.data_conferencia) {
-        const emissao = new Date(c.data_emissao_nota + 'T00:00:00');
-        const recebimento = new Date(c.data_conferencia + 'T00:00:00');
-        diffDias = Math.floor((recebimento.getTime() - emissao.getTime()) / (1000 * 60 * 60 * 24));
-      }
+  async buscarConferencias(inicio: string, fim: string) {
+    const { data, error } = await supabase
+      .from("conferencias_mestre")
+      .select("*, fornecedores(*), usuario:usuarios(*)")
+      .gte("data_conferencia", inicio)
+      .lte("data_conferencia", fim);
+    if (error) throw error;
+    return data || [];
+  },
 
-      return {
-        codigo_customizado: c.codigo_customizado,
-        numero_nota_fiscal: c.numero_nota_fiscal || 'N/A',
-        data_emissao_nota: c.data_emissao_nota || '',
-        fornecedor_nome: c.fornecedores?.nome_fantasia || 'FORNECEDOR MANUAL',
-        prazo_entrega_dias: diffDias < 0 ? 0 : diffDias,
-        quantidade_itens_diferentes: Array.isArray(c.conferencia_itens) ? c.conferencia_itens.length : 0,
-        conferente_nome: c.usuarios?.nome || 'Conferente',
-        data_fechamento: c.updated_at
-      };
-    });
-  }
+  async buscarTemperaturas(inicio: string, fim: string) {
+    const { data, error } = await supabase
+      .from("temperatura_afericoes")
+      .select("*, temperatura_equipamentos(*), usuario:usuarios(*)")
+      .gte("data_registro", inicio)
+      .lte("data_registro", fim);
+    if (error) throw error;
+    return data || [];
+  },
+
+  async buscarOfertas(inicio: string, fim: string) {
+    const { data, error } = await supabase
+      .from("ofertas_mestre")
+      .select("*, usuario:usuarios(*)")
+      .gte("data_registro", inicio)
+      .lte("data_registro", fim);
+    if (error) throw error;
+    return data || [];
+  },
+
+  async buscarVencimentos(inicio: string, fim: string) {
+    const { data, error } = await supabase
+      .from("vencimentos_controle")
+      .select("*, produtos(*), usuario:usuarios(*)")
+      .gte("data_validade", inicio)
+      .lte("data_validade", fim)
+      .order("data_validade", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+  
 };
