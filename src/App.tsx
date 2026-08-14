@@ -23,6 +23,8 @@ import Temperatura from './pages/Temperatura';
 import Orcamentos from './pages/Orcamentos';
 import Clientes from './pages/Clientes';
 import Ofertas from './pages/Ofertas';
+import Vencimentos from './pages/Vencimentos';
+import Notificacoes from './pages/Notificacoes';
 
 interface UsuarioLogado {
   id: string;
@@ -53,7 +55,9 @@ type TelaAtiva =
   | 'temperatura'
   | 'orcamentos'
   | 'clientes'
-  | 'ofertas';
+  | 'ofertas'
+  | 'vencimentos'
+  | 'notificacoes';
 
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -75,7 +79,6 @@ export default function App() {
     }
   }, []);
 
-  // Busca permissões do usuário logado diretamente da tabela no Supabase
   const handleLoginSuccess = async (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);
 
@@ -120,11 +123,34 @@ export default function App() {
     return <Ofertas onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
   }
 
+  if (telaAtiva === 'vencimentos') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Vencimentos
+        onVoltarParaHome={() => setTelaAtiva('home')}
+        usuarioLogado={usuario}
+        onDirecionarParaAvaria={() => setTelaAtiva('avarias')}
+      />
+    );
+  }
+
+ if (telaAtiva === 'notificacoes') {
+  if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+  return (
+    <Notificacoes
+      onVoltarParaHome={() => setTelaAtiva('home')}
+      onNavegarParaVencimentos={() => setTelaAtiva('vencimentos')}
+      usuarioLogado={usuario} // 👈 Passando objeto do usuário
+    />
+  );
+}
+
   if (usuario && telaAtiva === 'home') {
     return (
       <Home
         nomeUsuario={usuario.nome}
         perfilUsuario={usuario.perfil}
+        usuarioLogadoId={usuario.id}
         permissoesDoUsuario={permissoesUsuario}
         onLogout={handleLogout}
         onNavegarParaCategorias={() => setTelaAtiva('categorias')}
@@ -145,6 +171,8 @@ export default function App() {
         onNavegarParaOrcamentos={() => setTelaAtiva('orcamentos')}
         onNavegarParaClientes={() => setTelaAtiva('clientes')}
         onNavegarParaOfertas={() => setTelaAtiva('ofertas')}
+        onNavegarParaVencimentos={() => setTelaAtiva('vencimentos')}
+        onNavegarParaNotificacoes={() => setTelaAtiva('notificacoes')}
       />
     );
   }

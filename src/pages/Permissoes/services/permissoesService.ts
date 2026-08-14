@@ -21,7 +21,8 @@ export const LISTA_MODULOS_SISTEMA = [
   'Conf. Cega',
   'Temperatura',
   'Clientes',
-  'Ofertas'
+  'Ofertas',
+  'Vencimentos'
 ];
 
 export const permissoesService = {

@@ -1,5 +1,6 @@
 // Arquivo: src/pages/Home/index.tsx
 import { useState, useEffect } from 'react';
+import { vencimentosService } from '../Vencimentos/services/vencimentosService';
 
 import iconUserLogin from '../../assets/icones/icon-user-login.svg';
 import iconLogout from '../../assets/icones/icon-logout.svg';
@@ -22,6 +23,7 @@ import iconCategorias from '../../assets/icones/icon-categorias.svg';
 interface HomeProps {
   nomeUsuario: string;
   perfilUsuario: string;
+  usuarioLogadoId?: string;
   permissoesDoUsuario?: string[];
   onLogout: () => void;
   onNavegarParaCategorias: () => void;
@@ -42,11 +44,14 @@ interface HomeProps {
   onNavegarParaOrcamentos?: () => void;
   onNavegarParaClientes?: () => void;
   onNavegarParaOfertas?: () => void;
+  onNavegarParaVencimentos?: () => void;
+  onNavegarParaNotificacoes?: () => void;
 }
 
 export default function Home({
   nomeUsuario,
   perfilUsuario,
+  usuarioLogadoId,
   permissoesDoUsuario = [],
   onLogout,
   onNavegarParaCategorias,
@@ -66,10 +71,14 @@ export default function Home({
   onNavegarParaTemperatura,
   onNavegarParaOrcamentos,
   onNavegarParaClientes,
-  onNavegarParaOfertas
+  onNavegarParaOfertas,
+  onNavegarParaVencimentos,
+  onNavegarParaNotificacoes
 }: HomeProps) {
   const [dataHora, setDataHora] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
+  const [qtdNotificacoesPendentes, setQtdNotificacoesPendentes] = useState(0);
+  const [alertaModalAberto, setAlertaModalAberto] = useState(false);
 
   const menuItems = [
     { label: 'Usuários', icon: iconUsuarios },
@@ -90,7 +99,8 @@ export default function Home({
     { label: 'Permissões', icon: iconPermissoes },
     { label: 'Categorias', icon: iconCategorias },
     { label: 'Clientes', icon: iconUsuarios },
-    { label: 'Ofertas', icon: iconCotacoes }
+    { label: 'Ofertas', icon: iconCotacoes },
+    { label: 'Vencimentos', icon: iconNotaFalta }
   ];
 
   useEffect(() => {
@@ -117,6 +127,28 @@ export default function Home({
     return () => clearInterval(intervalo);
   }, []);
 
+  // Verifica notificações PENDENTES do usuário
+  useEffect(() => {
+    const checarNotificacoes = async () => {
+      try {
+        const idUser = usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+        const lista = await vencimentosService.listarTodosVencimentos(idUser);
+        
+        // Itens a vencer em até 90 dias que ainda estão PENDENTES de visualização
+        const pendentes = lista.filter((i) => i.diasParaVencer >= 0 && i.diasParaVencer <= 90 && i.statusLeitura === 'Pendente');
+        setQtdNotificacoesPendentes(pendentes.length);
+
+        // Enquanto houver pendências, o alerta é exibido
+        if (pendentes.length > 0) {
+          setAlertaModalAberto(true);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    checarNotificacoes();
+  }, [usuarioLogadoId]);
+
   const handleModuleClick = (label: string) => {
     const mapaModulos: Record<string, string> = {
       'Usuários': 'Usuarios',
@@ -137,12 +169,11 @@ export default function Home({
       'Conf. Cega': 'Conf. Cega',
       'Temperatura': 'Temperatura',
       'Clientes': 'Clientes',
-      'Ofertas': 'Ofertas'
+      'Ofertas': 'Ofertas',
+      'Vencimentos': 'Vencimentos'
     };
 
     const moduloChave = mapaModulos[label];
-    
-    // Perfil Administrador possui acesso total; demais perfis dependem da liberação individual
     const temAcesso = perfilUsuario === 'Administrador' || (moduloChave && permissoesDoUsuario.includes(moduloChave));
 
     if (moduloChave && !temAcesso) {
@@ -157,25 +188,19 @@ export default function Home({
     else if (label === 'Vendedores') onNavegarParaVendedores();
     else if (label === 'Produtos') onNavegarParaProdutos();
     else if (label === 'Inventário') onNavegarParaInventario();
-    else if (label === 'Cotações') onNavegarParaCotacoes();         
-    else if (label === 'Orçamentos') {
-      if (onNavegarParaOrcamentos) onNavegarParaOrcamentos();
-    }
-    else if (label === 'Clientes') {
-      if (onNavegarParaClientes) onNavegarParaClientes();
-    }
-    else if (label === 'Ofertas') {
-      if (onNavegarParaOfertas) onNavegarParaOfertas();
-    }
+    else if (label === 'Cotações') onNavegarParaCotacoes();
+    else if (label === 'Orçamentos') { if (onNavegarParaOrcamentos) onNavegarParaOrcamentos(); }
+    else if (label === 'Clientes') { if (onNavegarParaClientes) onNavegarParaClientes(); }
+    else if (label === 'Ofertas') { if (onNavegarParaOfertas) onNavegarParaOfertas(); }
+    else if (label === 'Vencimentos') { if (onNavegarParaVencimentos) onNavegarParaVencimentos(); }
     else if (label === 'Pedidos') onNavegarParaPedidos();
     else if (label === 'Tarefas') onNavegarParaTarefas();
     else if (label === 'Avarias') onNavegarParaAvarias();
     else if (label === 'Conf. Cega') onNavegarParaConfCega();
-    else if (label === 'Relatórios') onNavegarParaRelatorios(); 
+    else if (label === 'Relatórios') onNavegarParaRelatorios();
     else if (label === 'Temperatura') onNavegarParaTemperatura();
-    else if (label === 'Nota de Falta') {
-      if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
-    } else {
+    else if (label === 'Nota de Falta') { if (onNavegarParaNotaFalta) onNavegarParaNotaFalta(); }
+    else {
       alert(`O módulo "${label}" está liberado e será construído em breve!`);
     }
   };
@@ -193,9 +218,27 @@ export default function Home({
               <span className="text-[#e07a5f] font-medium text-sm leading-tight">{perfilUsuario}</span>
             </div>
           </div>
-          <button onClick={onLogout} className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all">
-            <img src={iconLogout} alt="Sair" className="w-8 h-8" />
-          </button>
+          
+          <div className="flex items-center gap-1">
+            {/* SINO DE NOTIFICAÇÕES */}
+            <button
+              type="button"
+              onClick={() => onNavegarParaNotificacoes && onNavegarParaNotificacoes()}
+              className="p-2 hover:bg-emerald-50 rounded-full active:scale-90 transition-all relative"
+              title="Notificações"
+            >
+              <span className="text-xl">🔔</span>
+              {qtdNotificacoesPendentes > 0 && (
+                <span className="absolute top-1 right-1 bg-red-600 text-white font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+                  {qtdNotificacoesPendentes > 99 ? '99+' : qtdNotificacoesPendentes}
+                </span>
+              )}
+            </button>
+
+            <button onClick={onLogout} className="p-2 hover:bg-red-50 rounded-full active:scale-90 transition-all">
+              <img src={iconLogout} alt="Sair" className="w-8 h-8" />
+            </button>
+          </div>
         </div>
 
         {/* SUBTITLE */}
@@ -221,6 +264,43 @@ export default function Home({
         </div>
 
       </div>
+
+      {/* MODAL ALERTA DE NOTIFICAÇÕES PENDENTES */}
+      {alertaModalAberto && (
+        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-center">
+            <div className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+              🔔
+            </div>
+            <div>
+              <h3 className="text-[#09797a] font-black text-base uppercase">Você tem novas notificações!</h3>
+              <p className="text-xs text-gray-500 font-bold mt-1">
+                Existem <strong>{qtdNotificacoesPendentes}</strong> produtos pendentes de visualização com validade próxima.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setAlertaModalAberto(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+              >
+                Ignorar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAlertaModalAberto(false);
+                  if (onNavegarParaNotificacoes) onNavegarParaNotificacoes();
+                }}
+                className="flex-1 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+              >
+                Ir para Notificações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
