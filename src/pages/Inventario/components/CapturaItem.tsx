@@ -1,239 +1,331 @@
+// Arquivo: src/pages/Inventario/components/CapturaItem.tsx
 import { useState, useEffect } from 'react';
-import { inventarioService } from '../services/inventarioService';
-import type { ItemInventariado } from '../services/inventarioService';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface CapturaItemProps {
   inventarioId: string;
   localCapturaId: string;
-  somenteConsulta: boolean;
+  localNome?: string;
+  somenteConsulta?: boolean;
+  onTrocarLocal?: () => void;
+  onConcluir?: () => void;
 }
 
-interface ProdutoConsultado {
-  id: string;
-  codigo_barras: string;
-  descricao: string;
-}
+export default function CapturaItem({
+  inventarioId,
+  localCapturaId,
+  localNome = 'Geral',
+  somenteConsulta = false,
+  onTrocarLocal,
+  onConcluir
+}: CapturaItemProps) {
+  const [itens, setItens] = useState<any[]>([]);
+  const [termoBusca, setTermoBusca] = useState('');
+  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
 
-export default function CapturaItem({ inventarioId, localCapturaId, somenteConsulta }: CapturaItemProps) {
-  const [codigo, setCodigo] = useState('');
   const [quantidade, setQuantidade] = useState<number | ''>(1);
-  const [multiplicador, setMultiplicador] = useState<number | ''>(1);
   const [lote, setLote] = useState('');
-  const [validade, setValidade] = useState('');
-
-  const [produto, setProduto] = useState<ProdutoConsultado | null>(null);
-  const [buscandoProduto, setBuscandoProduto] = useState(false);
-  const [feedback, setFeedback] = useState('');
+  const [dataValidade, setDataValidade] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState('');
-  const [itensContabilizados, setItensContabilizados] = useState<ItemInventariado[]>([]);
 
-  const carregarItensSessao = async () => {
+  const carregarItens = async () => {
     try {
-      const dados = await inventarioService.listarItensDoInventario(inventarioId);
-      setItensContabilizados(dados);
+      const { data, error } = await supabase
+        .from('inventario_itens')
+        .select(`
+          id,
+          quantidade_contabilizada,
+          lote,
+          data_validade,
+          produtos:produto_id ( id, codprod, codbarra, descricao, unidade ),
+          locais_captura:local_captura_id ( id, nome )
+        `)
+        .eq('inventario_id', inventarioId)
+        .order('id', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar itens do inventário:', error);
+        return;
+      }
+
+      setItens(data || []);
     } catch (err) {
       console.error(err);
     }
   };
 
   useEffect(() => {
-    carregarItensSessao();
-  }, [inventarioId]);
+    carregarItens();
+  }, [inventarioId, localCapturaId]);
 
+  // Autocomplete de Produto
   useEffect(() => {
-    if (codigo.trim().length < 3) {
-      setProduto(null);
-      setFeedback('');
+    if (!termoBusca.trim() || produtoSelecionado) {
+      setProdutosEncontrados([]);
       return;
     }
 
-    const consultar = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
-        setBuscandoProduto(true);
-        const prod = await inventarioService.buscarProdutoPorCodigo(codigo.trim());
-        if (prod) {
-          setProduto(prod);
-          setFeedback(`✅ ${prod.descricao}`);
-        } else {
-          setProduto(null);
-          setFeedback('⚠️ Produto não localizado.');
-        }
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('id, codprod, codbarra, descricao, unidade')
+          .or(`codbarra.ilike.%${termoBusca}%,codprod.ilike.%${termoBusca}%,descricao.ilike.%${termoBusca}%`)
+          .limit(10);
+
+        if (error) throw error;
+        setProdutosEncontrados(data || []);
       } catch (err) {
-        setFeedback('❌ Erro na consulta.');
-      } finally {
-        // CORRIGIDO: Removido por completo o lixo sintático "bits" da linha 66
-        setBuscandoProduto(false);
+        console.error(err);
       }
-    }, 400);
+    }, 250);
 
-    return () => clearTimeout(consultar);
-  }, [codigo]);
+    return () => clearTimeout(timer);
+  }, [termoBusca, produtoSelecionado]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSalvarItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (somenteConsulta) return;
-    
-    if (!produto || !quantidade || !multiplicador || !lote.trim() || !validade) {
-      setErro('Todos os campos, incluindo Lote e Validade, são obrigatórios.');
+    if (!produtoSelecionado) {
+      alert('Selecione um produto.');
       return;
     }
 
     try {
       setSalvando(true);
-      setErro('');
+      const { error } = await supabase.from('inventario_itens').insert([
+        {
+          inventario_id: inventarioId,
+          produto_id: produtoSelecionado.id,
+          local_captura_id: localCapturaId,
+          quantidade_contabilizada: Number(quantidade || 1),
+          lote: lote.trim() || null,
+          data_validade: dataValidade || null
+        }
+      ]);
 
-      const totalUnidades = Number(quantidade) * Number(multiplicador);
+      if (error) throw error;
 
-      await inventarioService.salvarItemContabilizado({
-        inventario_id: inventarioId,
-        produto_id: produto.id,
-        quantidade_contabilizada: totalUnidades,
-        local_captura_id: localCapturaId,
-        lote: lote.trim(),
-        data_validade: validade
-      });
-
-      setCodigo('');
+      setProdutoSelecionado(null);
+      setTermoBusca('');
       setQuantidade(1);
-      setMultiplicador(1);
       setLote('');
-      setValidade('');
-      setProduto(null);
-      setFeedback('🎉 Item lançado!');
-
-      carregarItensSessao();
-      setTimeout(() => setFeedback(''), 2000);
-
+      setDataValidade('');
+      carregarItens();
     } catch (err) {
-      setErro('Erro ao salvar item no banco.');
+      console.error(err);
+      alert('Erro ao registrar item no inventário.');
     } finally {
       setSalvando(false);
     }
   };
 
-  const formatarDataBR = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    return dateStr.split('-').reverse().join('/');
+  const handleRemoverItem = async (id: string) => {
+    if (somenteConsulta) return;
+    if (!confirm('Deseja excluir este item da contagem?')) return;
+    try {
+      const { error } = await supabase.from('inventario_itens').delete().eq('id', id);
+      if (error) throw error;
+      carregarItens();
+    } catch (err) {
+      alert('Erro ao remover item.');
+    }
   };
 
   return (
-    <div className="flex flex-col gap-5 w-full">
-      {!somenteConsulta ? (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 bg-gray-50 p-4 rounded-2xl border border-gray-200">
-          {erro && <div className="bg-red-50 text-red-600 text-xs p-2.5 rounded-xl text-center font-bold">{erro}</div>}
-          
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-gray-500 pl-1">Código de Barras</label>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Bipe ou digite..."
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
-                className="w-full bg-white border border-gray-300 rounded-xl px-3 h-10 text-xs outline-none focus:border-[#09797a] font-semibold pr-8"
-                autoFocus
-              />
-              {buscandoProduto && <div className="absolute right-3 top-3 animate-spin rounded-full h-4 w-4 border-b-2 border-[#09797a]" />}
-            </div>
-            {feedback && <div className="text-[10px] font-bold mt-1 text-[#09797a]">{feedback}</div>}
+    <div className="w-full max-w-2xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 select-none min-h-[calc(100vh-32px)]">
+      
+      {/* HEADER */}
+      <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+        <div className="flex items-center gap-3">
+          {onTrocarLocal && (
+            <button
+              type="button"
+              onClick={onTrocarLocal}
+              className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+            >
+              ←
+            </button>
+          )}
+          <div>
+            <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">CONTAGEM FÍSICA</h1>
+            <p className="text-[11px] text-gray-400 font-bold mt-1">
+              Local: <strong className="text-gray-700">{localNome}</strong>
+            </p>
+          </div>
+        </div>
+
+        {onTrocarLocal && !somenteConsulta && (
+          <button
+            type="button"
+            onClick={onTrocarLocal}
+            className="text-xs text-[#09797a] font-black uppercase underline"
+          >
+            Trocar Local
+          </button>
+        )}
+      </div>
+
+      {/* FORMULÁRIO DE BIPAGEM (Oculto em modo de somente consulta) */}
+      {!somenteConsulta && (
+        <form onSubmit={handleSalvarItem} className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
+          <span className="text-[10px] font-black text-gray-400 uppercase px-1">Registrar Item</span>
+
+          <div className="flex flex-col gap-1 relative">
+            <label className="text-[10px] font-bold text-gray-500 uppercase px-1">EAN, Código ou Descrição *</label>
+            <input
+              type="text"
+              required
+              placeholder="Bipe ou digite para buscar..."
+              value={termoBusca}
+              onChange={(e) => {
+                setTermoBusca(e.target.value);
+                setProdutoSelecionado(null);
+              }}
+              className="w-full h-11 text-xs bg-white border border-[#09797a] px-3 rounded-xl font-bold text-gray-800"
+            />
+
+            {produtosEncontrados.length > 0 && !produtoSelecionado && (
+              <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-40 overflow-y-auto z-30 divide-y divide-gray-100">
+                {produtosEncontrados.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setProdutoSelecionado(p);
+                      setTermoBusca(`${p.codprod} - ${p.descricao}`);
+                      setProdutosEncontrados([]);
+                    }}
+                    className="w-full text-left p-3 hover:bg-emerald-50/50 flex flex-col text-xs font-bold text-gray-800 uppercase"
+                  >
+                    <span>{p.codprod} - {p.descricao}</span>
+                    <span className="text-[10px] text-gray-400 font-mono">EAN: {p.codbarra || 'S/EAN'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-gray-500 pl-1">Qtd Contada</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Qtd *</label>
               <input
                 type="number"
-                min="1"
+                min={0.01}
+                step="any"
+                required
                 value={quantidade}
-                onChange={(e) => setQuantidade(e.target.value === '' ? '' : Number(e.target.value))}
-                className="bg-white border border-gray-300 rounded-xl px-3 h-10 text-xs outline-none focus:border-[#09797a] font-bold"
-                required
-                disabled={!produto}
+                onWheel={(e) => e.currentTarget.blur()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuantidade(val === '' ? '' : Number(val));
+                }}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-800 text-center"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-gray-500 pl-1">Multiplicador</label>
-              <input
-                type="number"
-                min="1"
-                value={multiplicador}
-                onChange={(e) => setMultiplicador(e.target.value === '' ? '' : Number(e.target.value))}
-                className="bg-white border border-gray-300 rounded-xl px-3 h-10 text-xs outline-none focus:border-[#09797a] font-bold text-emerald-700"
-                required
-                disabled={!produto}
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-gray-500 pl-1">Lote</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Lote</label>
               <input
                 type="text"
-                placeholder="Ex: L12"
+                placeholder="Opcional"
                 value={lote}
                 onChange={(e) => setLote(e.target.value)}
-                className="bg-white border border-gray-300 rounded-xl px-3 h-10 text-xs outline-none focus:border-[#09797a] font-bold"
-                required
-                disabled={!produto}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-800 uppercase"
               />
             </div>
+
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-gray-500 pl-1">Vencimento</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Validade</label>
               <input
                 type="date"
-                value={validade}
-                onChange={(e) => setValidade(e.target.value)}
-                className="bg-white border border-gray-300 rounded-xl px-2 h-10 text-xs outline-none focus:border-[#09797a] font-bold"
-                required
-                disabled={!produto}
+                value={dataValidade}
+                onChange={(e) => setDataValidade(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-2 rounded-xl font-bold text-gray-800"
               />
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={salvando || !produto}
-            className="w-full h-11 bg-[#09797a] text-white rounded-xl text-xs font-bold active:scale-95 disabled:opacity-40 transition-all shadow-sm mt-1"
+            disabled={salvando || !produtoSelecionado}
+            className="w-full h-11 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
           >
-            {salvando ? 'Gravando...' : 'Confirmar & Lançar'}
+            {salvando ? 'Salvando...' : '+ Confirmar Contagem'}
           </button>
         </form>
-      ) : null}
+      )}
 
-      <div className="flex flex-col flex-1 select-none">
-        <h3 className="text-xs font-black text-gray-700 mb-2 pl-1 uppercase tracking-wider">
-          Itens Coletados ({itensContabilizados.length})
-        </h3>
-        <div className="flex flex-col gap-2 max-h-55 overflow-y-auto pr-1">
-          {itensContabilizados.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 text-xs italic bg-gray-50 rounded-xl border border-dashed">
-              Nenhum item lançado nesta sessão.
-            </div>
-          ) : (
-            itensContabilizados.map((it) => (
-              <div key={it.id} className="bg-white border border-gray-200 p-2.5 rounded-xl flex flex-col gap-0.5 shadow-xs">
-                <div className="flex justify-between items-start">
-                  <span className="font-extrabold text-gray-800 text-xs truncate max-w-50">
-                    {it.produtos?.descricao}
-                  </span>
-                  <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-black text-xs px-2 py-0.5 rounded-md">
-                    {it.quantidade_contabilizada} UN
-                  </span>
-                </div>
-                <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-0.5">
-                  <span>📍 {it.locais_captura?.nome}</span>
-                  <div className="flex gap-2">
-                    {it.lote && <span>Lote: {it.lote}</span>}
-                    {it.data_validade && <span className="text-amber-600">Venc: {formatarDataBR(it.data_validade)}</span>}
+      {/* LISTAGEM DE ITENS CONTABILIZADOS */}
+      <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
+        <span className="text-[10px] font-black text-gray-400 uppercase px-1">
+          Itens Contados no Inventário ({itens.length})
+        </span>
+
+        {itens.length === 0 ? (
+          <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+            Nenhum item contado ainda.
+          </div>
+        ) : (
+          itens.map((item) => {
+            const prod = item.produtos || {};
+            const dataFmt = item.data_validade
+              ? new Date(item.data_validade + 'T00:00:00').toLocaleDateString('pt-BR')
+              : null;
+
+            return (
+              <div
+                key={item.id}
+                className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded">
+                      {prod.codprod}
+                    </span>
+                    <span className="text-[9px] font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded uppercase">
+                      {item.locais_captura?.nome || 'Local'}
+                    </span>
+                  </div>
+
+                  <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                    {prod.descricao}
+                  </h4>
+
+                  <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase mt-1">
+                    <span>Qtd: <strong className="text-gray-800">{item.quantidade_contabilizada} {prod.unidade || 'UN'}</strong></span>
+                    {item.lote && <span>| Lote: <strong className="text-gray-800">{item.lote}</strong></span>}
+                    {dataFmt && <span>| Val: <strong className="text-gray-800">{dataFmt}</strong></span>}
                   </div>
                 </div>
+
+                {!somenteConsulta && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoverItem(item.id)}
+                    className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-black text-xs uppercase transition-all"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
-            ))
-          )}
-        </div>
+            );
+          })
+        )}
       </div>
+
+      {/* FOOTER */}
+      {onConcluir && (
+        <div className="pt-2 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onConcluir}
+            className="w-full py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+          >
+            {somenteConsulta ? 'Voltar' : 'Finalizar Inventário'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
