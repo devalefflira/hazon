@@ -11,8 +11,6 @@ export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia,
   const [itens, setItens] = useState<any[]>(
     conferencia.conferencia_itens?.map(item => ({
       id: item.id,
-      codprod: item.produto?.codprod || "-",
-      codbarra: item.produto?.codbarra || "",
       descricao: item.produto?.descricao || "-",
       quantidade_contada: item.quantidade_contada || "",
       lote: item.lote || "",
@@ -56,33 +54,20 @@ export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia,
           </div>
         </div>
 
-        {/* Lista de Itens (Cards Mobile) */}
+        {/* Lista de Itens */}
         <div className="p-3 sm:p-5 overflow-y-auto flex-1 space-y-3 bg-slate-50">
           {itens.map((item, idx) => (
             <div key={item.id} className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
               
-              {/* Identificação do Produto */}
-              <div className="flex justify-between items-start gap-2">
-                <div>
-                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                    <span className="bg-teal-50 text-teal-800 text-[11px] font-black px-2 py-0.5 rounded-md">
-                      CÓD: {item.codprod}
-                    </span>
-                    {item.codbarra && (
-                      <span className="text-slate-400 text-[10px]">
-                        EAN: {item.codbarra}
-                      </span>
-                    )}
-                  </div>
-                  <h4 className="text-xs sm:text-sm font-bold text-slate-800 leading-snug">
-                    {item.descricao}
-                  </h4>
-                </div>
+              {/* Apenas a Descrição do Produto do XML */}
+              <div>
+                <h4 className="text-xs sm:text-sm font-extrabold text-slate-800 leading-snug">
+                  {item.descricao}
+                </h4>
               </div>
 
-              {/* Grid de Inputs Responsivos */}
+              {/* Grid de Inputs */}
               <div className="grid grid-cols-12 gap-2 pt-1 border-t border-slate-100">
-                {/* Quantidade */}
                 <div className="col-span-4">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
                     Qtd (UN)
@@ -98,7 +83,6 @@ export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia,
                   />
                 </div>
 
-                {/* Lote */}
                 <div className="col-span-4">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
                     Lote
@@ -112,7 +96,6 @@ export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia,
                   />
                 </div>
 
-                {/* Validade */}
                 <div className="col-span-4">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
                     Validade

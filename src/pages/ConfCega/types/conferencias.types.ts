@@ -1,6 +1,4 @@
 export interface ItemNotaXML {
-  cProd: string;
-  cEAN: string;
   xProd: string;
   uCom: string;
   qComOriginal?: number;
@@ -27,6 +25,7 @@ export interface ConferenciaRegistro {
   hora_conferencia: string;
   status: "Pendente" | "Em Andamento" | "Finalizada";
   observacao?: string;
+  updated_at?: string;
   fornecedor?: {
     id: string;
     razao_social: string;
@@ -42,9 +41,7 @@ export interface ConferenciaRegistro {
     lote?: string;
     data_validade?: string;
     produto?: {
-      codprod: string;
       descricao: string;
-      codbarra: string;
     };
   }>;
 }

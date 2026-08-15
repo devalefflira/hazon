@@ -1,23 +1,18 @@
-// src/pages/ConfCega/utils/gerarPdfRelatorioAgregado.ts
 import type { ConferenciaRegistro } from "../types/conferencias.types";
 
 export function gerarPdfRelatorioAgregado(conferencias: ConferenciaRegistro[]) {
   const dataEmissaoRelatorio = new Date().toLocaleString("pt-BR");
   
-  // Agrupa os números das notas e fornecedores para o cabeçalho
   const listaNotas = conferencias.map(c => `#${c.numero_nota_fiscal}`).join(", ");
   const totalPecas = conferencias.reduce((acc, c) => {
     return acc + (c.conferencia_itens?.reduce((subAcc, i) => subAcc + Number(i.quantidade_contada || 0), 0) || 0);
   }, 0);
 
-  // Monta as linhas da tabela unificada com a referência de qual NF pertence o item
   const rows = conferencias.flatMap(conf => 
     (conf.conferencia_itens || []).map(it => `
       <tr>
         <td><strong>NF #${conf.numero_nota_fiscal}</strong></td>
-        <td><strong>${it.produto?.codprod || "-"}</strong></td>
-        <td>${it.produto?.codbarra || "-"}</td>
-        <td>${it.produto?.descricao || "-"}</td>
+        <td><strong>${it.produto?.descricao || "-"}</strong></td>
         <td style="text-align: right; font-weight: bold; color: #0f766e;">${it.quantidade_contada} UN</td>
         <td>${it.lote || "-"}</td>
         <td>${it.data_validade ? new Date(it.data_validade).toLocaleDateString("pt-BR") : "-"}</td>
@@ -67,8 +62,6 @@ export function gerarPdfRelatorioAgregado(conferencias: ConferenciaRegistro[]) {
       <thead>
         <tr>
           <th>Nota</th>
-          <th>Cód</th>
-          <th>Cód Barras</th>
           <th>Descrição do Produto</th>
           <th style="text-align: right;">Qtd Recebida</th>
           <th>Lote</th>

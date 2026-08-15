@@ -3,10 +3,8 @@ import type { ConferenciaRegistro } from "../types/conferencias.types";
 export function gerarPdfRelatorioConferencia(conf: ConferenciaRegistro) {
   const rows = conf.conferencia_itens?.map((it) => `
     <tr>
-      <td><strong>${it.produto?.codprod || "-"}</strong></td>
-      <td>${it.produto?.codbarra || "-"}</td>
-      <td>${it.produto?.descricao || "-"}</td>
-      <td style="text-align: right; font-weight: bold;">${it.quantidade_contada} UN</td>
+      <td><strong>${it.produto?.descricao || "-"}</strong></td>
+      <td style="text-align: right; font-weight: bold; color: #0f766e;">${it.quantidade_contada} UN</td>
       <td>${it.lote || "-"}</td>
       <td>${it.data_validade ? new Date(it.data_validade).toLocaleDateString("pt-BR") : "-"}</td>
     </tr>
@@ -51,8 +49,6 @@ export function gerarPdfRelatorioConferencia(conf: ConferenciaRegistro) {
     <table>
       <thead>
         <tr>
-          <th>Cód</th>
-          <th>Cód Barras</th>
           <th>Descrição do Produto</th>
           <th style="text-align: right;">Qtd Contada</th>
           <th>Lote</th>

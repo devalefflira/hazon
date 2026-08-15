@@ -9,29 +9,28 @@ export function parsearXMLNotaFiscal(xmlText: string): NotaImportadaXML {
     throw new Error("Formato de arquivo XML inválido.");
   }
 
+  // Dados do Emitente
   const emit = xmlDoc.getElementsByTagName("emit")[0];
   const cnpj = emit?.getElementsByTagName("CNPJ")[0]?.textContent || "";
   const razaoSocial = emit?.getElementsByTagName("xNome")[0]?.textContent || emit?.getElementsByTagName("xFant")[0]?.textContent || "Fornecedor Desconhecido";
 
+  // Identificação da Nota
   const ide = xmlDoc.getElementsByTagName("ide")[0];
   const numeroNota = ide?.getElementsByTagName("nNF")[0]?.textContent || "S/N";
   const dhEmi = ide?.getElementsByTagName("dhEmi")[0]?.textContent || ide?.getElementsByTagName("dEmi")[0]?.textContent || new Date().toISOString();
 
+  // Itens da Nota na ordem exata que vêm no XML (Apenas Descrição)
   const detElements = xmlDoc.getElementsByTagName("det");
   const itens: ItemNotaXML[] = [];
 
   for (let i = 0; i < detElements.length; i++) {
     const prod = detElements[i].getElementsByTagName("prod")[0];
     if (prod) {
-      const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
-      const cEAN = prod.getElementsByTagName("cEAN")[0]?.textContent || "";
-      const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "";
+      const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "Produto Sem Descrição";
       const uCom = prod.getElementsByTagName("uCom")[0]?.textContent || "UN";
       const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
 
       itens.push({
-        cProd,
-        cEAN: cEAN === "SEM GTIN" ? "" : cEAN,
         xProd,
         uCom,
         qComOriginal: qCom,

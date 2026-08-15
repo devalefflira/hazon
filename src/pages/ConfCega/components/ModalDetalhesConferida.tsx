@@ -34,8 +34,7 @@ export const ModalDetalhesConferida: React.FC<ModalDetalhesProps> = ({ conferenc
             {conferencia.conferencia_itens?.map((item) => (
               <div key={item.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-black text-slate-400 mb-0.5">CÓD: {item.produto?.codprod}</div>
-                  <div className="text-xs font-bold text-slate-800 truncate">{item.produto?.descricao}</div>
+                  <div className="text-xs font-bold text-slate-800 leading-snug">{item.produto?.descricao}</div>
                   <div className="text-[10px] text-slate-500 mt-1">
                     Lote: <strong className="text-slate-700">{item.lote || "-"}</strong> • Validade: <strong className="text-slate-700">{item.data_validade ? new Date(item.data_validade).toLocaleDateString("pt-BR") : "-"}</strong>
                   </div>

@@ -9,7 +9,7 @@ export const conferenciasService = {
         *,
         fornecedor:fornecedores(*),
         usuario:usuarios(nome),
-        conferencia_itens(*, produto:produtos(*))
+        conferencia_itens(*, produto:produtos(descricao))
       `)
       .order("created_at", { ascending: false });
 
@@ -59,34 +59,25 @@ export const conferenciasService = {
 
     if (errConf) throw errConf;
 
-    for (const it of nota.itens) {
-      let prodId: string | null = null;
-      const { data: prodExistente } = await supabase
+    // Cria registro de produto baseado estritamente na descrição da nota atual
+    for (let i = 0; i < nota.itens.length; i++) {
+      const it = nota.itens[i];
+      const codUnicoItem = `ITEM-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`;
+
+      const { data: novoProduto } = await supabase
         .from("produtos")
+        .insert({
+          codprod: codUnicoItem,
+          descricao: it.xProd,
+          unidade: "UN"
+        })
         .select("id")
-        .eq("codprod", it.cProd)
-        .maybeSingle();
+        .single();
 
-      if (prodExistente) {
-        prodId = prodExistente.id;
-      } else {
-        const { data: novoProd } = await supabase
-          .from("produtos")
-          .insert({
-            codprod: it.cProd,
-            descricao: it.xProd,
-            codbarra: it.cEAN,
-            unidade: "UN"
-          })
-          .select("id")
-          .single();
-        if (novoProd) prodId = novoProd.id;
-      }
-
-      if (prodId) {
+      if (novoProduto) {
         await supabase.from("conferencia_itens").insert({
           conferencia_mestre_id: confCriada.id,
-          produto_id: prodId,
+          produto_id: novoProduto.id,
           quantidade_contada: 0,
           unidade_medida: "UN",
           lote: it.lote || "",
