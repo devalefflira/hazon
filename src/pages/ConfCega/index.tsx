@@ -1,377 +1,210 @@
-// Arquivo: src/pages/ConfCega/index.tsx
-import { useState, useEffect } from 'react';
-import { conferenciasService } from './services/conferenciasService';
-import FormularConferenciaCega from './components/FormularConferenciaCega';
-import { gerarPdfRelatorio } from './utils/gerarPdfRelatorio';
-import type { ConferenciaMestre } from './types/conferencias.types';
+import React, { useState, useEffect, useRef } from "react";
+import { conferenciasService } from "./services/conferenciasService";
+import type { ConferenciaRegistro } from "./types/conferencias.types";
+import { parsearXMLNotaFiscal } from "./utils/xmlNfeParser";
+import { ModalConferencia } from "./components/ModalConferencia";
+import { ModalDetalhesConferida } from "./components/ModalDetalhesConferida";
+import { gerarPdfRelatorioConferencia } from "./utils/gerarPdfRelatorio";
 
 interface ConfCegaProps {
-  onVoltarParaHome: () => void;
   usuarioLogadoId?: string;
+  onVoltarParaHome?: () => void;
 }
 
-export default function ConfCega({ onVoltarParaHome, usuarioLogadoId }: ConfCegaProps) {
-  const [conferencias, setConferencias] = useState<ConferenciaMestre[]>([]);
-  const [fornecedores, setFornecedores] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [conferenciaAtiva, setConferenciaAtiva] = useState<ConferenciaMestre | null>(null);
+const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }) => {
+  const [abaAtiva, setAbaAtiva] = useState<"pendentes" | "conferidas">("pendentes");
+  const [conferencias, setConferencias] = useState<ConferenciaRegistro[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [conferenciaSelecionada, setConferenciaSelecionada] = useState<ConferenciaRegistro | null>(null);
+  const [modalDetalhes, setModalDetalhes] = useState<ConferenciaRegistro | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Modal Nova Conferência
-  const [modalNovoAberto, setModalNovoAberto] = useState(false);
-  const [fornecedorId, setFornecedorId] = useState('');
-  const [termoBuscaForn, setTermoBuscaForn] = useState('');
-  const [fornecedorSelecionado, setFornecedorSelecionado] = useState<any | null>(null);
-
-  const [numeroNota, setNumeroNota] = useState('');
-  const [dataEmissao, setDataEmissao] = useState('');
-  const [observacao, setObservacao] = useState('');
-  const [criando, setCriando] = useState(false);
-
-  const carregarDados = async () => {
+  const carregarLista = async () => {
     try {
-      setLoading(true);
-      const [dadosConf, dadosForn] = await Promise.all([
-        conferenciasService.listarConferencias(),
-        conferenciasService.listarFornecedores()
-      ]);
-      setConferencias(dadosConf);
-      setFornecedores(dadosForn);
-    } catch (err) {
-      console.error('Erro ao listar conferências/fornecedores:', err);
+      setCarregando(true);
+      const data: any = await conferenciasService.listarConferencias();
+      setConferencias(data);
+    } catch (err: any) {
+      alert("Erro ao carregar conferências: " + err.message);
     } finally {
-      setLoading(false);
+      setCarregando(false);
     }
   };
 
   useEffect(() => {
-    carregarDados();
+    carregarLista();
   }, []);
 
-  const handleCriarNovaConferencia = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const idUser = usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
-    if (!idUser) {
-      alert('Usuário não autenticado.');
-      return;
-    }
+  const handleUploadXML = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     try {
-      setCriando(true);
-      const nova = await conferenciasService.criarConferencia({
-        usuario_id: idUser,
-        fornecedor_id: fornecedorId || undefined,
-        numero_nota_fiscal: numeroNota.trim() || undefined,
-        data_emissao_nota: dataEmissao || undefined,
-        observacao: observacao.trim() || undefined
-      });
+      setCarregando(true);
+      const xmlText = await file.text();
+      const notaParseada = parsearXMLNotaFiscal(xmlText);
 
-      setModalNovoAberto(false);
-      setFornecedorId('');
-      setTermoBuscaForn('');
-      setFornecedorSelecionado(null);
-      setNumeroNota('');
-      setDataEmissao('');
-      setObservacao('');
-      setConferenciaAtiva(nova);
-      carregarDados();
-    } catch (err) {
-      alert('Erro ao iniciar lote de conferência.');
+      const usuarioId = usuarioLogadoId || "00000000-0000-0000-0000-000000000000";
+
+      await conferenciasService.criarConferenciaImportada(notaParseada, usuarioId);
+      await carregarLista();
+      setAbaAtiva("pendentes");
+    } catch (err: any) {
+      alert("Falha ao importar XML da Nota: " + err.message);
     } finally {
-      setCriando(false);
+      setCarregando(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleCancelarConferencia = async (id: string) => {
-    if (!confirm('Deseja cancelar esta conferência?')) return;
-    try {
-      await conferenciasService.atualizarStatusConferencia(id, 'Cancelada');
-      carregarDados();
-    } catch (err) {
-      alert('Erro ao cancelar conferência.');
+  const handleSalvarConferencia = async (confId: string, itens: any[], status: "Em Andamento" | "Finalizada") => {
+    await conferenciasService.salvarProgressoItens(confId, itens, status);
+    await carregarLista();
+    if (status === "Finalizada") {
+      setAbaAtiva("conferidas");
     }
   };
 
-  const handleExportarPdf = async (conf: ConferenciaMestre) => {
-    try {
-      const itens = await conferenciasService.listarItensConferidos(conf.id);
-      gerarPdfRelatorio(conf, itens);
-    } catch (err) {
-      alert('Erro ao gerar relatório da conferência.');
-    }
-  };
-
-  // Se uma conferência estiver ativa em modo de bipe/digitação
-  if (conferenciaAtiva) {
-    return (
-      <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
-        <FormularConferenciaCega
-          conferencia={conferenciaAtiva}
-          conferenciaId={conferenciaAtiva.id}
-          codigoLote={conferenciaAtiva.codigo_customizado}
-          onVoltar={() => {
-            setConferenciaAtiva(null);
-            carregarDados();
-          }}
-          onFinalizarOuPausar={() => {
-            setConferenciaAtiva(null);
-            carregarDados();
-          }}
-          onCancelar={() => {
-            setConferenciaAtiva(null);
-            carregarDados();
-          }}
-        />
-      </div>
-    );
-  }
+  const pendentes = conferencias.filter((c) => c.status !== "Finalizada");
+  const conferidas = conferencias.filter((c) => c.status === "Finalizada");
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
-      <div className="w-full max-w-2xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
-        
-        {/* HEADER */}
-        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
+    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center">
+      <div className="w-full max-w-6xl">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onVoltarParaHome || (() => window.history.back())}
+              className="p-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-full text-teal-800 transition shadow-sm"
+              title="Voltar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+            </button>
             <div>
-              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">CONF. CEGA</h1>
-              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Conferência de Recebimento de Mercadorias</p>
+              <h1 className="text-2xl font-black text-teal-950 uppercase tracking-tight">Conferência Cega</h1>
+              <p className="text-sm text-slate-500 font-medium">Auditoria de Recebimento de Mercadorias via XML de NF-e</p>
             </div>
           </div>
+
+          <div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".xml"
+              onChange={handleUploadXML}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={carregando}
+              className="bg-teal-800 hover:bg-teal-900 active:scale-95 text-white font-bold px-5 py-3 rounded-2xl shadow-md transition flex items-center gap-2 text-sm"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              Importar XML da Nota
+            </button>
+          </div>
+        </div>
+
+        <div className="flex border-b border-slate-200 mb-6 gap-8">
           <button
-            type="button"
-            onClick={() => {
-              setFornecedorId('');
-              setTermoBuscaForn('');
-              setFornecedorSelecionado(null);
-              setNumeroNota('');
-              setDataEmissao('');
-              setObservacao('');
-              setModalNovoAberto(true);
-            }}
-            className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+            onClick={() => setAbaAtiva("pendentes")}
+            className={`pb-3 font-bold text-sm tracking-wider uppercase transition border-b-2 flex items-center gap-2 ${
+              abaAtiva === "pendentes" ? "border-teal-800 text-teal-900" : "border-transparent text-slate-400 hover:text-slate-600"
+            }`}
           >
-            + Iniciar Lote
+            Pendentes
+            <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs font-black">{pendentes.length}</span>
+          </button>
+          <button
+            onClick={() => setAbaAtiva("conferidas")}
+            className={`pb-3 font-bold text-sm tracking-wider uppercase transition border-b-2 flex items-center gap-2 ${
+              abaAtiva === "conferidas" ? "border-teal-800 text-teal-900" : "border-transparent text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            Conferidas
+            <span className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full text-xs font-black">{conferidas.length}</span>
           </button>
         </div>
 
-        {/* LISTAGEM DE LOTES */}
-        <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
-          {loading ? (
-            <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando conferências...</div>
-          ) : conferencias.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-              Nenhuma conferência encontrada. Clique em "+ Iniciar Lote" para começar.
-            </div>
-          ) : (
-            conferencias.map((conf) => {
-              const isEmAndamento = conf.status === 'Em Andamento';
-              const isFinalizado = conf.status === 'Finalizado';
-              const nomeForn = conf.fornecedores?.nome_fantasia || conf.fornecedores?.razao_social;
-
-              return (
-                <div
-                  key={conf.id}
-                  className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                        {conf.codigo_customizado}
-                      </span>
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
-                        isEmAndamento ? 'bg-amber-100 text-amber-800' :
-                        isFinalizado ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {conf.status}
-                      </span>
-                      {nomeForn && (
-                        <span className="text-[9px] font-black text-gray-600 bg-gray-200 px-2 py-0.5 rounded uppercase truncate max-w-[150px]">
-                          {nomeForn}
-                        </span>
-                      )}
-                    </div>
-
-                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                      NF: {conf.numero_nota_fiscal || 'S/N'} | Itens: {conf.conferencia_itens?.length || 0}
-                    </h4>
-
-                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                      Resp: {conf.usuarios?.nome || 'SISTEMA'} - {conf.data_conferencia} às {conf.hora_conferencia}
-                    </p>
+        {carregando ? (
+          <div className="text-center py-20 text-slate-400 font-medium">Carregando dados da conferência...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {(abaAtiva === "pendentes" ? pendentes : conferidas).map((conf) => (
+              <div key={conf.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-3">
+                    <span className="text-xs font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg">
+                      NF #{conf.numero_nota_fiscal}
+                    </span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                      conf.status === "Finalizada" ? "bg-teal-100 text-teal-800" : conf.status === "Em Andamento" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+                    }`}>
+                      {conf.status}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {isEmAndamento && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setConferenciaAtiva(conf)}
-                          className="px-3 py-1.5 bg-[#09797a] text-white rounded-xl text-xs font-black uppercase shadow-xs"
-                        >
-                          Continuar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCancelarConferencia(conf.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg text-xs font-bold"
-                          title="Cancelar Conferência"
-                        >
-                          ✕
-                        </button>
-                      </>
-                    )}
+                  <h3 className="font-extrabold text-slate-800 text-base leading-snug line-clamp-2 mb-2">
+                    {conf.fornecedor?.razao_social || "Fornecedor Não Identificado"}
+                  </h3>
 
-                    {isFinalizado && (
-                      <button
-                        type="button"
-                        onClick={() => handleExportarPdf(conf)}
-                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-xs font-black uppercase transition-all shadow-xs"
-                      >
-                        🖨️ PDF
-                      </button>
-                    )}
+                  <div className="text-xs text-slate-500 space-y-1 mb-4">
+                    <div><strong>CNPJ:</strong> {conf.fornecedor?.cnpj || "-"}</div>
+                    <div><strong>Emissão:</strong> {new Date(conf.data_emissao_nota).toLocaleDateString("pt-BR")}</div>
+                    <div><strong>Itens na Nota:</strong> {conf.conferencia_itens?.length || 0} produtos</div>
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
 
-      </div>
-
-      {/* MODAL INICIAR NOVO LOTE COM BUSCA DE FORNECEDOR */}
-      {modalNovoAberto && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <form onSubmit={handleCriarNovaConferencia} className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-              <h3 className="text-[#09797a] font-black text-base uppercase">INICIAR LOTE DE CONFERÊNCIA</h3>
-              <button
-                type="button"
-                onClick={() => setModalNovoAberto(false)}
-                className="text-gray-400 font-bold text-base"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {/* BUSCA DE FORNECEDOR POR DIGITAÇÃO */}
-              <div className="flex flex-col gap-1 relative">
-                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Fornecedor (Opcional)</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Digite a razão social ou nome fantasia..."
-                    value={termoBuscaForn}
-                    onChange={(e) => {
-                      setTermoBuscaForn(e.target.value);
-                      setFornecedorSelecionado(null);
-                      setFornecedorId('');
-                    }}
-                    className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase pr-8"
-                  />
-                  {fornecedorSelecionado && (
+                {abaAtiva === "pendentes" ? (
+                  <button
+                    onClick={() => setConferenciaSelecionada(conf)}
+                    className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2 shadow"
+                  >
+                    {conf.status === "Em Andamento" ? "Continuar Conferência" : "Iniciar Conferência"}
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
                     <button
-                      type="button"
-                      onClick={() => {
-                        setFornecedorSelecionado(null);
-                        setTermoBuscaForn('');
-                        setFornecedorId('');
-                      }}
-                      className="absolute right-2.5 top-2.5 text-gray-400 hover:text-red-500 font-bold text-xs"
+                      onClick={() => setModalDetalhes(conf)}
+                      className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2 rounded-xl transition text-xs text-center"
                     >
-                      ✕
+                      Ver Detalhes
                     </button>
-                  )}
-                </div>
-
-                {/* LISTA SUSPENSA COM RESULTADOS */}
-                {termoBuscaForn.trim() && !fornecedorSelecionado && (
-                  <div className="absolute top-15 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-44 overflow-y-auto z-30 divide-y divide-gray-100">
-                    {fornecedores
-                      .filter((f) => {
-                        const termo = termoBuscaForn.toLowerCase();
-                        const fantasia = (f.nome_fantasia || '').toLowerCase();
-                        const razao = (f.razao_social || '').toLowerCase();
-                        return fantasia.includes(termo) || razao.includes(termo);
-                      })
-                      .slice(0, 8)
-                      .map((f) => (
-                        <button
-                          key={f.id}
-                          type="button"
-                          onClick={() => {
-                            setFornecedorSelecionado(f);
-                            setFornecedorId(f.id);
-                            setTermoBuscaForn(f.nome_fantasia || f.razao_social);
-                          }}
-                          className="w-full text-left p-2.5 hover:bg-emerald-50 text-xs font-bold text-gray-800 uppercase flex flex-col"
-                        >
-                          <span>{f.nome_fantasia || f.razao_social}</span>
-                          {f.nome_fantasia && f.razao_social && (
-                            <span className="text-[9px] text-gray-400">{f.razao_social}</span>
-                          )}
-                        </button>
-                      ))}
+                    <button
+                      onClick={() => gerarPdfRelatorioConferencia(conf)}
+                      className="px-3 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold py-2 rounded-xl transition text-xs"
+                      title="Imprimir PDF"
+                    >
+                      PDF
+                    </button>
                   </div>
                 )}
               </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Número NF</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 123456"
-                    value={numeroNota}
-                    onChange={(e) => setNumeroNota(e.target.value)}
-                    className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
-                  />
-                </div>
+      {conferenciaSelecionada && (
+        <ModalConferencia
+          conferencia={conferenciaSelecionada}
+          onClose={() => setConferenciaSelecionada(null)}
+          onSalvar={handleSalvarConferencia}
+        />
+      )}
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Emissão NF</label>
-                  <input
-                    type="date"
-                    value={dataEmissao}
-                    onChange={(e) => setDataEmissao(e.target.value)}
-                    className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Observação</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Carga descarregada na Doca 02"
-                  value={observacao}
-                  onChange={(e) => setObservacao(e.target.value)}
-                  className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setModalNovoAberto(false)}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={criando}
-                className="flex-1 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
-              >
-                {criando ? 'Iniciando...' : 'Iniciar Bipe'}
-              </button>
-            </div>
-          </form>
-        </div>
+      {modalDetalhes && (
+        <ModalDetalhesConferida
+          conferencia={modalDetalhes}
+          onClose={() => setModalDetalhes(null)}
+        />
       )}
     </div>
   );
-}
+};
+
+export default ConfCega;

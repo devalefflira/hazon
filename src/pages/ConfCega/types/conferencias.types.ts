@@ -1,46 +1,60 @@
-// Arquivo: src/pages/ConfCega/types/conferencias.types.ts
-
-export interface ConferenciaItem {
-  id?: string;
-  conferencia_mestre_id?: string;
-  produto_id: string;
-  quantidade_contada: number;
-  unidade_medida?: string;
-  observacao?: string;
+export interface ItemNotaXML {
+  cProd: string;
+  cEAN: string;
+  xProd: string;
+  uCom: string;
+  qComOriginal?: number;
+  quantidadeContada?: number;
   lote?: string;
-  data_validade?: string;
-  created_at?: string;
-  produtos?: {
-    id: string;
-    codprod: string;
-    descricao: string;
-    codbarra?: string;
-    unidade?: string;
-  };
+  dataValidade?: string;
 }
 
-export interface ConferenciaMestre {
+export interface NotaImportadaXML {
+  id?: string;
+  cnpj: string;
+  razaoSocial: string;
+  numeroNota: string;
+  dataEmissao: string;
+  itens: ItemNotaXML[];
+}
+
+export interface ConferenciaRegistro {
   id: string;
   codigo_customizado: string;
-  pedido_mestre_id?: string;
-  usuario_id: string;
-  status: 'Em Andamento' | 'Finalizado' | 'Cancelado';
+  numero_nota_fiscal: string;
+  data_emissao_nota: string;
   data_conferencia: string;
   hora_conferencia: string;
-  numero_nota_fiscal?: string;
-  data_emissao_nota?: string;
-  fornecedor_id?: string;
+  status: "Pendente" | "Em Andamento" | "Finalizada";
   observacao?: string;
-  created_at?: string;
-  updated_at?: string;
-  usuarios?: {
+  fornecedor?: {
     id: string;
+    razao_social: string;
+    cnpj: string;
+  };
+  usuario?: {
     nome: string;
   };
-  fornecedores?: {
+  conferencia_itens?: Array<{
     id: string;
-    nome_fantasia: string;
-    razao_social: string;
-  };
-  conferencia_itens?: ConferenciaItem[];
+    quantidade_contada: number;
+    unidade_medida: string;
+    lote?: string;
+    data_validade?: string;
+    produto?: {
+      codprod: string;
+      descricao: string;
+      codbarra: string;
+    };
+  }>;
+}
+
+export interface ConferenciaItem {
+  id: string;
+  conferencia_mestre_id: string;
+  produto_id: string;
+  quantidade_contada: number;
+  unidade_medida: string;
+  lote?: string;
+  data_validade?: string;
 }
