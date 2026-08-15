@@ -98,10 +98,20 @@ export const conferenciasService = {
     return confCriada;
   },
 
-  async salvarProgressoItens(conferenciaId: string, itensAtualizados: any[], status: "Em Andamento" | "Finalizada") {
+  async salvarProgressoItens(
+    conferenciaId: string,
+    itensAtualizados: any[],
+    status: "Em Andamento" | "Finalizada",
+    usuarioFinalizadorId?: string
+  ) {
+    const updatePayload: Record<string, any> = { status };
+    if (usuarioFinalizadorId) {
+      updatePayload.usuario_id = usuarioFinalizadorId;
+    }
+
     await supabase
       .from("conferencias_mestre")
-      .update({ status })
+      .update(updatePayload)
       .eq("id", conferenciaId);
 
     for (const item of itensAtualizados) {
@@ -109,7 +119,7 @@ export const conferenciasService = {
         .from("conferencia_itens")
         .update({
           quantidade_contada: Number(item.quantidade_contada) || 0,
-          lote: item.lote || null,
+          lote: item.lote ? item.lote.toUpperCase() : null,
           data_validade: item.data_validade || null
         })
         .eq("id", item.id);

@@ -58,7 +58,8 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
   };
 
   const handleSalvarConferencia = async (confId: string, itens: any[], status: "Em Andamento" | "Finalizada") => {
-    await conferenciasService.salvarProgressoItens(confId, itens, status);
+    // Ao salvar/finalizar, vincula o conferente como o usuário logado que executou a contagem
+    await conferenciasService.salvarProgressoItens(confId, itens, status, usuarioLogadoId);
     await carregarLista();
     if (status === "Finalizada") {
       setAbaAtiva("conferidas");
@@ -69,10 +70,12 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
   const conferidas = conferencias.filter((c) => c.status === "Finalizada");
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center">
-      <div className="w-full max-w-6xl">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 flex flex-col items-center">
+      <div className="w-full max-w-5xl">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
             <button
               onClick={onVoltarParaHome || (() => window.history.back())}
               className="p-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-full text-teal-800 transition shadow-sm"
@@ -83,8 +86,8 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
               </svg>
             </button>
             <div>
-              <h1 className="text-2xl font-black text-teal-950 uppercase tracking-tight">Conferência Cega</h1>
-              <p className="text-sm text-slate-500 font-medium">Auditoria de Recebimento de Mercadorias via XML de NF-e</p>
+              <h1 className="text-xl sm:text-2xl font-black text-teal-950 uppercase tracking-tight">Conferência Cega</h1>
+              <p className="text-xs text-slate-500 font-medium">Auditoria de Recebimento via XML de NF-e</p>
             </div>
           </div>
 
@@ -99,20 +102,21 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={carregando}
-              className="bg-teal-800 hover:bg-teal-900 active:scale-95 text-white font-bold px-5 py-3 rounded-2xl shadow-md transition flex items-center gap-2 text-sm"
+              className="bg-teal-800 hover:bg-teal-900 active:scale-95 text-white font-bold px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl shadow-md transition flex items-center gap-2 text-xs sm:text-sm"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
               </svg>
-              Importar XML da Nota
+              <span>Importar XML</span>
             </button>
           </div>
         </div>
 
-        <div className="flex border-b border-slate-200 mb-6 gap-8">
+        {/* Abas */}
+        <div className="flex border-b border-slate-200 mb-6 gap-6 sm:gap-8">
           <button
             onClick={() => setAbaAtiva("pendentes")}
-            className={`pb-3 font-bold text-sm tracking-wider uppercase transition border-b-2 flex items-center gap-2 ${
+            className={`pb-3 font-black text-xs sm:text-sm tracking-wider uppercase transition border-b-2 flex items-center gap-2 ${
               abaAtiva === "pendentes" ? "border-teal-800 text-teal-900" : "border-transparent text-slate-400 hover:text-slate-600"
             }`}
           >
@@ -121,7 +125,7 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
           </button>
           <button
             onClick={() => setAbaAtiva("conferidas")}
-            className={`pb-3 font-bold text-sm tracking-wider uppercase transition border-b-2 flex items-center gap-2 ${
+            className={`pb-3 font-black text-xs sm:text-sm tracking-wider uppercase transition border-b-2 flex items-center gap-2 ${
               abaAtiva === "conferidas" ? "border-teal-800 text-teal-900" : "border-transparent text-slate-400 hover:text-slate-600"
             }`}
           >
@@ -130,29 +134,30 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
           </button>
         </div>
 
+        {/* Listagem */}
         {carregando ? (
-          <div className="text-center py-20 text-slate-400 font-medium">Carregando dados da conferência...</div>
+          <div className="text-center py-20 text-slate-400 font-medium">Carregando conferências...</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {(abaAtiva === "pendentes" ? pendentes : conferidas).map((conf) => (
-              <div key={conf.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+              <div key={conf.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
                 <div>
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="text-xs font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[11px] font-black text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg">
                       NF #{conf.numero_nota_fiscal}
                     </span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                       conf.status === "Finalizada" ? "bg-teal-100 text-teal-800" : conf.status === "Em Andamento" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
                     }`}>
                       {conf.status}
                     </span>
                   </div>
 
-                  <h3 className="font-extrabold text-slate-800 text-base leading-snug line-clamp-2 mb-2">
+                  <h3 className="font-extrabold text-slate-800 text-sm leading-snug line-clamp-2 mb-2">
                     {conf.fornecedor?.razao_social || "Fornecedor Não Identificado"}
                   </h3>
 
-                  <div className="text-xs text-slate-500 space-y-1 mb-4">
+                  <div className="text-[11px] text-slate-500 space-y-0.5 mb-4">
                     <div><strong>CNPJ:</strong> {conf.fornecedor?.cnpj || "-"}</div>
                     <div><strong>Emissão:</strong> {new Date(conf.data_emissao_nota).toLocaleDateString("pt-BR")}</div>
                     <div><strong>Itens na Nota:</strong> {conf.conferencia_itens?.length || 0} produtos</div>
@@ -162,7 +167,7 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
                 {abaAtiva === "pendentes" ? (
                   <button
                     onClick={() => setConferenciaSelecionada(conf)}
-                    className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2 shadow"
+                    className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold py-2.5 rounded-xl transition text-xs sm:text-sm flex items-center justify-center gap-2 shadow"
                   >
                     {conf.status === "Em Andamento" ? "Continuar Conferência" : "Iniciar Conferência"}
                   </button>
