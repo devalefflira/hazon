@@ -5,6 +5,7 @@ import type { ConferenciaRegistro } from "./types/conferencias.types";
 import { parsearXMLNotaFiscal } from "./utils/xmlNfeParser";
 import { ModalConferencia } from "./components/ModalConferencia";
 import { ModalDetalhesConferida } from "./components/ModalDetalhesConferida";
+import { ModalPreviaItens } from "./components/ModalPreviaItens";
 import { gerarPdfRelatorioConferencia } from "./utils/gerarPdfRelatorio";
 import { gerarPdfRelatorioAgregado } from "./utils/gerarPdfRelatorioAgregado";
 
@@ -19,6 +20,7 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
   const [selecionadas, setSelecionadas] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [conferenciaSelecionada, setConferenciaSelecionada] = useState<ConferenciaRegistro | null>(null);
+  const [modalPrevia, setModalPrevia] = useState<ConferenciaRegistro | null>(null);
   const [modalDetalhes, setModalDetalhes] = useState<ConferenciaRegistro | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,7 +128,7 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
           </div>
         </div>
 
-        {/* Abas e Ação Agregada */}
+        {/* Abas */}
         <div className="flex flex-wrap items-center justify-between border-b border-slate-200 mb-6 gap-4">
           <div className="flex gap-6 sm:gap-8">
             <button
@@ -149,7 +151,6 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
             </button>
           </div>
 
-          {/* Botão Relatório Agregado (habilitado apenas na aba Conferidas quando há seleção) */}
           {abaAtiva === "conferidas" && (
             <button
               onClick={handleGerarRelatorioAgregado}
@@ -181,7 +182,6 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
                   }`}
                 >
                   <div>
-                    {/* Topo do Card */}
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
                         {abaAtiva === "conferidas" && (
@@ -203,18 +203,15 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
                       </span>
                     </div>
 
-                    {/* Fornecedor */}
                     <h3 className="font-extrabold text-slate-800 text-sm leading-snug line-clamp-2 mb-2">
                       {conf.fornecedor?.razao_social || "Fornecedor Não Identificado"}
                     </h3>
 
-                    {/* Informações */}
                     <div className="text-[11px] text-slate-500 space-y-0.5 mb-4">
                       <div><strong>CNPJ:</strong> {conf.fornecedor?.cnpj || "-"}</div>
                       <div><strong>Emissão:</strong> {new Date(conf.data_emissao_nota).toLocaleDateString("pt-BR")}</div>
                       <div><strong>Itens na Nota:</strong> {conf.conferencia_itens?.length || 0} produtos</div>
                       
-                      {/* Dados de Finalização (Exclusivo da aba Conferidas) */}
                       {conf.status === "Finalizada" && (
                         <div className="pt-2 mt-2 border-t border-slate-100 space-y-0.5 text-slate-700">
                           <div><strong>Conferente:</strong> <span className="text-teal-900 font-bold">{conf.usuario?.nome || "-"}</span></div>
@@ -226,12 +223,20 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
 
                   {/* Ações */}
                   {abaAtiva === "pendentes" ? (
-                    <button
-                      onClick={() => setConferenciaSelecionada(conf)}
-                      className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold py-2.5 rounded-xl transition text-xs sm:text-sm flex items-center justify-center gap-2 shadow"
-                    >
-                      {conf.status === "Em Andamento" ? "Continuar Conferência" : "Iniciar Conferência"}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setModalPrevia(conf)}
+                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl transition text-xs text-center"
+                      >
+                        Ver Itens
+                      </button>
+                      <button
+                        onClick={() => setConferenciaSelecionada(conf)}
+                        className="flex-1 bg-teal-800 hover:bg-teal-900 text-white font-bold py-2.5 rounded-xl transition text-xs text-center shadow"
+                      >
+                        {conf.status === "Em Andamento" ? "Continuar" : "Iniciar"}
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex gap-2">
                       <button
@@ -255,6 +260,14 @@ const ConfCega: React.FC<ConfCegaProps> = ({ usuarioLogadoId, onVoltarParaHome }
           </div>
         )}
       </div>
+
+      {modalPrevia && (
+        <ModalPreviaItens
+          conferencia={modalPrevia}
+          onClose={() => setModalPrevia(null)}
+          onIniciarConferencia={() => setConferenciaSelecionada(modalPrevia)}
+        />
+      )}
 
       {conferenciaSelecionada && (
         <ModalConferencia

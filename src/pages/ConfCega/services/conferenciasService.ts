@@ -1,3 +1,4 @@
+// src/pages/ConfCega/services/conferenciasService.ts
 import { supabase } from "../../../lib/supabaseClient";
 import type { NotaImportadaXML } from "../types/conferencias.types";
 
@@ -59,7 +60,6 @@ export const conferenciasService = {
 
     if (errConf) throw errConf;
 
-    // Cria registro de produto baseado estritamente na descrição da nota atual
     for (let i = 0; i < nota.itens.length; i++) {
       const it = nota.itens[i];
       const codUnicoItem = `ITEM-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`;
@@ -69,7 +69,7 @@ export const conferenciasService = {
         .insert({
           codprod: codUnicoItem,
           descricao: it.xProd,
-          unidade: "UN"
+          unidade: it.uCom || "UN"
         })
         .select("id")
         .single();
@@ -110,6 +110,7 @@ export const conferenciasService = {
         .from("conferencia_itens")
         .update({
           quantidade_contada: Number(item.quantidade_contada) || 0,
+          unidade_medida: item.unidade_medida || "UN",
           lote: item.lote ? item.lote.toUpperCase() : null,
           data_validade: item.data_validade || null
         })

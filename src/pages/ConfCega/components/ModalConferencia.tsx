@@ -1,3 +1,4 @@
+// src/pages/ConfCega/components/ModalConferencia.tsx
 import React, { useState } from "react";
 import type { ConferenciaRegistro } from "../types/conferencias.types";
 
@@ -7,12 +8,15 @@ interface ModalConferenciaProps {
   onSalvar: (conferenciaId: string, itens: any[], status: "Em Andamento" | "Finalizada") => Promise<void>;
 }
 
+const OPCOES_EMBALAGEM = ["UN", "CX", "FD", "SC", "PC"];
+
 export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia, onClose, onSalvar }) => {
   const [itens, setItens] = useState<any[]>(
     conferencia.conferencia_itens?.map(item => ({
       id: item.id,
       descricao: item.produto?.descricao || "-",
       quantidade_contada: item.quantidade_contada || "",
+      unidade_medida: item.unidade_medida || "UN",
       lote: item.lote || "",
       data_validade: item.data_validade || ""
     })) || []
@@ -58,19 +62,18 @@ export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia,
         <div className="p-3 sm:p-5 overflow-y-auto flex-1 space-y-3 bg-slate-50">
           {itens.map((item, idx) => (
             <div key={item.id} className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
-              
-              {/* Apenas a Descrição do Produto do XML */}
               <div>
                 <h4 className="text-xs sm:text-sm font-extrabold text-slate-800 leading-snug">
                   {item.descricao}
                 </h4>
               </div>
 
-              {/* Grid de Inputs */}
+              {/* Grid com QTD, EMB, LOTE e VALIDADE */}
               <div className="grid grid-cols-12 gap-2 pt-1 border-t border-slate-100">
-                <div className="col-span-4">
+                {/* QTD */}
+                <div className="col-span-3">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
-                    Qtd (UN)
+                    QTD
                   </label>
                   <input
                     type="number"
@@ -83,22 +86,40 @@ export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia,
                   />
                 </div>
 
-                <div className="col-span-4">
+                {/* EMB */}
+                <div className="col-span-3">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
-                    Lote
+                    EMB
+                  </label>
+                  <select
+                    value={item.unidade_medida}
+                    onChange={(e) => handleItemChange(idx, "unidade_medida", e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 focus:bg-white focus:border-teal-600 rounded-xl px-1.5 py-2 text-xs font-bold text-slate-800 cursor-pointer"
+                  >
+                    {OPCOES_EMBALAGEM.map((emb) => (
+                      <option key={emb} value={emb}>{emb}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* LOTE */}
+                <div className="col-span-3">
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                    LOTE
                   </label>
                   <input
                     type="text"
-                    placeholder="Lote"
+                    placeholder="LOTE"
                     value={item.lote}
                     onChange={(e) => handleItemChange(idx, "lote", e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 focus:bg-white focus:border-teal-600 rounded-xl px-2 py-2 text-xs font-semibold uppercase text-slate-700"
                   />
                 </div>
 
-                <div className="col-span-4">
+                {/* VALIDADE */}
+                <div className="col-span-3">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
-                    Validade
+                    VALIDADE
                   </label>
                   <input
                     type="date"
@@ -108,7 +129,6 @@ export const ModalConferencia: React.FC<ModalConferenciaProps> = ({ conferencia,
                   />
                 </div>
               </div>
-
             </div>
           ))}
         </div>
