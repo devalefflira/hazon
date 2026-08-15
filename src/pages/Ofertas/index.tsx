@@ -1,4 +1,4 @@
-// Arquivo: src/pages/Ofertas/index.tsx
+// src/pages/Ofertas/index.tsx
 import { useState, useEffect } from 'react';
 import { ofertasService } from './services/ofertasService';
 import { gerarPdfOferta } from './utils/gerarPdfOferta';
@@ -16,14 +16,15 @@ const TIPOS_OFERTA_OPCOES = [
   'Data Comemorativa'
 ];
 
+type AbaPrincipalOfertas = 'SUGERIDAS' | 'REVISAR_APROVAR' | 'PRECIFICAR' | 'CONCLUIDAS';
+
 export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProps) {
   const [ofertas, setOfertas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Abas Principais
-  const [abaPrincipal, setAbaAtiva] = useState<'CRIADAS' | 'A_PRECIFICAR' | 'CONCLUIDAS'>('CRIADAS');
-  const [subAbaCriadas, setSubAbaCriadas] = useState<'EM_ANDAMENTO' | 'FINALIZADAS'>('EM_ANDAMENTO');
-  const [subAbaConcluidas, setSubAbaConcluidas] = useState<'GERAR_PLACAS' | 'GERAR_RELATORIO'>('GERAR_RELATORIO');
+  // 4 Fases Principais
+  const [abaPrincipal, setAbaAtiva] = useState<AbaPrincipalOfertas>('SUGERIDAS');
+  const [subAbaConcluidas, setSubAbaConcluidas] = useState<'GERAR_RELATORIO' | 'GERAR_PLACAS'>('GERAR_RELATORIO');
 
   // Sub-abas de Gerar Placas
   const [subAbaPlacas, setSubAbaPlacas] = useState<'LAYOUT' | 'GERAR'>('LAYOUT');
@@ -38,12 +39,16 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   // Seleção de Oferta para Gerar Placas
   const [ofertaParaPlaca, setOfertaParaPlaca] = useState<any | null>(null);
 
-  // Modal: Nova Oferta
+  // Modal: Nova Oferta / Edição na Lista Sugerida
   const [modalNovaOferta, setModalNovaOferta] = useState(false);
   const [codigoEdicaoAtual, setCodigoEdicaoAtual] = useState<string | null>(null);
   const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
   const [itensEmEdicao, setItensEmEdicao] = useState<any[]>([]);
+
+  // Modal: Revisar / Aprovar
+  const [ofertaEmRevisao, setOfertaEmRevisao] = useState<any | null>(null);
+  const [itensRevisaoSelecionados, setItensRevisaoSelecionados] = useState<string[]>([]);
 
   // Precificação
   const [ofertaEmPrecificacao, setOfertaEmPrecificacao] = useState<any | null>(null);
@@ -73,7 +78,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     carregarOfertas();
   }, []);
 
-  // Importar Imagem de Layout do Usuário (PNG/JPG)
   const handleImportarLayout = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -93,7 +97,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     }
   };
 
-  // Autocomplete de Produtos
   useEffect(() => {
     if (!termoBuscaProduto.trim()) {
       setProdutosEncontrados([]);
@@ -136,7 +139,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     setItensEmEdicao((prev) => prev.filter((i) => i.temp_id !== tempId));
   };
 
-  const handleSalvarOfertaCriada = async (statusFinal: 'Em Andamento' | 'Criada Finalizada') => {
+  const handleSalvarOfertaSugerida = async (avancarParaRevisao = false) => {
     if (itensEmEdicao.length === 0) {
       alert('Adicione ao menos um produto.');
       return;
@@ -145,6 +148,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     try {
       setSalvando(true);
       const userObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
+      const statusFinal = avancarParaRevisao ? 'Revisar/Aprovar' : 'Lista Sugerida';
 
       await ofertasService.salvarOferta({
         codigo_customizado: codigoEdicaoAtual,
@@ -153,14 +157,104 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         itens: itensEmEdicao
       });
 
-      alert(statusFinal === 'Em Andamento' ? 'Oferta salva em Criadas / Em Andamento!' : 'Oferta enviada para A Precificar!');
+      alert(avancarParaRevisao ? 'Oferta enviada para Revisar/Aprovar!' : 'Oferta salva na Lista Sugerida!');
       setModalNovaOferta(false);
       setCodigoEdicaoAtual(null);
       setItensEmEdicao([]);
       carregarOfertas();
+      if (avancarParaRevisao) {
+        setAbaAtiva('REVISAR_APROVAR');
+      } else {
+        setAbaAtiva('SUGERIDAS');
+      }
     } catch (err) {
       console.error(err);
       alert('Erro ao salvar oferta.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const handleAbrirRevisao = (oferta: any) => {
+    setOfertaEmRevisao(oferta);
+    const todosIds = (oferta.oferta_itens || []).map((it: any) => it.id);
+    setItensRevisaoSelecionados(todosIds);
+  };
+
+  const toggleItemRevisao = (id: string) => {
+    setItensRevisaoSelecionados((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleVoltarParaListaSugerida = async () => {
+    if (!ofertaEmRevisao) return;
+    try {
+      setSalvando(true);
+      const userObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
+      
+      const itensFinais = (ofertaEmRevisao.oferta_itens || [])
+        .filter((it: any) => itensRevisaoSelecionados.includes(it.id))
+        .map((item: any) => ({
+          produto_id: item.produto_id,
+          preco_custo_real: item.preco_custo_real,
+          preco_venda_tabela: item.preco_venda_tabela,
+          preco_oferta: item.preco_oferta || 0
+        }));
+
+      await ofertasService.salvarOferta({
+        codigo_customizado: ofertaEmRevisao.codigo_customizado,
+        usuario_id: userObj?.id,
+        status: 'Lista Sugerida',
+        itens: itensFinais
+      });
+
+      alert('Oferta retornada para a Lista Sugerida!');
+      setOfertaEmRevisao(null);
+      carregarOfertas();
+      setAbaAtiva('SUGERIDAS');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao retornar para Lista Sugerida.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const handleAprovarParaPrecificar = async () => {
+    if (!ofertaEmRevisao) return;
+    if (itensRevisaoSelecionados.length === 0) {
+      alert('Selecione ao menos um produto para aprovar.');
+      return;
+    }
+
+    try {
+      setSalvando(true);
+      const userObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
+
+      const itensFinais = (ofertaEmRevisao.oferta_itens || [])
+        .filter((it: any) => itensRevisaoSelecionados.includes(it.id))
+        .map((item: any) => ({
+          produto_id: item.produto_id,
+          preco_custo_real: item.preco_custo_real,
+          preco_venda_tabela: item.preco_venda_tabela,
+          preco_oferta: item.preco_oferta || 0
+        }));
+
+      await ofertasService.salvarOferta({
+        codigo_customizado: ofertaEmRevisao.codigo_customizado,
+        usuario_id: userObj?.id,
+        status: 'Precificar',
+        itens: itensFinais
+      });
+
+      alert('Oferta aprovada com sucesso! Prossiga com a precificação.');
+      setOfertaEmRevisao(null);
+      carregarOfertas();
+      setAbaAtiva('PRECIFICAR');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao aprovar oferta.');
     } finally {
       setSalvando(false);
     }
@@ -220,9 +314,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     }
   };
 
-  const ofertasEmAndamento = ofertas.filter((o) => o.status === 'Em Andamento');
-  const ofertasCriadasFinalizadas = ofertas.filter((o) => o.status === 'Criada Finalizada');
-  const ofertasAPrecificar = ofertasCriadasFinalizadas;
+  const ofertasSugeridas = ofertas.filter((o) => o.status === 'Lista Sugerida' || o.status === 'Em Andamento');
+  const ofertasRevisarAprovar = ofertas.filter((o) => o.status === 'Revisar/Aprovar' || o.status === 'Criada Finalizada');
+  const ofertasPrecificar = ofertas.filter((o) => o.status === 'Precificar');
   const ofertasConcluidas = ofertas.filter((o) => o.status === 'Concluida');
 
   const agoraData = new Date().toLocaleDateString('pt-BR');
@@ -239,7 +333,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
             <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
             <div>
               <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">OFERTAS</h1>
-              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Gestão, Precificação e Impressão de Placas</p>
+              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Fluxo de Sugestão, Revisão, Precificação e Placas</p>
             </div>
           </div>
           <button
@@ -255,54 +349,49 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           </button>
         </div>
 
-        {/* ABAS PRINCIPAIS */}
-        <div className="bg-gray-100 p-1 rounded-2xl flex text-xs font-black">
+        {/* 4 ABAS PRINCIPAIS */}
+        <div className="bg-gray-100 p-1 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs font-black">
           <button
             type="button"
-            onClick={() => setAbaAtiva('CRIADAS')}
-            className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${abaPrincipal === 'CRIADAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'}`}
+            onClick={() => setAbaAtiva('SUGERIDAS')}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'SUGERIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            CRIADAS
+            <span>LISTA SUGERIDA</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasSugeridas.length}</span>
           </button>
           <button
             type="button"
-            onClick={() => setAbaAtiva('A_PRECIFICAR')}
-            className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${abaPrincipal === 'A_PRECIFICAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'}`}
+            onClick={() => setAbaAtiva('REVISAR_APROVAR')}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'REVISAR_APROVAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            A PRECIFICAR ({ofertasAPrecificar.length})
+            <span>REVISAR / APROVAR</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasRevisarAprovar.length}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('PRECIFICAR')}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'PRECIFICAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <span>PRECIFICAR</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasPrecificar.length}</span>
           </button>
           <button
             type="button"
             onClick={() => setAbaAtiva('CONCLUIDAS')}
-            className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${abaPrincipal === 'CONCLUIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'}`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'CONCLUIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            CONCLUÍDAS ({ofertasConcluidas.length})
+            <span>CONCLUÍDAS</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasConcluidas.length}</span>
           </button>
         </div>
-
-        {/* SUB-ABAS DE CRIADAS */}
-        {abaPrincipal === 'CRIADAS' && (
-          <div className="flex gap-2 border-b border-gray-100 pb-2">
-            <button
-              type="button"
-              onClick={() => setSubAbaCriadas('EM_ANDAMENTO')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
-                subAbaCriadas === 'EM_ANDAMENTO' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-gray-50 text-gray-400'
-              }`}
-            >
-              Em Andamento ({ofertasEmAndamento.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubAbaCriadas('FINALIZADAS')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
-                subAbaCriadas === 'FINALIZADAS' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-gray-50 text-gray-400'
-              }`}
-            >
-              Finalizadas ({ofertasCriadasFinalizadas.length})
-            </button>
-          </div>
-        )}
 
         {/* SUB-ABAS DE CONCLUÍDAS */}
         {abaPrincipal === 'CONCLUIDAS' && (
@@ -332,291 +421,319 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         <div className="flex-1 flex flex-col gap-2">
           {loading ? (
             <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando ofertas...</div>
-          ) : abaPrincipal === 'CRIADAS' && subAbaCriadas === 'EM_ANDAMENTO' ? (
-            ofertasEmAndamento.map((ofe) => (
-              <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                <div>
-                  <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                    {ofe.codigo_customizado}
-                  </span>
-                  <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                    Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                  </h4>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCodigoEdicaoAtual(ofe.codigo_customizado);
-                    setItensEmEdicao(
-                      (ofe.oferta_itens || []).map((item: any) => ({
-                        temp_id: item.id || Math.random().toString(),
-                        produto_id: item.produto_id,
-                        codprod: item.produtos?.codprod,
-                        descricao: item.produtos?.descricao,
-                        preco_custo_real: item.preco_custo_real,
-                        preco_venda_tabela: item.preco_venda_tabela
-                      }))
-                    );
-                    setModalNovaOferta(true);
-                  }}
-                  className="px-3.5 py-1.5 bg-amber-100 text-amber-900 rounded-xl text-xs font-black uppercase"
-                >
-                  Continuar
-                </button>
-              </div>
-            ))
-          ) : abaPrincipal === 'CRIADAS' && subAbaCriadas === 'FINALIZADAS' ? (
-            ofertasCriadasFinalizadas.length === 0 ? (
-              <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-                Nenhuma oferta finalizada nesta etapa.
-              </div>
-            ) : (
-              ofertasCriadasFinalizadas.map((ofe) => (
-                <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                      {ofe.codigo_customizado}
-                    </span>
-                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                      Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                    </h4>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      {ofe.data_registro} às {ofe.hora_registro}
-                    </p>
+          ) : (
+            <>
+              {/* ABA 1: LISTA SUGERIDA */}
+              {abaPrincipal === 'SUGERIDAS' && (
+                ofertasSugeridas.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+                    Nenhuma oferta na Lista Sugerida. Clique em "+ Nova Oferta" para começar.
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setOfertaVerDetalhes(ofe)}
-                    className="px-3.5 py-1.5 bg-emerald-100 text-emerald-900 rounded-xl text-xs font-black uppercase"
-                  >
-                    Ver Itens
-                  </button>
-                </div>
-              ))
-            )
-          ) : abaPrincipal === 'A_PRECIFICAR' ? (
-            ofertasAPrecificar.map((ofe) => (
-              <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                <div>
-                  <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                    {ofe.codigo_customizado}
-                  </span>
-                  <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                    A Precificar | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                  </h4>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleAbrirPrecificacao(ofe)}
-                  className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm"
-                >
-                  Precificar
-                </button>
-              </div>
-            ))
-          ) : abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_RELATORIO' ? (
-            ofertasConcluidas.length === 0 ? (
-              <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-                Nenhuma oferta concluída ainda.
-              </div>
-            ) : (
-              ofertasConcluidas.map((ofe) => (
-                <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                        {ofe.codigo_customizado}
-                      </span>
-                      <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded uppercase">
-                        {ofe.tipo_oferta === 'Data Comemorativa' ? ofe.tipo_oferta_customizado : ofe.tipo_oferta}
-                      </span>
-                    </div>
-                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                      Período: {ofe.data_inicio} até {ofe.data_fim}
-                    </h4>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                    </p>
-                  </div>
-
-                  {/* OPÇÕES DE RELATÓRIO: COMPLETO OU ENCARTE */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
-                      className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-xs font-black uppercase transition-all"
-                      title="Relatório com Custo, Tabela e Oferta"
-                    >
-                      📄 Completo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'ENCARTE')}
-                      className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
-                      title="Relatório simplificado apenas com Descrição e Preço de Oferta"
-                    >
-                      🎨 Encarte
-                    </button>
-                  </div>
-                </div>
-              ))
-            )
-          ) : abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_PLACAS' ? (
-            
-            /* CONTEÚDO DE GERAR PLACAS (LAYOUT / GERAR) */
-            <div className="flex flex-col gap-4">
-              
-              {/* SUB-ABAS INTERNAS DE PLACAS */}
-              <div className="bg-emerald-50 border border-emerald-200 p-1 rounded-2xl flex text-xs font-black">
-                <button
-                  type="button"
-                  onClick={() => setSubAbaPlacas('LAYOUT')}
-                  className={`flex-1 py-2 rounded-xl uppercase transition-all ${
-                    subAbaPlacas === 'LAYOUT' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
-                  }`}
-                >
-                  1. Layout da Placa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSubAbaPlacas('GERAR')}
-                  className={`flex-1 py-2 rounded-xl uppercase transition-all ${
-                    subAbaPlacas === 'GERAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
-                  }`}
-                >
-                  2. Gerar Impressão
-                </button>
-              </div>
-
-              {/* ABA 1: SELEÇÃO E IMPORTAÇÃO DE LAYOUT */}
-              {subAbaPlacas === 'LAYOUT' && (
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-black text-gray-700 uppercase">Layouts Cadastrados</span>
-                    <label className="bg-[#09797a] hover:bg-[#075f60] text-white px-3 py-1.5 rounded-xl text-xs font-black uppercase cursor-pointer transition-all shadow-sm">
-                      + Importar Layout (PNG/JPG)
-                      <input type="file" accept="image/*" onChange={handleImportarLayout} className="hidden" />
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mt-1">
-                    {layoutsDisponiveis.map((lay) => (
-                      <div
-                        key={lay.id}
-                        onClick={() => setLayoutSelecionado(lay)}
-                        className={`p-3 rounded-2xl border-2 cursor-pointer flex flex-col gap-2 transition-all ${
-                          layoutSelecionado?.id === lay.id ? 'border-[#09797a] bg-emerald-50/50' : 'border-gray-200 bg-white'
-                        }`}
-                      >
-                        <div className="h-24 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200">
-                          {lay.imagemUrl ? (
-                            <img src={lay.imagemUrl} alt={lay.nome} className="h-full object-contain" />
-                          ) : (
-                            <span className="text-[10px] font-black text-gray-400 text-center px-2 uppercase">
-                              Template Modelo BV (2 por página)
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex justify-between items-center text-xs font-black">
-                          <span className="text-gray-800 uppercase truncate">{lay.nome}</span>
-                          {layoutSelecionado?.id === lay.id && <span className="text-[#09797a]">✓ Ativo</span>}
-                        </div>
+                ) : (
+                  ofertasSugeridas.map((ofe) => (
+                    <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                      <div>
+                        <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                          {ofe.codigo_customizado}
+                        </span>
+                        <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                          Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                        </h4>
+                        <p className="text-[10px] text-gray-400 font-mono">
+                          {ofe.data_registro} às {ofe.hora_registro}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSubAbaPlacas('GERAR')}
-                    className="w-full bg-[#09797a] text-white py-3 rounded-2xl text-xs font-black uppercase shadow-md mt-2"
-                  >
-                    Avançar para Gerar Impressão →
-                  </button>
-                </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCodigoEdicaoAtual(ofe.codigo_customizado);
+                            setItensEmEdicao(
+                              (ofe.oferta_itens || []).map((item: any) => ({
+                                temp_id: item.id || Math.random().toString(),
+                                produto_id: item.produto_id,
+                                codprod: item.produtos?.codprod,
+                                descricao: item.produtos?.descricao,
+                                preco_custo_real: item.preco_custo_real,
+                                preco_venda_tabela: item.preco_venda_tabela
+                              }))
+                            );
+                            setModalNovaOferta(true);
+                          }}
+                          className="px-3.5 py-1.5 bg-teal-100 hover:bg-teal-200 text-teal-900 rounded-xl text-xs font-black uppercase transition-all"
+                        >
+                          Editar / Adicionar Itens
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )
               )}
 
-              {/* ABA 2: GERAR PLACAS */}
-              {subAbaPlacas === 'GERAR' && (
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
-                  <div className="bg-white border border-emerald-200 p-3 rounded-2xl flex justify-between items-center text-xs font-bold text-gray-800">
-                    <div>
-                      <span className="text-[9px] text-gray-400 block uppercase">Layout Selecionado</span>
-                      <span>{layoutSelecionado?.nome || 'Padrão'}</span>
+              {/* ABA 2: REVISAR / APROVAR */}
+              {abaPrincipal === 'REVISAR_APROVAR' && (
+                ofertasRevisarAprovar.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+                    Nenhuma oferta aguardando revisão e aprovação.
+                  </div>
+                ) : (
+                  ofertasRevisarAprovar.map((ofe) => (
+                    <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                      <div>
+                        <span className="text-[9px] font-mono font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase">
+                          {ofe.codigo_customizado}
+                        </span>
+                        <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                          Revisão Pendente | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                        </h4>
+                        <p className="text-[10px] text-gray-400 font-mono">
+                          Resp: {ofe.usuarios?.nome || 'SISTEMA'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAbrirRevisao(ofe)}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                      >
+                        Revisar / Aprovar
+                      </button>
                     </div>
+                  ))
+                )
+              )}
+
+              {/* ABA 3: PRECIFICAR */}
+              {abaPrincipal === 'PRECIFICAR' && (
+                ofertasPrecificar.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+                    Nenhuma oferta aguardando precificação.
+                  </div>
+                ) : (
+                  ofertasPrecificar.map((ofe) => (
+                    <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                      <div>
+                        <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                          {ofe.codigo_customizado}
+                        </span>
+                        <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                          Aguardando Precificação | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                        </h4>
+                        <p className="text-[10px] text-gray-400 font-mono">
+                          Resp: {ofe.usuarios?.nome || 'SISTEMA'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAbrirPrecificacao(ofe)}
+                        className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                      >
+                        Precificar
+                      </button>
+                    </div>
+                  ))
+                )
+              )}
+
+              {/* ABA 4: CONCLUÍDAS - GERAR RELATÓRIO */}
+              {abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_RELATORIO' && (
+                ofertasConcluidas.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+                    Nenhuma oferta concluída ainda.
+                  </div>
+                ) : (
+                  ofertasConcluidas.map((ofe) => (
+                    <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                            {ofe.codigo_customizado}
+                          </span>
+                          <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded uppercase">
+                            {ofe.tipo_oferta === 'Data Comemorativa' ? ofe.tipo_oferta_customizado : ofe.tipo_oferta}
+                          </span>
+                        </div>
+                        <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                          Período: {ofe.data_inicio} até {ofe.data_fim}
+                        </h4>
+                        <p className="text-[10px] text-gray-400 font-mono">
+                          Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
+                          className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-xs font-black uppercase transition-all"
+                          title="Relatório com Custo, Tabela e Oferta"
+                        >
+                          📄 Completo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'ENCARTE')}
+                          className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                          title="Relatório simplificado apenas com Descrição e Preço de Oferta"
+                        >
+                          🎨 Encarte
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+
+              {/* ABA 4: CONCLUÍDAS - GERAR PLACAS */}
+              {abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_PLACAS' && (
+                <div className="flex flex-col gap-4">
+                  <div className="bg-emerald-50 border border-emerald-200 p-1 rounded-2xl flex text-xs font-black">
                     <button
                       type="button"
                       onClick={() => setSubAbaPlacas('LAYOUT')}
-                      className="text-[#09797a] text-[10px] uppercase underline font-black"
+                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${
+                        subAbaPlacas === 'LAYOUT' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                      }`}
                     >
-                      Alterar
+                      1. Layout da Placa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubAbaPlacas('GERAR')}
+                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${
+                        subAbaPlacas === 'GERAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                      }`}
+                    >
+                      2. Gerar Impressão
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-gray-500 uppercase">Selecione a Oferta Concluída</label>
-                      <select
-                        value={ofertaParaPlaca?.id || ''}
-                        onChange={(e) => {
-                          const encont = ofertasConcluidas.find((o) => o.id === e.target.value);
-                          setOfertaParaPlaca(encont || null);
-                        }}
-                        className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
-                      >
-                        <option value="">Selecione...</option>
-                        {ofertasConcluidas.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.codigo_customizado} - {o.tipo_oferta} ({o.oferta_itens?.length || 0} itens)
-                          </option>
+                  {subAbaPlacas === 'LAYOUT' && (
+                    <div className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-black text-gray-700 uppercase">Layouts Cadastrados</span>
+                        <label className="bg-[#09797a] hover:bg-[#075f60] text-white px-3 py-1.5 rounded-xl text-xs font-black uppercase cursor-pointer transition-all shadow-sm">
+                          + Importar Layout (PNG/JPG)
+                          <input type="file" accept="image/*" onChange={handleImportarLayout} className="hidden" />
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mt-1">
+                        {layoutsDisponiveis.map((lay) => (
+                          <div
+                            key={lay.id}
+                            onClick={() => setLayoutSelecionado(lay)}
+                            className={`p-3 rounded-2xl border-2 cursor-pointer flex flex-col gap-2 transition-all ${
+                              layoutSelecionado?.id === lay.id ? 'border-[#09797a] bg-emerald-50/50' : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="h-24 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200">
+                              {lay.imagemUrl ? (
+                                <img src={lay.imagemUrl} alt={lay.nome} className="h-full object-contain" />
+                              ) : (
+                                <span className="text-[10px] font-black text-gray-400 text-center px-2 uppercase">
+                                  Template Modelo BV (2 por página)
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex justify-between items-center text-xs font-black">
+                              <span className="text-gray-800 uppercase truncate">{lay.nome}</span>
+                              {layoutSelecionado?.id === lay.id && <span className="text-[#09797a]">✓ Ativo</span>}
+                            </div>
+                          </div>
                         ))}
-                      </select>
-                    </div>
+                      </div>
 
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-gray-500 uppercase">Placas Por Página A4</label>
-                      <select
-                        value={placasPorPaginaConfig}
-                        onChange={(e) => setPlacasPorPaginaConfig(Number(e.target.value))}
-                        className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+                      <button
+                        type="button"
+                        onClick={() => setSubAbaPlacas('GERAR')}
+                        className="w-full bg-[#09797a] text-white py-3 rounded-2xl text-xs font-black uppercase shadow-md mt-2"
                       >
-                        <option value={1}>1 Placa por Folha (A4 Inteira)</option>
-                        <option value={2}>2 Placas por Folha (Meia A4 - Padrão)</option>
-                        <option value={4}>4 Placas por Folha (Quarto A4)</option>
-                      </select>
+                        Avançar para Gerar Impressão →
+                      </button>
                     </div>
-                  </div>
+                  )}
 
-                  <button
-                    type="button"
-                    disabled={!ofertaParaPlaca}
-                    onClick={() =>
-                      gerarPdfPlacas(
-                        ofertaParaPlaca,
-                        ofertaParaPlaca.oferta_itens || [],
-                        layoutSelecionado?.imagemUrl,
-                        placasPorPaginaConfig
-                      )
-                    }
-                    className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3.5 rounded-2xl text-xs font-black uppercase shadow-md disabled:opacity-40 mt-2"
-                  >
-                    🖨️ Gerar PDF de Placas de Oferta
-                  </button>
+                  {subAbaPlacas === 'GERAR' && (
+                    <div className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
+                      <div className="bg-white border border-emerald-200 p-3 rounded-2xl flex justify-between items-center text-xs font-bold text-gray-800">
+                        <div>
+                          <span className="text-[9px] text-gray-400 block uppercase">Layout Selecionado</span>
+                          <span>{layoutSelecionado?.nome || 'Padrão'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSubAbaPlacas('LAYOUT')}
+                          className="text-[#09797a] text-[10px] uppercase underline font-black"
+                        >
+                          Alterar
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase">Selecione a Oferta Concluída</label>
+                          <select
+                            value={ofertaParaPlaca?.id || ''}
+                            onChange={(e) => {
+                              const encont = ofertasConcluidas.find((o) => o.id === e.target.value);
+                              setOfertaParaPlaca(encont || null);
+                            }}
+                            className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
+                          >
+                            <option value="">Selecione...</option>
+                            {ofertasConcluidas.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.codigo_customizado} - {o.tipo_oferta} ({o.oferta_itens?.length || 0} itens)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase">Placas Por Página A4</label>
+                          <select
+                            value={placasPorPaginaConfig}
+                            onChange={(e) => setPlacasPorPaginaConfig(Number(e.target.value))}
+                            className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+                          >
+                            <option value={1}>1 Placa por Folha (A4 Inteira)</option>
+                            <option value={2}>2 Placas por Folha (Meia A4 - Padrão)</option>
+                            <option value={4}>4 Placas por Folha (Quarto A4)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={!ofertaParaPlaca}
+                        onClick={() =>
+                          gerarPdfPlacas(
+                            ofertaParaPlaca,
+                            ofertaParaPlaca.oferta_itens || [],
+                            layoutSelecionado?.imagemUrl,
+                            placasPorPaginaConfig
+                          )
+                        }
+                        className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3.5 rounded-2xl text-xs font-black uppercase shadow-md disabled:opacity-40 mt-2"
+                      >
+                        🖨️ Gerar PDF de Placas de Oferta
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-
-            </div>
-          ) : null}
+            </>
+          )}
         </div>
-
       </div>
 
-      {/* MODAL: NOVA OFERTA */}
+      {/* MODAL: NOVA OFERTA / EDIÇÃO DE ITENS (LISTA SUGERIDA) */}
       {modalNovaOferta && (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
           <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
               <h3 className="text-[#09797a] font-black text-base uppercase">
-                {codigoEdicaoAtual ? `EDITAR OFERTA ${codigoEdicaoAtual}` : 'NOVA OFERTA'}
+                {codigoEdicaoAtual ? `EDITAR LISTA SUGERIDA (${codigoEdicaoAtual})` : 'NOVA OFERTA - LISTA SUGERIDA'}
               </h3>
               <button type="button" onClick={() => setModalNovaOferta(false)} className="text-gray-400 font-bold text-base">✕</button>
             </div>
@@ -632,7 +749,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </div>
             </div>
 
-            {/* BUSCA DE PRODUTO */}
             <div className="flex gap-2 relative">
               <input
                 type="text"
@@ -659,7 +775,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               )}
             </div>
 
-            {/* TABELA DE ITENS ADICIONADOS */}
             <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 max-h-[35vh]">
               <table className="w-full text-left text-xs font-bold">
                 <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
@@ -675,7 +790,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                   {itensEmEdicao.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-6 text-center text-gray-400 italic text-xs">
-                        Nenhum produto adicionado.
+                        Nenhum produto adicionado à lista.
                       </td>
                     </tr>
                   ) : (
@@ -705,7 +820,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </table>
             </div>
 
-            {/* BOTÕES */}
             <div className="flex gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
@@ -717,18 +831,123 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               <button
                 type="button"
                 disabled={salvando || itensEmEdicao.length === 0}
-                onClick={() => handleSalvarOfertaCriada('Em Andamento')}
+                onClick={() => handleSalvarOfertaSugerida(false)}
                 className="flex-1 py-3 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-2xl text-xs font-black uppercase"
               >
-                Pausar
+                Salvar na Lista Sugerida
               </button>
               <button
                 type="button"
                 disabled={salvando || itensEmEdicao.length === 0}
-                onClick={() => handleSalvarOfertaCriada('Criada Finalizada')}
+                onClick={() => handleSalvarOfertaSugerida(true)}
                 className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
               >
-                Finalizar Oferta
+                Seguir para Revisar/Aprovar →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REVISAR / APROVAR */}
+      {ofertaEmRevisao && (
+        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
+          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+              <div>
+                <span className="text-[10px] uppercase font-black text-amber-700">Fase de Revisão</span>
+                <h3 className="text-[#09797a] font-black text-base uppercase">
+                  REVISAR / APROVAR OFERTA {ofertaEmRevisao.codigo_customizado}
+                </h3>
+              </div>
+              <button type="button" onClick={() => setOfertaEmRevisao(null)} className="text-gray-400 font-bold text-base">✕</button>
+            </div>
+
+            <div className="flex justify-between items-center text-xs font-bold text-gray-600 bg-gray-50 p-3 rounded-2xl">
+              <span>Selecione os produtos que serão aprovados para precificação:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const todosIds = (ofertaEmRevisao.oferta_itens || []).map((it: any) => it.id);
+                  if (itensRevisaoSelecionados.length === todosIds.length) {
+                    setItensRevisaoSelecionados([]);
+                  } else {
+                    setItensRevisaoSelecionados(todosIds);
+                  }
+                }}
+                className="text-[#09797a] underline font-black text-[11px] uppercase"
+              >
+                {itensRevisaoSelecionados.length === (ofertaEmRevisao.oferta_itens || []).length ? 'Desmarcar Todos' : 'Marcar Todos'}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 max-h-[40vh]">
+              <table className="w-full text-left text-xs font-bold">
+                <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
+                  <tr>
+                    <th className="p-2 text-center w-10">OK</th>
+                    <th className="p-2">CODPROD</th>
+                    <th className="p-2">DESCRIÇÃO</th>
+                    <th className="p-2 text-right">CUSTO REAL</th>
+                    <th className="p-2 text-right">PVENDA</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(ofertaEmRevisao.oferta_itens || []).map((item: any) => {
+                    const prod = item.produtos || {};
+                    const isChecked = itensRevisaoSelecionados.includes(item.id);
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => toggleItemRevisao(item.id)}
+                        className={`cursor-pointer transition-all ${isChecked ? 'bg-emerald-50/60' : 'hover:bg-gray-50 opacity-60'}`}
+                      >
+                        <td className="p-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="w-4 h-4 text-[#09797a] rounded border-gray-300"
+                          />
+                        </td>
+                        <td className="p-2 font-mono text-[#09797a]">{prod.codprod}</td>
+                        <td className="p-2 uppercase">{prod.descricao}</td>
+                        <td className="p-2 text-right font-mono text-gray-500">
+                          {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="p-2 text-right font-mono text-gray-800">
+                          {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setOfertaEmRevisao(null)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                disabled={salvando}
+                onClick={handleVoltarParaListaSugerida}
+                className="flex-1 py-3 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-2xl text-xs font-black uppercase transition-all"
+              >
+                ← Revisar (Voltar)
+              </button>
+              <button
+                type="button"
+                disabled={salvando || itensRevisaoSelecionados.length === 0}
+                onClick={handleAprovarParaPrecificar}
+                className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+              >
+                Aprovar ({itensRevisaoSelecionados.length}) e Precificar →
               </button>
             </div>
           </div>
@@ -864,7 +1083,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* MODAL: VER DETALHES DE OFERTA CRIADA FINALIZADA */}
+      {/* MODAL: VER DETALHES DE OFERTA */}
       {ofertaVerDetalhes && (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
           <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
