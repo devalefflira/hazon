@@ -21,6 +21,8 @@ export interface VencimentoItem {
     descricao: string;
     codbarra?: string;
     unidade?: string;
+    custoreal?: number;
+    pvenda?: number;
   };
   usuarios?: {
     id: string;
@@ -43,10 +45,12 @@ export const vencimentosService = {
   async buscarProdutos(termo: string): Promise<any[]> {
     if (!termo.trim()) return [];
 
+    const pattern = termo.trim().replace(/\s+/g, '%').replace(/%+/g, '%');
+
     const { data, error } = await supabase
       .from('produtos')
       .select('id, codprod, descricao, codbarra, unidade, custoreal, pvenda')
-      .or(`codbarra.ilike.%${termo}%,codprod.ilike.%${termo}%,descricao.ilike.%${termo}%`)
+      .or(`codbarra.ilike.%${pattern}%,codprod.ilike.%${pattern}%,descricao.ilike.%${pattern}%`)
       .limit(10);
 
     if (error) throw error;
@@ -118,27 +122,27 @@ export const vencimentosService = {
       .from('vencimentos_controle')
       .select(`
         id, codigo_customizado, produto_id, lote, data_validade, quantidade, origem, created_at,
-        produtos ( id, codprod, descricao, codbarra, unidade ),
+        produtos ( id, codprod, descricao, codbarra, unidade, custoreal, pvenda ),
         usuarios ( id, nome )
       `);
 
-    // 4.3. Busca do módulo de Inventário com joins do inventário e usuário
+    // 4.3. Busca do módulo de Inventário
     const { data: dadosInventario } = await supabase
       .from('inventario_itens')
       .select(`
         id, produto_id, lote, data_validade, quantidade_contabilizada,
         inventarios ( id, created_at, data_registro, hora_registro, usuarios ( id, nome ) ),
-        produtos ( id, codprod, descricao, codbarra, unidade )
+        produtos ( id, codprod, descricao, codbarra, unidade, custoreal, pvenda )
       `)
       .not('data_validade', 'is', null);
 
-    // 4.4. Busca do módulo de Conferência Cega com joins de conferência e usuário
+    // 4.4. Busca do módulo de Conferência Cega
     const { data: dadosConfCega } = await supabase
       .from('conferencia_itens')
       .select(`
         id, produto_id, lote, data_validade, quantidade_contada, created_at,
         conferencias_mestre ( id, created_at, data_conferencia, hora_conferencia, usuarios ( id, nome ) ),
-        produtos ( id, codprod, descricao, codbarra, unidade )
+        produtos ( id, codprod, descricao, codbarra, unidade, custoreal, pvenda )
       `)
       .not('data_validade', 'is', null);
 
@@ -236,5 +240,44 @@ export const vencimentosService = {
     });
 
     return listaUnificada.sort((a, b) => a.diasParaVencer - b.diasParaVencer);
+  },
+
+  // 5. Enviar Itens Selecionados para a fase "Revisar/Aprovar" do Módulo Ofertas
+  async enviarItensParaOferta(itensVencimento: any[], usuarioId?: string) {
+    const codCustom = `OFT-${Date.now().toString().slice(-6)}`;
+
+    // 5.1. Cria a oferta mestre na fase 'Revisar/Aprovar'
+    const { data: ofertaCriada, error: errMestre } = await supabase
+      .from('ofertas_mestre')
+      .insert({
+        codigo_customizado: codCustom,
+        usuario_id: usuarioId || null,
+        status: 'Revisar/Aprovar',
+        tipo_oferta: 'Queima de Estoque',
+        tipo_oferta_customizado: 'Controle de Validades (≤ 30 Dias)'
+      })
+      .select()
+      .single();
+
+    if (errMestre) throw errMestre;
+
+    // 5.2. Insere os itens vinculados na tabela oferta_itens
+    const inserts = itensVencimento.map((item) => {
+      const prod = item.produtos || {};
+      return {
+        oferta_mestre_id: ofertaCriada.id,
+        produto_id: item.produto_id,
+        preco_custo_real: Number(prod.custoreal || 0),
+        preco_venda_tabela: Number(prod.pvenda || 0),
+        preco_oferta: Number(prod.pvenda || 0)
+      };
+    });
+
+    if (inserts.length > 0) {
+      const { error: errItens } = await supabase.from('oferta_itens').insert(inserts);
+      if (errItens) throw errItens;
+    }
+
+    return ofertaCriada;
   }
 };

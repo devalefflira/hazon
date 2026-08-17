@@ -21,6 +21,10 @@ export default function Vencimentos({
   const [abaPrincipal, setAbaPrincipal] = useState<'A_VENCER' | 'VENCIDOS'>('A_VENCER');
   const [subAbaAVencer, setSubAbaAVencer] = useState<'CRITICO' | 'ALERTA' | 'NORMAL'>('CRITICO');
 
+  // Seleção de itens para oferta (apenas em CRITICO <= 30 dias)
+  const [itensSelecionados, setItensSelecionados] = useState<string[]>([]);
+  const [enviandoOferta, setEnviandoOferta] = useState(false);
+
   // Modal Novo Controle
   const [modalNovoAberto, setModalNovoAberto] = useState(false);
   const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
@@ -115,6 +119,32 @@ export default function Vencimentos({
     }
   };
 
+  // Seleção e envio para ofertas
+  const toggleSelecao = (id: string) => {
+    setItensSelecionados((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleEnviarParaOfertas = async () => {
+    if (itensSelecionados.length === 0) return;
+
+    try {
+      setEnviandoOferta(true);
+      const userObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
+      const itensParaEnviar = itensCriticos.filter((item) => itensSelecionados.includes(item.id));
+
+      await vencimentosService.enviarItensParaOferta(itensParaEnviar, userObj?.id);
+
+      alert(`Campanha de oferta criada com sucesso com ${itensSelecionados.length} item(ns) e enviada para a fase "Revisar / Aprovar" no módulo Ofertas!`);
+      setItensSelecionados([]);
+    } catch (err: any) {
+      alert('Erro ao enviar para Ofertas: ' + err.message);
+    } finally {
+      setEnviandoOferta(false);
+    }
+  };
+
   // Filtros
   const itensAVencer = itens.filter((i: VencimentoItem) => i.diasParaVencer >= 0);
   const itensVencidos = itens.filter((i: VencimentoItem) => i.diasParaVencer < 0);
@@ -158,7 +188,10 @@ export default function Vencimentos({
         <div className="bg-gray-100 p-1 rounded-2xl flex text-xs font-black">
           <button
             type="button"
-            onClick={() => setAbaPrincipal('A_VENCER')}
+            onClick={() => {
+              setAbaPrincipal('A_VENCER');
+              setItensSelecionados([]);
+            }}
             className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${
               abaPrincipal === 'A_VENCER' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'
             }`}
@@ -167,7 +200,10 @@ export default function Vencimentos({
           </button>
           <button
             type="button"
-            onClick={() => setAbaPrincipal('VENCIDOS')}
+            onClick={() => {
+              setAbaPrincipal('VENCIDOS');
+              setItensSelecionados([]);
+            }}
             className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${
               abaPrincipal === 'VENCIDOS' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400'
             }`}
@@ -176,39 +212,62 @@ export default function Vencimentos({
           </button>
         </div>
 
-        {/* SUB-ABAS A VENCER */}
+        {/* SUB-ABAS A VENCER & BOTÃO ENVIAR PARA OFERTAS */}
         {abaPrincipal === 'A_VENCER' && (
-          <div className="flex gap-2 border-b border-gray-100 pb-2">
-            <button
-              type="button"
-              onClick={() => setSubAbaAVencer('CRITICO')}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
-                subAbaAVencer === 'CRITICO' ? 'bg-red-100 text-red-700 border border-red-300 shadow-sm' : 'bg-gray-50 text-gray-400'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
-              ≤ 30 Dias ({itensCriticos.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubAbaAVencer('ALERTA')}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
-                subAbaAVencer === 'ALERTA' ? 'bg-amber-100 text-amber-800 border border-amber-300 shadow-sm' : 'bg-gray-50 text-gray-400'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              31 a 45 Dias ({itensAlerta.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubAbaAVencer('NORMAL')}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
-                subAbaAVencer === 'NORMAL' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm' : 'bg-gray-50 text-gray-400'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              ≥ 46 Dias ({itensNormais.length})
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubAbaAVencer('CRITICO');
+                  setItensSelecionados([]);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
+                  subAbaAVencer === 'CRITICO' ? 'bg-red-100 text-red-700 border border-red-300 shadow-sm' : 'bg-gray-50 text-gray-400'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                ≤ 30 Dias ({itensCriticos.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubAbaAVencer('ALERTA');
+                  setItensSelecionados([]);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
+                  subAbaAVencer === 'ALERTA' ? 'bg-amber-100 text-amber-800 border border-amber-300 shadow-sm' : 'bg-gray-50 text-gray-400'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                31 a 45 Dias ({itensAlerta.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubAbaAVencer('NORMAL');
+                  setItensSelecionados([]);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
+                  subAbaAVencer === 'NORMAL' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm' : 'bg-gray-50 text-gray-400'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                ≥ 46 Dias ({itensNormais.length})
+              </button>
+            </div>
+
+            {/* BOTÃO ENVIAR PARA OFERTAS (Exclusivo da aba <= 30 Dias) */}
+            {subAbaAVencer === 'CRITICO' && (
+              <button
+                type="button"
+                disabled={itensSelecionados.length === 0 || enviandoOferta}
+                onClick={handleEnviarParaOfertas}
+                className="bg-[#09797a] hover:bg-[#075f60] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-black uppercase px-3.5 py-1.5 rounded-xl shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+              >
+                <span>🏷️ Enviar Para Ofertas ({itensSelecionados.length})</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -224,42 +283,59 @@ export default function Vencimentos({
             listaExibicao.map((item: VencimentoItem) => {
               const prod: any = item.produtos || {};
               const dataValFmt = new Date(item.data_validade + 'T00:00:00').toLocaleDateString('pt-BR');
+              const isChecked = itensSelecionados.includes(item.id);
+              const permitirSelecao = abaPrincipal === 'A_VENCER' && subAbaAVencer === 'CRITICO';
 
               return (
                 <div
                   key={item.id}
-                  className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center hover:bg-emerald-50/20 transition-all"
+                  className={`p-3.5 bg-gray-50 border rounded-2xl flex justify-between items-center transition-all ${
+                    isChecked
+                      ? 'border-[#09797a] ring-2 ring-[#09797a]/20 bg-teal-50/20'
+                      : 'border-gray-200 hover:bg-emerald-50/20'
+                  }`}
                 >
-                  <div className="flex-1 pr-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                        {item.codigo_customizado || 'VEN'}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-gray-400">
-                        Cód: {prod.codprod || 'N/A'}
-                      </span>
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
-                        item.origem === 'Inventário' ? 'bg-purple-100 text-purple-700' :
-                        item.origem === 'Conf. Cega' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'
-                      }`}>
-                        Origem: {item.origem}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-3 flex-1 pr-2">
+                    {/* CHECKBOX EXCLUSIVO DA ABA <= 30 DIAS */}
+                    {permitirSelecao && (
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleSelecao(item.id)}
+                        className="w-4 h-4 text-[#09797a] rounded border-gray-300 focus:ring-[#09797a] cursor-pointer"
+                      />
+                    )}
 
-                    <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                      {prod.descricao || 'PRODUTO NÃO ENCONTRADO'}
-                    </h4>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                          {item.codigo_customizado || 'VEN'}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-gray-400">
+                          Cód: {prod.codprod || 'N/A'}
+                        </span>
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
+                          item.origem === 'Inventário' ? 'bg-purple-100 text-purple-700' :
+                          item.origem === 'Conf. Cega' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'
+                        }`}>
+                          Origem: {item.origem}
+                        </span>
+                      </div>
 
-                    <div className="flex items-center gap-3 text-[10px] text-gray-500 font-bold uppercase mt-1 flex-wrap">
-                      <span>LOTE: <strong className="text-gray-800">{item.lote}</strong></span>
-                      <span>QTD: <strong className="text-gray-800">{item.quantidade} {prod.unidade || 'UN'}</strong></span>
-                      <span>VALIDADE: <strong className="text-gray-800">{dataValFmt}</strong></span>
-                    </div>
+                      <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                        {prod.descricao || 'PRODUTO NÃO ENCONTRADO'}
+                      </h4>
 
-                    {/* IDENTIFICAÇÃO DO USUÁRIO, DATA E HORA */}
-                    <div className="text-[10px] text-gray-400 font-mono mt-1 flex items-center gap-1 font-bold">
-                      <span>👤 {item.usuarioNome || 'SISTEMA'},</span>
-                      <span>{item.dataHoraRegistro}</span>
+                      <div className="flex items-center gap-3 text-[10px] text-gray-500 font-bold uppercase mt-1 flex-wrap">
+                        <span>LOTE: <strong className="text-gray-800">{item.lote}</strong></span>
+                        <span>QTD: <strong className="text-gray-800">{item.quantidade} {prod.unidade || 'UN'}</strong></span>
+                        <span>VALIDADE: <strong className="text-gray-800">{dataValFmt}</strong></span>
+                      </div>
+
+                      <div className="text-[10px] text-gray-400 font-mono mt-1 flex items-center gap-1 font-bold">
+                        <span>👤 {item.usuarioNome || 'SISTEMA'},</span>
+                        <span>{item.dataHoraRegistro}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -284,7 +360,6 @@ export default function Vencimentos({
                       )}
                     </div>
 
-                    {/* Botão direcionando para Avaria no caso de Vencido */}
                     {abaPrincipal === 'VENCIDOS' && (
                       <button
                         type="button"
