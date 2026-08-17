@@ -43,14 +43,61 @@ export const relatoriosService = {
     return data || [];
   },
 
-  async buscarAvarias(inicio: string, fim: string) {
+  async buscarAvarias(
+    inicio: string,
+    fim: string,
+    filtros?: { departamento?: string; secao?: string; categoria?: string }
+  ) {
     const { data, error } = await supabase
       .from("avarias")
       .select("*, produtos(*), motivos_avaria(*)")
       .gte("data_registro", inicio)
-      .lte("data_registro", fim);
+      .lte("data_registro", fim)
+      .order("data_registro", { ascending: false });
+
     if (error) throw error;
-    return data || [];
+
+    let resultado = data || [];
+
+    if (filtros?.departamento && filtros.departamento !== "TODOS") {
+      resultado = resultado.filter(
+        (item: any) => item.produtos?.departamento === filtros.departamento
+      );
+    }
+
+    if (filtros?.secao && filtros.secao !== "TODOS") {
+      resultado = resultado.filter(
+        (item: any) => item.produtos?.secao === filtros.secao
+      );
+    }
+
+    if (filtros?.categoria && filtros.categoria !== "TODOS") {
+      resultado = resultado.filter(
+        (item: any) => item.produtos?.categoria === filtros.categoria
+      );
+    }
+
+    return resultado;
+  },
+
+  async buscarOpcoesFiltrosProdutos() {
+    const { data, error } = await supabase
+      .from("produtos")
+      .select("departamento, secao, categoria");
+
+    if (error) throw error;
+
+    const departamentos = Array.from(
+      new Set((data || []).map((p: any) => p.departamento).filter(Boolean))
+    );
+    const secoes = Array.from(
+      new Set((data || []).map((p: any) => p.secao).filter(Boolean))
+    );
+    const categorias = Array.from(
+      new Set((data || []).map((p: any) => p.categoria).filter(Boolean))
+    );
+
+    return { departamentos, secoes, categorias };
   },
 
   async buscarTrocas(inicio: string, fim: string) {
@@ -123,5 +170,4 @@ export const relatoriosService = {
     if (error) throw error;
     return data || [];
   },
-  
 };

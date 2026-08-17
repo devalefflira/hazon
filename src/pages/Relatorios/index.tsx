@@ -1,5 +1,5 @@
 // src/pages/Relatorios/index.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { relatoriosService } from "./services/relatoriosService";
 import { gerarRelatorioVencimentos } from "./utils/generators/gerarRelatorioVencimentos";
 import { gerarRelatorioInventario } from "./utils/generators/gerarRelatorioInventario";
@@ -46,6 +46,31 @@ const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
   const [dataFim, setDataFim] = useState<string>(hoje);
   const [carregando, setCarregando] = useState<boolean>(false);
 
+  // Filtros específicos para Avarias (Padrão: TODOS)
+  const [departamentoSel, setDepartamentoSel] = useState<string>("TODOS");
+  const [secaoSel, setSecaoSel] = useState<string>("TODOS");
+  const [categoriaSel, setCategoriaSel] = useState<string>("TODOS");
+
+  // Opções dinâmicas carregadas da base
+  const [opcoesDepartamentos, setOpcoesDepartamentos] = useState<string[]>([]);
+  const [opcoesSecoes, setOpcoesSecoes] = useState<string[]>([]);
+  const [opcoesCategorias, setOpcoesCategorias] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function carregarFiltros() {
+      try {
+        const { departamentos, secoes, categorias } =
+          await relatoriosService.buscarOpcoesFiltrosProdutos();
+        setOpcoesDepartamentos(departamentos as string[]);
+        setOpcoesSecoes(secoes as string[]);
+        setOpcoesCategorias(categorias as string[]);
+      } catch (err) {
+        console.error("Erro ao carregar opções de filtros:", err);
+      }
+    }
+    carregarFiltros();
+  }, []);
+
   const handleVoltar = () => {
     if (onVoltarParaHome) {
       onVoltarParaHome();
@@ -54,11 +79,21 @@ const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
     }
   };
 
+  const formatarDataFiltro = (dt: string) => {
+    if (!dt) return "";
+    const partes = dt.split("-");
+    if (partes.length === 3) {
+      const [ano, mes, dia] = partes;
+      return `${dia}/${mes}/${ano}`;
+    }
+    return dt;
+  };
+
   const handleGerarRelatorio = async () => {
     try {
       setCarregando(true);
-      const dtInicioFmt = new Date(dataInicio).toLocaleDateString("pt-BR");
-      const dtFimFmt = new Date(dataFim).toLocaleDateString("pt-BR");
+      const dtInicioFmt = formatarDataFiltro(dataInicio);
+      const dtFimFmt = formatarDataFiltro(dataFim);
 
       switch (submodulo) {
         case "vencimentos": {
@@ -87,8 +122,22 @@ const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
           break;
         }
         case "avarias": {
-          const dados = await relatoriosService.buscarAvarias(dataInicio, dataFim);
-          gerarRelatorioAvarias(dados, dtInicioFmt, dtFimFmt);
+          const dados = await relatoriosService.buscarAvarias(dataInicio, dataFim, {
+            departamento: departamentoSel,
+            secao: secaoSel,
+            categoria: categoriaSel,
+          });
+
+          if (!dados || dados.length === 0) {
+            alert("Nenhum registro de avaria encontrado para os filtros selecionados.");
+            return;
+          }
+
+          gerarRelatorioAvarias(dados, dtInicioFmt, dtFimFmt, {
+            departamento: departamentoSel,
+            secao: secaoSel,
+            categoria: categoriaSel,
+          });
           break;
         }
         case "trocas": {
@@ -155,7 +204,8 @@ const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
 
         {/* Card Formulário */}
         <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Linha 1: Submódulo e Período */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {/* Seletor do Módulo */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
@@ -200,6 +250,68 @@ const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
               />
             </div>
           </div>
+
+          {/* Linha 2: Filtros Condicionais de Avarias (Departamento, Seção e Categoria) */}
+          {submodulo === "avarias" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 pt-4 border-t border-slate-200">
+              {/* Departamento */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Departamento
+                </label>
+                <select
+                  value={departamentoSel}
+                  onChange={(e) => setDepartamentoSel(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 uppercase cursor-pointer"
+                >
+                  <option value="TODOS">TODOS</option>
+                  {opcoesDepartamentos.map((dep) => (
+                    <option key={dep} value={dep}>
+                      {dep.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Seção */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Seção
+                </label>
+                <select
+                  value={secaoSel}
+                  onChange={(e) => setSecaoSel(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 uppercase cursor-pointer"
+                >
+                  <option value="TODOS">TODOS</option>
+                  {opcoesSecoes.map((sec) => (
+                    <option key={sec} value={sec}>
+                      {sec.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Categoria */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Categoria
+                </label>
+                <select
+                  value={categoriaSel}
+                  onChange={(e) => setCategoriaSel(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 uppercase cursor-pointer"
+                >
+                  <option value="TODOS">TODOS</option>
+                  {opcoesCategorias.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Botão de Ação */}
           <button
