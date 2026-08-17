@@ -19,6 +19,7 @@ export default function CadastroClienteModal({
   const [cidade, setCidade] = useState('Bom Jesus das Selvas');
   const [estado, setEstado] = useState('Maranhão');
   const [endereco, setEndereco] = useState('');
+  const [bairro, setBairro] = useState('');
   const [numero, setNumero] = useState('');
   const [pontoReferencia, setPontoReferencia] = useState('');
   const [pasta, setPasta] = useState(PASTAS_CLIENTES[0]);
@@ -32,6 +33,7 @@ export default function CadastroClienteModal({
       setCidade(clienteEdicao.cidade || 'Bom Jesus das Selvas');
       setEstado(clienteEdicao.estado || 'Maranhão');
       setEndereco(clienteEdicao.endereco || '');
+      setBairro(clienteEdicao.bairro || '');
       setNumero(clienteEdicao.numero || '');
       setPontoReferencia(clienteEdicao.ponto_referencia || '');
       setPasta(clienteEdicao.pasta || PASTAS_CLIENTES[0]);
@@ -54,6 +56,7 @@ export default function CadastroClienteModal({
         cidade: cidade.trim(),
         estado: estado.trim(),
         endereco: endereco.trim(),
+        bairro: bairro.trim(),
         numero: numero.trim(),
         ponto_referencia: pontoReferencia.trim(),
         pasta
@@ -68,16 +71,27 @@ export default function CadastroClienteModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-      <form onSubmit={handleSubmit} className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
-        <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+    <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-lg bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100"
+      >
+        {/* Header Fixo */}
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
           <h3 className="text-[#09797a] font-black text-base uppercase">
             {clienteEdicao ? 'EDITAR CLIENTE' : 'NOVO CADASTRO DE CLIENTE'}
           </h3>
-          <button type="button" onClick={onCancelar} className="text-gray-400 font-bold text-base">✕</button>
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 font-bold flex items-center justify-center text-sm"
+          >
+            ✕
+          </button>
         </div>
 
-        <div className="overflow-y-auto flex flex-col gap-3 pr-1 flex-1">
+        {/* Corpo Rolável */}
+        <div className="overflow-y-auto flex flex-col gap-3 p-4 sm:p-6 flex-1 bg-slate-50/40">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Nome do Cliente *</label>
             <input
@@ -86,11 +100,11 @@ export default function CadastroClienteModal({
               placeholder="DIGITE O NOME COMPLETO OU RAZÃO..."
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
+              className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:border-[#09797a]"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-bold text-gray-500 uppercase px-1">CPF / CNPJ</label>
               <input
@@ -98,7 +112,7 @@ export default function CadastroClienteModal({
                 placeholder="000.000.000-00"
                 value={cpfCnpj}
                 onChange={(e) => setCpfCnpj(e.target.value)}
-                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
               />
             </div>
 
@@ -110,19 +124,19 @@ export default function CadastroClienteModal({
                 placeholder="(99) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setContatoWhatsapp(e.target.value)}
-                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Cidade</label>
               <input
                 type="text"
                 value={cidade}
                 onChange={(e) => setCidade(e.target.value)}
-                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
               />
             </div>
 
@@ -132,7 +146,7 @@ export default function CadastroClienteModal({
                 type="text"
                 value={estado}
                 onChange={(e) => setEstado(e.target.value)}
-                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
               />
             </div>
           </div>
@@ -145,7 +159,7 @@ export default function CadastroClienteModal({
                 placeholder="Rua, Avenida..."
                 value={endereco}
                 onChange={(e) => setEndereco(e.target.value)}
-                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
               />
             </div>
 
@@ -156,20 +170,33 @@ export default function CadastroClienteModal({
                 placeholder="Nº"
                 value={numero}
                 onChange={(e) => setNumero(e.target.value)}
-                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center focus:border-[#09797a]"
               />
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Ponto de Referência</label>
-            <input
-              type="text"
-              placeholder="Ex: Próximo à Praça Central"
-              value={pontoReferencia}
-              onChange={(e) => setPontoReferencia(e.target.value)}
-              className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Bairro</label>
+              <input
+                type="text"
+                placeholder="Nome do Bairro..."
+                value={bairro}
+                onChange={(e) => setBairro(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Ponto de Referência</label>
+              <input
+                type="text"
+                placeholder="Ex: Próximo à Praça Central"
+                value={pontoReferencia}
+                onChange={(e) => setPontoReferencia(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
+              />
+            </div>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -177,7 +204,7 @@ export default function CadastroClienteModal({
             <select
               value={pasta}
               onChange={(e) => setPasta(e.target.value)}
-              className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
+              className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:border-[#09797a]"
             >
               {PASTAS_CLIENTES.map((p) => (
                 <option key={p} value={p}>{p.toUpperCase()}</option>
@@ -186,11 +213,12 @@ export default function CadastroClienteModal({
           </div>
         </div>
 
-        <div className="flex gap-2 pt-2 border-t border-gray-100">
+        {/* Footer Fixo */}
+        <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0">
           <button
             type="button"
             onClick={onCancelar}
-            className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+            className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase hover:bg-gray-200 transition-all"
           >
             Cancelar
           </button>

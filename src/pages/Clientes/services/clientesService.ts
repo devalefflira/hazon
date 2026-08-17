@@ -30,6 +30,7 @@ export const clientesService = {
     cidade?: string;
     estado?: string;
     endereco?: string;
+    bairro?: string;
     numero?: string;
     ponto_referencia?: string;
     pasta: string;
@@ -38,6 +39,7 @@ export const clientesService = {
       .from('clientes')
       .insert([{
         ...payload,
+        bairro: payload.bairro || null,
         cidade: payload.cidade || 'Bom Jesus das Selvas',
         estado: payload.estado || 'Maranhão',
         ativo: true
@@ -55,6 +57,7 @@ export const clientesService = {
       .from('clientes')
       .update({
         ...payload,
+        bairro: payload.bairro || null,
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
