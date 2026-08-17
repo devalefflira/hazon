@@ -9,12 +9,19 @@ export function gerarPdfOferta(
 ) {
   const doc = new jsPDF();
 
-  const dataInicioFmt = oferta.data_inicio
-    ? new Date(oferta.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR')
-    : 'N/I';
-  const dataFimFmt = oferta.data_fim
-    ? new Date(oferta.data_fim + 'T00:00:00').toLocaleDateString('pt-BR')
-    : 'N/I';
+  const formatarData = (dt: string) => {
+    if (!dt) return 'N/I';
+    const partes = dt.split('T')[0].split('-');
+    if (partes.length === 3) {
+      const [ano, mes, dia] = partes;
+      return `${dia}/${mes}/${ano}`;
+    }
+    return dt;
+  };
+
+  const dataInicioFmt = formatarData(oferta.data_inicio);
+  const dataFimFmt = formatarData(oferta.data_fim);
+
   const tipoExibicao =
     oferta.tipo_oferta === 'Data Comemorativa' && oferta.tipo_oferta_customizado
       ? `${oferta.tipo_oferta} (${oferta.tipo_oferta_customizado})`
@@ -35,7 +42,7 @@ export function gerarPdfOferta(
   doc.text(`Código: ${oferta.codigo_customizado}`, 14, 22);
   doc.text(`Responsável: ${oferta.usuarios?.nome || 'SISTEMA'}`, 14, 27);
   doc.text(`Tipo de Oferta: ${tipoExibicao}`, 14, 32);
-  doc.text(`Período da Oferta: ${dataInicioFmt} até ${dataFimFmt}`, 14, 37);
+  doc.text(`Período da Oferta: de ${dataInicioFmt} até ${dataFimFmt}`, 14, 37);
 
   let headTable: string[][] = [];
   let tableRows: any[][] = [];

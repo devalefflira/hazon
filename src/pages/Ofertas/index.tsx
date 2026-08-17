@@ -192,7 +192,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     try {
       setSalvando(true);
       const userObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
-      
+
       const itensFinais = (ofertaEmRevisao.oferta_itens || [])
         .filter((it: any) => itensRevisaoSelecionados.includes(it.id))
         .map((item: any) => ({
@@ -319,6 +319,16 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   const ofertasPrecificar = ofertas.filter((o) => o.status === 'Precificar');
   const ofertasConcluidas = ofertas.filter((o) => o.status === 'Concluida');
 
+  const formatarDataBR = (dt: string) => {
+    if (!dt) return 'N/I';
+    const partes = dt.split('T')[0].split('-');
+    if (partes.length === 3) {
+      const [ano, mes, dia] = partes;
+      return `${dia}/${mes}/${ano}`;
+    }
+    return dt;
+  };
+
   const agoraData = new Date().toLocaleDateString('pt-BR');
   const agoraHora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const nomeUser = usuarioLogado?.nome || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.nome || 'USUÁRIO';
@@ -326,7 +336,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   return (
     <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
       <div className="w-full max-w-3xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
-        
+
         {/* HEADER */}
         <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
           <div className="flex items-center gap-3">
@@ -354,9 +364,8 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('SUGERIDAS')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
-              abaPrincipal === 'SUGERIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-            }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'SUGERIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+              }`}
           >
             <span>LISTA SUGERIDA</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasSugeridas.length}</span>
@@ -364,9 +373,8 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('REVISAR_APROVAR')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
-              abaPrincipal === 'REVISAR_APROVAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-            }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'REVISAR_APROVAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+              }`}
           >
             <span>REVISAR / APROVAR</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasRevisarAprovar.length}</span>
@@ -374,9 +382,8 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('PRECIFICAR')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
-              abaPrincipal === 'PRECIFICAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-            }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'PRECIFICAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+              }`}
           >
             <span>PRECIFICAR</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasPrecificar.length}</span>
@@ -384,9 +391,8 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('CONCLUIDAS')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
-              abaPrincipal === 'CONCLUIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-            }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'CONCLUIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+              }`}
           >
             <span>CONCLUÍDAS</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasConcluidas.length}</span>
@@ -399,18 +405,16 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
             <button
               type="button"
               onClick={() => setSubAbaConcluidas('GERAR_RELATORIO')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
-                subAbaConcluidas === 'GERAR_RELATORIO' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-gray-50 text-gray-400'
-              }`}
+              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${subAbaConcluidas === 'GERAR_RELATORIO' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-gray-50 text-gray-400'
+                }`}
             >
               Gerar Relatório de Ofertas
             </button>
             <button
               type="button"
               onClick={() => setSubAbaConcluidas('GERAR_PLACAS')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
-                subAbaConcluidas === 'GERAR_PLACAS' ? 'bg-[#09797a] text-white shadow-md' : 'bg-gray-50 text-gray-400'
-              }`}
+              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${subAbaConcluidas === 'GERAR_PLACAS' ? 'bg-[#09797a] text-white shadow-md' : 'bg-gray-50 text-gray-400'
+                }`}
             >
               Gerar Placas
             </button>
@@ -553,7 +557,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           </span>
                         </div>
                         <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                          Período: {ofe.data_inicio} até {ofe.data_fim}
+                          Período da Oferta: de {formatarDataBR(ofe.data_inicio)} até {formatarDataBR(ofe.data_fim)}
                         </h4>
                         <p className="text-[10px] text-gray-400 font-mono">
                           Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
@@ -590,18 +594,16 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                     <button
                       type="button"
                       onClick={() => setSubAbaPlacas('LAYOUT')}
-                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${
-                        subAbaPlacas === 'LAYOUT' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
-                      }`}
+                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${subAbaPlacas === 'LAYOUT' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                        }`}
                     >
                       1. Layout da Placa
                     </button>
                     <button
                       type="button"
                       onClick={() => setSubAbaPlacas('GERAR')}
-                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${
-                        subAbaPlacas === 'GERAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
-                      }`}
+                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${subAbaPlacas === 'GERAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                        }`}
                     >
                       2. Gerar Impressão
                     </button>
@@ -622,9 +624,8 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           <div
                             key={lay.id}
                             onClick={() => setLayoutSelecionado(lay)}
-                            className={`p-3 rounded-2xl border-2 cursor-pointer flex flex-col gap-2 transition-all ${
-                              layoutSelecionado?.id === lay.id ? 'border-[#09797a] bg-emerald-50/50' : 'border-gray-200 bg-white'
-                            }`}
+                            className={`p-3 rounded-2xl border-2 cursor-pointer flex flex-col gap-2 transition-all ${layoutSelecionado?.id === lay.id ? 'border-[#09797a] bg-emerald-50/50' : 'border-gray-200 bg-white'
+                              }`}
                           >
                             <div className="h-24 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200">
                               {lay.imagemUrl ? (
@@ -906,7 +907,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            onChange={() => {}}
+                            onChange={() => { }}
                             className="w-4 h-4 text-[#09797a] rounded border-gray-300"
                           />
                         </td>

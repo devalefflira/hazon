@@ -1,6 +1,44 @@
 // Arquivo: src/pages/Ofertas/utils/gerarPdfPlacas.ts
 import { jsPDF } from 'jspdf';
 
+// Função para unificar produtos que só mudam sabor/fragrância
+function agruparItensSimilares(itens: any[]) {
+  const grupos: Record<string, { descricao: string; preco_oferta: number }> = {};
+
+  itens.forEach((item) => {
+    const prod = item.produtos || {};
+    const descOriginal = (prod.descricao || item.descricao || 'PRODUTO').toUpperCase().trim();
+    const preco = Number(item.preco_oferta || 0);
+
+    let chaveBase = descOriginal;
+
+    // Regras de agrupamento por família de produtos
+    if (descOriginal.includes('GELATINA') && descOriginal.includes('SALON LINE')) {
+      chaveBase = 'GELATINA CAP SALON LINE 550G FRAGRÂNCIAS';
+    } else if (descOriginal.includes('SUCO PROMIX')) {
+      chaveBase = 'SUCO PROMIX 10L SABORES';
+    } else if (descOriginal.includes('CR TRAT DABELLE') || descOriginal.includes('MASC DABELLE')) {
+      chaveBase = 'CREME TRATAMENTO DABELLE 800G FRAGRÂNCIAS';
+    } else if (descOriginal.includes('SABON PALMOLIVE') || descOriginal.includes('SAB PALMOLIVE')) {
+      chaveBase = 'SABONETE PALMOLIVE 85G FRAGRÂNCIAS';
+    } else if (descOriginal.includes('BALA ERLAN')) {
+      chaveBase = 'BALA ERLAN 500G SABORES DIVERSOS';
+    }
+
+    // Chave única composta pela descrição agrupada + preço de oferta
+    const chaveUnica = `${chaveBase}_${preco}`;
+
+    if (!grupos[chaveUnica]) {
+      grupos[chaveUnica] = {
+        descricao: chaveBase,
+        preco_oferta: preco
+      };
+    }
+  });
+
+  return Object.values(grupos);
+}
+
 export function gerarPdfPlacas(
   oferta: any,
   itens: any[],
@@ -11,10 +49,13 @@ export function gerarPdfPlacas(
   const larguraA4 = 210;
   const alturaA4 = 297;
 
+  // Itens unificados por fragrância/sabor
+  const itensAgrupados = agruparItensSimilares(itens);
+
   // Altura ocupada por cada placa
   const alturaPlaca = alturaA4 / placasPorPagina;
 
-  itens.forEach((item, index) => {
+  itensAgrupados.forEach((item, index) => {
     const indiceNaPagina = index % placasPorPagina;
 
     // Adiciona nova página quando atinge o limite da folha
@@ -37,8 +78,7 @@ export function gerarPdfPlacas(
       doc.rect(5, yInicio + 5, larguraA4 - 10, alturaPlaca - 10);
     }
 
-    const prod = item.produtos || {};
-    const descricaoProduto = (prod.descricao || 'PRODUTO').toUpperCase();
+    const descricaoProduto = item.descricao.toUpperCase();
     const precoOferta = Number(item.preco_oferta || 0);
 
     // Formata o número (ex: 2,19 ou 17,99)
@@ -48,10 +88,10 @@ export function gerarPdfPlacas(
     });
 
     // ========================================================
-    // 2. DESCRIÇÃO DO PRODUTO: BOLD (Tamanho proporcional)
+    // 2. DESCRIÇÃO DO PRODUTO: BOLD
     // ========================================================
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(23);
+    doc.setFontSize(22);
     doc.setTextColor(24, 39, 75); // Azul escuro / grafite (#18274b)
 
     const posDescricaoY = yInicio + alturaPlaca * 0.44;
@@ -64,18 +104,16 @@ export function gerarPdfPlacas(
     // 3. CIFRÃO (R$) + VALOR NUMÉRICO GIGANTE
     // ========================================================
     const corVermelho = [225, 29, 29];   // Vermelho vibrante (#e11d1d)
-    const corContorno = [130, 10, 10];   // Bordô escuro para o contorno 3D (#820a0a)
+    const corContorno = [130, 10, 10];   // Bordô escuro para o contorno (#820a0a)
 
     doc.setFont('Helvetica', 'bold');
 
-    // Configurações do bloco de preço
     const posBasePrecoY = yInicio + alturaPlaca * 0.77;
 
-    // Largura total para centralizar o conjunto "R$ + 2,19"
     doc.setFontSize(42);
     const larguraRS = doc.getTextWidth('R$');
     
-    doc.setFontSize(82); // Tamanho gigante para os números
+    doc.setFontSize(82);
     const larguraNumero = doc.getTextWidth(valorNumericoFmt);
 
     const espacamento = 6;
@@ -91,11 +129,11 @@ export function gerarPdfPlacas(
       renderingMode: 'fillThenStroke'
     });
 
-    // Desenha o Número Gigante (ex: 2,19)
+    // Desenha o Número Gigante
     doc.setFontSize(82);
     doc.setTextColor(corVermelho[0], corVermelho[1], corVermelho[2]);
     doc.setDrawColor(corContorno[0], corContorno[1], corContorno[2]);
-    doc.setLineWidth(1.0); // Contorno reforçado no estilo cartaz de supermercado
+    doc.setLineWidth(1.0);
     doc.text(valorNumericoFmt, xInicioConjunto + larguraRS + espacamento, posBasePrecoY, {
       renderingMode: 'fillThenStroke'
     });
