@@ -1,7 +1,8 @@
-import { useState } from 'react';
+// src/pages/Login/index.tsx
+import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { ShieldCheck } from 'lucide-react';
 
-import logoHazon from '../../assets/icones/logo-hazonerp.svg';
 import iconUser from '../../assets/icones/icon-user.svg';
 import iconPassword from '../../assets/icones/icon-password.svg';
 
@@ -21,7 +22,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setErro('');
 
     try {
-      // Faz a busca no banco de dados trazendo o usuário e o nome do seu perfil atrelado
+      // Busca no banco trazendo o usuário e o nome do perfil vinculado
       const { data, error } = await supabase
         .from('usuarios')
         .select(`
@@ -31,7 +32,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           perfis ( nome )
         `)
         .eq('email', email.trim())
-        .single(); // Traz apenas um registro
+        .single();
 
       if (error || !data) {
         setErro('E-mail não encontrado ou incorreto.');
@@ -39,19 +40,19 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
 
-      // Validação simples de senha (em produção usaremos criptografia hash)
+      // Validação de senha
       if (data.senha_hash !== password) {
         setErro('Senha incorreta. Tente novamente.');
         setLoading(false);
         return;
       }
 
-      // Se passou nas validações, extrai o nome do perfil mapeado na relação
+      // Extração do perfil
       const perfilNome = Array.isArray(data.perfis) 
         ? data.perfis[0]?.nome 
         : (data.perfis as any)?.nome || 'Operacional';
 
-      // Envia os dados para o App.tsx mudar de tela
+      // Comunica o App.tsx com os dados do usuário autenticado
       onLoginSuccess({
         id: data.id,
         nome: data.nome,
@@ -66,16 +67,20 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-sans">
+    <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-sans select-none">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl flex flex-col items-center px-8 py-12">
         
-        {/* ÁREA DA LOGO */}
+        {/* ÁREA DO SÍMBOLO DE ESCUDO / CONTROLE + NOME DA MARCA */}
         <div className="mb-10 flex flex-col justify-center items-center w-full">
-          <img src={logoHazon} alt="Logo Hazon" className="w-44 h-44 object-contain" />
-          <h1 className="text-[#09797a] font-bold text-4xl tracking-wider mt-4 select-none">HAZON</h1>
+          <div className="w-28 h-28 rounded-full border-4 border-[#09797a] bg-teal-50/50 flex items-center justify-center shadow-inner transition-all">
+            <ShieldCheck className="w-14 h-14 text-[#09797a]" strokeWidth={2.2} />
+          </div>
+          <h1 className="text-[#09797a] font-bold text-4xl tracking-wider mt-4 select-none">
+            HAZON
+          </h1>
         </div>
 
-        {/* MENSAGEM DE ERRO (Se houver) */}
+        {/* MENSAGEM DE ERRO */}
         {erro && (
           <div className="w-full bg-red-50 text-red-600 text-sm p-3 rounded-xl mb-4 text-center font-medium border border-red-200 animate-pulse">
             {erro}
