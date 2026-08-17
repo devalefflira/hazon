@@ -20,6 +20,9 @@ export interface AvariaRecord {
     codbarra?: string;
     unidade?: string;
     custoreal?: number;
+    departamento?: string;
+    secao?: string;
+    categoria?: string;
   };
   motivos_avaria?: {
     id: string;

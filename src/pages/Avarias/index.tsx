@@ -1,38 +1,56 @@
 // Arquivo: src/pages/Avarias/index.tsx
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { avariasService } from './services/avariasService';
+import type { AvariaRecord } from './types/avarias.types';
 import RegistrarAvariaModal from './components/RegistrarAvariaModal';
 
 interface AvariasProps {
-  onVoltarParaHome: () => void;
+  onVoltarParaHome?: () => void;
   usuarioLogado?: any;
   usuarioLogadoId?: string;
 }
 
 export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: AvariasProps) {
-  const [avarias, setAvarias] = useState<any[]>([]);
+  const idUsuarioFinal = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+
+  const [avarias, setAvarias] = useState<AvariaRecord[]>([]);
   const [motivos, setMotivos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modalAberto, setModalAberto] = useState(false);
+  const [modalRegistroAberto, setModalRegistroAberto] = useState(false);
 
   // Filtros
-  const [motivoFiltro, setMotivoFiltro] = useState('');
-  const [destinacaoFiltro, setDestinacaoFiltro] = useState('');
+  const [dataInicio, setDataInicio] = useState<string>('');
+  const [dataFim, setDataFim] = useState<string>('');
+  const [motivoSel, setMotivoSel] = useState<string>('TODOS');
+  const [destinacaoSel, setDestinacaoSel] = useState<string>('TODAS');
+  const [departamentoSel, setDepartamentoSel] = useState<string>('TODOS');
+  const [secaoSel, setSecaoSel] = useState<string>('TODOS');
+  const [categoriaSel, setCategoriaSel] = useState<string>('TODOS');
+
+  // Opções para os Selects
+  const [opcoesDepartamentos, setOpcoesDepartamentos] = useState<string[]>([]);
+  const [opcoesSecoes, setOpcoesSecoes] = useState<string[]>([]);
+  const [opcoesCategorias, setOpcoesCategorias] = useState<string[]>([]);
+
+  // Paginação
+  const [paginaAtual, setPaginaAtual] = useState<number>(1);
+  const [itensPorPagina, setItensPorPagina] = useState<number>(10);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [dadosAvarias, dadosMotivos] = await Promise.all([
-        avariasService.listarAvarias({
-          motivo_id: motivoFiltro || undefined,
-          destinacao: destinacaoFiltro || undefined
-        }),
-        avariasService.listarMotivosAvaria()
+      const [listaAvarias, listaMotivos, opcoesFiltros] = await Promise.all([
+        avariasService.listarAvarias(),
+        avariasService.listarMotivosAvaria(),
+        avariasService.buscarOpcoesFiltrosProdutos()
       ]);
-      setAvarias(dadosAvarias);
-      setMotivos(dadosMotivos);
-    } catch (err) {
-      console.error(err);
+      setAvarias(listaAvarias);
+      setMotivos(listaMotivos);
+      setOpcoesDepartamentos(opcoesFiltros.departamentos as string[]);
+      setOpcoesSecoes(opcoesFiltros.secoes as string[]);
+      setOpcoesCategorias(opcoesFiltros.categorias as string[]);
+    } catch (err: any) {
+      console.error('Erro ao carregar avarias:', err);
     } finally {
       setLoading(false);
     }
@@ -40,174 +58,388 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
 
   useEffect(() => {
     carregarDados();
-  }, [motivoFiltro, destinacaoFiltro]);
+  }, []);
 
-  const handleSalvarAvaria = async (payload: any) => {
-    try {
-      // Prioriza a prop usuarioLogado, usuarioLogadoId ou o LocalStorage
-      const idUsuarioFinal = usuarioLogado?.id || usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
-      
-      await avariasService.registrarAvaria({
-        ...payload,
-        usuario_id: idUsuarioFinal
-      });
-      alert('Avaria registrada com sucesso!');
-      setModalAberto(false);
-      carregarDados();
-    } catch (err) {
-      alert('Erro ao registrar avaria.');
+  // Formatação segura de data DD/MM/YYYY sem deslocamento de timezone
+  const formatarDataSegura = (dataStr?: string) => {
+    if (!dataStr) return '-';
+    const partes = dataStr.split('T')[0].split('-');
+    if (partes.length === 3) {
+      const [ano, mes, dia] = partes;
+      return `${dia}/${mes}/${ano}`;
     }
+    return dataStr;
   };
 
-  // Função auxiliar para formatar a hora (exibe apenas HH:mm)
-  const formatarHoraLimpa = (horaRaw?: string) => {
-    if (!horaRaw) return '';
-    const partes = horaRaw.split('.')[0].split(':'); // Remove milissegundos
-    if (partes.length >= 2) {
-      return `${partes[0]}:${partes[1]}`;
-    }
-    return horaRaw;
+  // Filtragem
+  const avariasFiltradas = useMemo(() => {
+    return avarias.filter((item: AvariaRecord) => {
+      const dataItem = item.data_registro ? item.data_registro.split('T')[0] : '';
+
+      // Período
+      if (dataInicio && dataItem < dataInicio) return false;
+      if (dataFim && dataItem > dataFim) return false;
+
+      // Motivo
+      if (motivoSel !== 'TODOS' && item.motivos_avaria?.descricao !== motivoSel) return false;
+
+      // Destinação
+      if (destinacaoSel !== 'TODAS' && item.destinacao !== destinacaoSel) return false;
+
+      // Departamento
+      if (departamentoSel !== 'TODOS' && item.produtos?.departamento !== departamentoSel) return false;
+
+      // Seção
+      if (secaoSel !== 'TODOS' && item.produtos?.secao !== secaoSel) return false;
+
+      // Categoria
+      if (categoriaSel !== 'TODOS' && item.produtos?.categoria !== categoriaSel) return false;
+
+      return true;
+    });
+  }, [avarias, dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel]);
+
+  // Resetar página quando filtros mudarem
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel, itensPorPagina]);
+
+  // Totalizador de Prejuízo
+  const totalPrejuizo = useMemo(() => {
+    return avariasFiltradas.reduce((acc, a) => {
+      const qtd = Number(a.quantidade || 0);
+      const custo = Number(a.preco_custo_na_perda || 0);
+      return acc + qtd * custo;
+    }, 0);
+  }, [avariasFiltradas]);
+
+  // Itens Paginados
+  const totalPaginas = Math.ceil(avariasFiltradas.length / itensPorPagina) || 1;
+  const indexInicial = (paginaAtual - 1) * itensPorPagina;
+  const avariasPaginadas = avariasFiltradas.slice(indexInicial, indexInicial + itensPorPagina);
+
+  const limparFiltros = () => {
+    setDataInicio('');
+    setDataFim('');
+    setMotivoSel('TODOS');
+    setDestinacaoSel('TODAS');
+    setDepartamentoSel('TODOS');
+    setSecaoSel('TODOS');
+    setCategoriaSel('TODOS');
+  };
+
+  const temFiltroAtivo =
+    Boolean(dataInicio) ||
+    Boolean(dataFim) ||
+    motivoSel !== 'TODOS' ||
+    destinacaoSel !== 'TODAS' ||
+    departamentoSel !== 'TODOS' ||
+    secaoSel !== 'TODOS' ||
+    categoriaSel !== 'TODOS';
+
+  const handleSalvarNovaAvaria = async (dados: any) => {
+    await avariasService.registrarAvaria({
+      ...dados,
+      usuario_id: idUsuarioFinal
+    });
+    setModalRegistroAberto(false);
+    await carregarDados();
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
-      <div className="w-full max-w-2xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+      <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
         
         {/* HEADER */}
-        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
+            <button
+              type="button"
+              onClick={onVoltarParaHome || (() => window.history.back())}
+              className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+            >
+              ←
+            </button>
             <div>
               <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">AVARIAS</h1>
-              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Controle de Quebras e Perdas</p>
+              <p className="text-[11px] text-slate-400 font-bold mt-1 tracking-wide">Controle de Quebras e Perdas</p>
             </div>
           </div>
+
           <button
             type="button"
-            onClick={() => setModalAberto(true)}
+            onClick={() => setModalRegistroAberto(true)}
             className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
           >
-            + Registrar
+            + REGISTRAR
           </button>
         </div>
 
-        {/* FILTROS AVANÇADOS */}
-        <div className="bg-gray-50 border border-gray-200 p-3.5 rounded-2xl flex flex-col gap-2">
-          <span className="text-[10px] font-black text-gray-400 uppercase px-1">Filtros Avançados</span>
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              value={motivoFiltro}
-              onChange={(e) => setMotivoFiltro(e.target.value)}
-              className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
-            >
-              <option value="">⚠️ Motivo: Todos</option>
-              {motivos.map((m) => (
-                <option key={m.id} value={m.id}>{m.descricao.toUpperCase()}</option>
-              ))}
-            </select>
+        {/* PAINEL DE FILTROS AVANÇADOS */}
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+              Filtros Avançados
+            </span>
+            {temFiltroAtivo && (
+              <button
+                type="button"
+                onClick={limparFiltros}
+                className="text-[10px] font-bold text-red-600 hover:underline uppercase"
+              >
+                Limpar Filtros
+              </button>
+            )}
+          </div>
 
+          {/* LINHA 1: MOTIVO & DESTINAÇÃO */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Motivo</label>
+              <select
+                value={motivoSel}
+                onChange={(e) => setMotivoSel(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+              >
+                <option value="TODOS">⚠️ MOTIVO: TODOS</option>
+                {motivos.map((m) => (
+                  <option key={m.id} value={m.descricao}>{m.descricao.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Destinação</label>
+              <select
+                value={destinacaoSel}
+                onChange={(e) => setDestinacaoSel(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+              >
+                <option value="TODAS">📦 DESTINAÇÃO: TODAS</option>
+                <option value="Descarte">DESCARTE</option>
+                <option value="Troca">TROCA</option>
+                <option value="Consumo Interno">CONSUMO INTERNO</option>
+                <option value="Doação">DOAÇÃO</option>
+              </select>
+            </div>
+          </div>
+
+          {/* LINHA 2: PERÍODO (DATA INICIAL E FINAL) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+              />
+            </div>
+          </div>
+
+          {/* LINHA 3: DEPARTAMENTO, SEÇÃO E CATEGORIA */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Departamento</label>
+              <select
+                value={departamentoSel}
+                onChange={(e) => setDepartamentoSel(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+              >
+                <option value="TODOS">DEPTO: TODOS</option>
+                {opcoesDepartamentos.map((dep) => (
+                  <option key={dep} value={dep}>{dep.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Seção</label>
+              <select
+                value={secaoSel}
+                onChange={(e) => setSecaoSel(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+              >
+                <option value="TODOS">SEÇÃO: TODAS</option>
+                {opcoesSecoes.map((sec) => (
+                  <option key={sec} value={sec}>{sec.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Categoria</label>
+              <select
+                value={categoriaSel}
+                onChange={(e) => setCategoriaSel(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+              >
+                <option value="TODOS">CAT: TODAS</option>
+                {opcoesCategorias.map((cat) => (
+                  <option key={cat} value={cat}>{cat.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* TOTALIZADOR DE PREJUÍZO & SELETOR DE QUANTIDADE POR PÁGINA */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-red-50/70 border border-red-200 px-4 py-3 rounded-2xl">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-red-900 uppercase">Total Prejuízo:</span>
+            <span className="font-mono text-base sm:text-lg font-black text-red-600">
+              - {totalPrejuizo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase ml-2">
+              ({avariasFiltradas.length} itens)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
             <select
-              value={destinacaoFiltro}
-              onChange={(e) => setDestinacaoFiltro(e.target.value)}
-              className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
+              value={itensPorPagina}
+              onChange={(e) => setItensPorPagina(Number(e.target.value))}
+              className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-2.5 py-1.5 outline-none focus:border-[#09797a]"
             >
-              <option value="">📦 Destinação: Todas</option>
-              <option value="Descarte">Descarte</option>
-              <option value="Troca Fornecedor">Troca Fornecedor</option>
-              <option value="Consumo Interno">Consumo Interno</option>
-              <option value="Doação">Doação</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
             </select>
           </div>
         </div>
 
-        {/* LISTAGEM DE AVARIAS */}
-        <div className="flex-1 flex flex-col gap-2">
+        {/* LISTAGEM DOS CARDS */}
+        <div className="flex-1 overflow-y-auto space-y-3">
           {loading ? (
-            <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando avarias...</div>
-          ) : avarias.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-              Nenhuma avaria encontrada com os filtros selecionados.
+            <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">Carregando avarias...</div>
+          ) : avariasFiltradas.length === 0 ? (
+            <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
+              Nenhuma avaria encontrada para os filtros selecionados.
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {avarias.map((item) => {
-                const prod = item.produtos || {};
-                const motivoDesc = item.motivos_avaria?.descricao || item.motivos_falta?.descricao || 'Avaria';
-                const respNome = item.usuarios?.nome || 'SISTEMA';
+            avariasPaginadas.map((av: AvariaRecord) => {
+              const valorPerda = Number(av.quantidade || 0) * Number(av.preco_custo_na_perda || 0);
 
-                const dataFmt = item.data_registro
-                  ? new Date(item.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')
-                  : new Date(item.created_at).toLocaleDateString('pt-BR');
-
-                const horaFmt = formatarHoraLimpa(item.hora_registro);
-                const totalPerda = Number(item.quantidade || 0) * Number(item.preco_custo_na_perda || 0);
-
-                return (
-                  <div
-                    key={item.id}
-                    className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex flex-col gap-1.5"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-mono font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-md uppercase">
-                            {item.codigo_customizado}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold text-gray-400">
-                            Cód: {prod.codprod || 'N/A'}
-                          </span>
-                        </div>
-
-                        <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                          {prod.descricao || 'PRODUTO NÃO ENCONTRADO'}
-                        </h4>
-
-                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">
-                          Qtd: <strong className="text-gray-800">{item.quantidade} {item.produtos?.unidade || 'UN'}</strong> | Motivo: {motivoDesc}
-                        </p>
-
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[9px] font-mono font-bold text-gray-600 bg-gray-200/60 px-2 py-0.5 rounded uppercase">
-                            Destino: {item.destinacao}
-                          </span>
-                          <span className="text-[9px] font-mono font-bold text-gray-400">
-                            Resp: <strong className="text-gray-700">{respNome}</strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="font-mono font-black text-xs text-red-600 block">
-                          - {totalPerda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
-                        <span className="text-[9px] font-mono font-bold text-gray-400 block mt-1">
-                          {dataFmt} {horaFmt ? `às ${horaFmt}` : ''}
-                        </span>
-                      </div>
+              return (
+                <div
+                  key={av.id}
+                  className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] font-mono font-black text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                        {av.codigo_customizado || 'AV'}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400">
+                        Cód: {av.produtos?.codprod || '-'}
+                      </span>
                     </div>
 
-                    {/* OBSERVAÇÃO (SE HOUVER) */}
-                    {item.observacao && item.observacao.trim() !== '' && (
-                      <div className="mt-0.5 bg-amber-50/80 border border-amber-200 text-amber-900 text-[10px] p-2 rounded-xl flex items-start gap-1 font-medium">
-                        <span className="font-black uppercase tracking-wide">Obs:</span>
-                        <span className="uppercase">{item.observacao}</span>
-                      </div>
-                    )}
+                    <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
+                      {av.produtos?.descricao || 'PRODUTO NÃO IDENTIFICADO'}
+                    </h3>
+
+                    <div className="text-[11px] text-slate-500 font-semibold mt-1">
+                      QTD: <strong className="text-slate-800">{av.quantidade} {av.produtos?.unidade || 'UN'}</strong> &nbsp;|&nbsp;
+                      MOTIVO: <strong className="text-slate-800 uppercase">{av.motivos_avaria?.descricao || 'AVARIA'}</strong>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                        DESTINO: {av.destinacao || 'DESCARTE'}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        Resp: <strong className="text-slate-600">{av.usuarios?.nome || 'Sistema'}</strong>
+                      </span>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="text-right flex-shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto flex sm:flex-col justify-between items-end">
+                    <span className="text-sm font-black text-red-600 font-mono">
+                      - R$ {valorPerda.toFixed(2).replace('.', ',')}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 font-mono mt-0.5">
+                      {formatarDataSegura(av.data_registro)} às {av.hora_registro?.slice(0, 5) || '00:00'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 
+        {/* CONTROLES DE PAGINAÇÃO */}
+        {avariasFiltradas.length > itensPorPagina && (
+          <div className="flex items-center justify-between border-t border-slate-100 pt-3 flex-shrink-0">
+            <span className="text-xs font-bold text-slate-500">
+              Página {paginaAtual} de {totalPaginas}
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={paginaAtual === 1}
+                onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+              >
+                ← Anterior
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPaginas || Math.abs(p - paginaAtual) <= 1)
+                  .map((p, idx, arr) => (
+                    <React.Fragment key={p}>
+                      {idx > 0 && arr[idx - 1] !== p - 1 && (
+                        <span className="text-xs text-slate-400 px-1">...</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setPaginaAtual(p)}
+                        className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${
+                          paginaAtual === p
+                            ? 'bg-[#09797a] text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    </React.Fragment>
+                  ))}
+              </div>
+
+              <button
+                type="button"
+                disabled={paginaAtual === totalPaginas}
+                onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+              >
+                Próxima →
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
-      {/* MODAL DE REGISTRO DE AVARIA */}
-      {modalAberto && (
+      {/* MODAL REGISTRAR AVARIA COM AS PROPS EXATAS */}
+      {modalRegistroAberto && (
         <RegistrarAvariaModal
           motivos={motivos}
-          onSalvar={handleSalvarAvaria}
-          onCancelar={() => setModalAberto(false)}
+          onCancelar={() => setModalRegistroAberto(false)}
+          onSalvar={handleSalvarNovaAvaria}
         />
       )}
     </div>
