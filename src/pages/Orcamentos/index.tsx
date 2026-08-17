@@ -44,7 +44,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
 
-  // Regra de Desconto, Preço e Embalagem (Campos de desconto salvos como number | '' para permitirem input limpo)
+  // Regra de Desconto, Preço e Embalagem
   const [modoDesconto, setModoDesconto] = useState<'SEM_DESCONTO' | 'PERCENTUAL' | 'MANUAL'>('SEM_DESCONTO');
   const [percentualDesconto, setPercentualDesconto] = useState<number | ''>('');
   const [precoFinalManual, setPrecoFinalManual] = useState<number | ''>('');
@@ -243,7 +243,6 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
 
   const valorTotalOrcamento = itensAdicionados.reduce((acc, item) => acc + item.valor_total_item, 0);
 
-  // Substitua o método handleSalvarOuPausar por este em src/pages/Orcamentos/index.tsx:
   const handleSalvarOuPausar = async (statusFinal: 'Pendente' | 'Concluido') => {
     if (!clienteNome.trim()) {
       alert('Informe ou selecione o cliente.');
@@ -440,24 +439,32 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
 
       </div>
 
-      {/* TELA / MODAL DE ORÇAMENTO */}
+      {/* JANELA CHEIA NO MOBILE / MODAL NO DESKTOP: NOVO / EDITAR ORÇAMENTO */}
       {emEdicao && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
+          <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-2xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
             
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+            {/* Header Sticky */}
+            <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <h3 className="text-[#09797a] font-black text-base uppercase">
                 {codigoOrcamentoAtual ? `EDITAR ORÇAMENTO ${codigoOrcamentoAtual}` : 'NOVO ORÇAMENTO'}
               </h3>
-              <button type="button" onClick={() => setEmEdicao(false)} className="text-gray-400 font-bold text-base">✕</button>
+              <button
+                type="button"
+                onClick={() => setEmEdicao(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="overflow-y-auto flex flex-col gap-4 pr-1 flex-1">
+            {/* Conteúdo Rolável */}
+            <div className="overflow-y-auto flex flex-col gap-4 p-4 sm:p-6 flex-1 bg-slate-50/40">
               
               {/* DADOS DO CLIENTE COM AUTOCOMPLETE */}
-              <div className="bg-gray-50 border border-gray-200 p-3.5 rounded-2xl flex flex-col gap-2 relative">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-gray-400 uppercase">Informações do Cliente</span>
+              <div className="bg-gray-50 border border-gray-200 p-3.5 rounded-2xl flex flex-col gap-2 relative shadow-sm bg-white">
+                <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
+                  <span className="text-[10px] font-black text-gray-500 uppercase">Informações do Cliente</span>
                   <span className="text-[9px] font-mono font-bold text-[#09797a] bg-emerald-100 px-2 py-0.5 rounded uppercase">
                     Pasta: {pastaCliente}
                   </span>
@@ -475,7 +482,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       setClienteNome(e.target.value.toUpperCase());
                       setClienteSelecionado(null);
                     }}
-                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
+                    className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:bg-white focus:border-[#09797a]"
                   />
 
                   {clientesEncontrados.length > 0 && !clienteSelecionado && (
@@ -505,7 +512,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       type="text"
                       value={cpfCnpj}
                       onChange={(e) => setCpfCnpj(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white"
                     />
                   </div>
 
@@ -517,7 +524,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       placeholder="(99) 99999-9999"
                       value={whatsapp}
                       onChange={(e) => setContatoWhatsapp(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white"
                     />
                   </div>
                 </div>
@@ -529,7 +536,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       type="text"
                       value={cidade}
                       onChange={(e) => setCidade(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -538,7 +545,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       type="text"
                       value={estado}
                       onChange={(e) => setEstado(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white"
                     />
                   </div>
                 </div>
@@ -551,7 +558,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       placeholder="Rua, Avenida..."
                       value={endereco}
                       onChange={(e) => setEndereco(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white"
                     />
                   </div>
                   <div className="col-span-1 flex flex-col gap-1">
@@ -561,7 +568,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       placeholder="Nº"
                       value={numero}
                       onChange={(e) => setNumero(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center focus:bg-white"
                     />
                   </div>
                 </div>
@@ -574,7 +581,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       placeholder="Bairro"
                       value={bairro}
                       onChange={(e) => setBairro(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -584,14 +591,14 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       placeholder="Próximo a..."
                       value={pontoReferencia}
                       onChange={(e) => setPontoReferencia(e.target.value)}
-                      className="w-full h-9 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                      className="w-full h-9 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white"
                     />
                   </div>
                 </div>
               </div>
 
               {/* SELEÇÃO E INCLUSÃO DE PRODUTO */}
-              <form onSubmit={handleAdicionarOuAtualizarItem} className="bg-emerald-50/50 border border-emerald-200 p-3.5 rounded-2xl flex flex-col gap-3">
+              <form onSubmit={handleAdicionarOuAtualizarItem} className="bg-emerald-50/50 border border-emerald-200 p-3.5 rounded-2xl flex flex-col gap-3 shadow-sm">
                 <span className="text-[10px] font-black text-emerald-800 uppercase">
                   {tempIdItemEdicao ? 'Editar Item no Orçamento' : 'Adicionar Produto no Orçamento'}
                 </span>
@@ -606,7 +613,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                       setProdutoSelecionado(null);
                     }}
                     placeholder="Bipe o EAN ou digite o nome/código..."
-                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
                   />
 
                   {produtosEncontrados.length > 0 && !produtoSelecionado && (
@@ -635,7 +642,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
                 {produtoSelecionado && (
                   <div className="bg-white border border-emerald-300 p-3 rounded-xl flex justify-between items-center text-xs font-bold text-gray-800">
                     <div>
-                      <span className="text-[9px] text-emerald-800 block uppercase">Cód: {produtoSelecionado.codprod}</span>
+                      <span className="text-[9px] text-emerald-800 block uppercase font-mono">Cód: {produtoSelecionado.codprod}</span>
                       <span className="uppercase">{produtoSelecionado.descricao}</span>
                       <div className="flex gap-3 text-[10px] font-mono text-gray-500 mt-1">
                         <span>Custo: R$ {produtoSelecionado.custoreal || 0}</span>
@@ -803,7 +810,7 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
               <div className="flex flex-col gap-2">
                 <span className="text-[10px] font-black text-gray-400 uppercase">Itens no Orçamento ({itensAdicionados.length})</span>
                 {itensAdicionados.map((item) => (
-                  <div key={item.temp_id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold">
+                  <div key={item.temp_id} className="p-3 bg-white border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold shadow-sm">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] font-mono text-[#09797a] bg-[#09797a]/10 px-1.5 py-0.5 rounded">
@@ -844,8 +851,8 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
 
             </div>
 
-            {/* TOTAL E BOTÕES */}
-            <div className="pt-3 border-t border-gray-100 flex flex-col gap-3">
+            {/* TOTAL E BOTÕES FIXOS NO FOOTER */}
+            <div className="sticky bottom-0 z-20 bg-white border-t border-gray-100 p-4 flex flex-col gap-3 flex-shrink-0">
               <div className="bg-emerald-100/70 border border-emerald-300 p-3 rounded-2xl flex justify-between items-center">
                 <span className="text-xs font-black text-emerald-900 uppercase">Total do Orçamento:</span>
                 <span className="font-mono text-base font-black text-emerald-950">
@@ -886,66 +893,74 @@ export default function Orcamentos({ onVoltarParaHome, usuarioLogado, usuarioLog
         </div>
       )}
 
-      {/* MODAL DE RESUMO DA ABA CONCLUÍDOS */}
+      {/* JANELA CHEIA NO MOBILE / MODAL NO DESKTOP: DETALHES DO ORÇAMENTO */}
       {orcamentoDetalhe && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
+          <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
             
-            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <div>
                 <span className="text-[9px] font-black text-gray-400 uppercase">Detalhes do Orçamento</span>
                 <h3 className="text-[#09797a] font-black text-base uppercase">{orcamentoDetalhe.codigo_customizado}</h3>
               </div>
-              <button type="button" onClick={() => setOrcamentoDetalhe(null)} className="text-gray-400 font-bold text-base">✕</button>
+              <button
+                type="button"
+                onClick={() => setOrcamentoDetalhe(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl grid grid-cols-2 gap-2 text-xs font-bold">
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Cliente</span>
-                <span className="text-gray-800">{orcamentoDetalhe.cliente_nome}</span>
+            <div className="overflow-y-auto flex flex-col gap-3 p-4 sm:p-6 flex-1 bg-slate-50/40">
+              <div className="bg-white border border-gray-200 p-3.5 rounded-2xl grid grid-cols-2 gap-2 text-xs font-bold shadow-sm">
+                <div>
+                  <span className="text-[9px] font-black text-gray-400 block uppercase">Cliente</span>
+                  <span className="text-gray-800">{orcamentoDetalhe.cliente_nome}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-black text-gray-400 block uppercase">Cidade/Estado</span>
+                  <span className="text-gray-800">{orcamentoDetalhe.cidade}/{orcamentoDetalhe.estado}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-black text-gray-400 block uppercase">Data/Hora</span>
+                  <span className="text-gray-800">{orcamentoDetalhe.data_registro} às {orcamentoDetalhe.hora_registro}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-black text-gray-400 block uppercase">Atendente</span>
+                  <span className="text-gray-800">{orcamentoDetalhe.usuarios?.nome || 'SISTEMA'}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Cidade/Estado</span>
-                <span className="text-gray-800">{orcamentoDetalhe.cidade}/{orcamentoDetalhe.estado}</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Data/Hora</span>
-                <span className="text-gray-800">{orcamentoDetalhe.data_registro} às {orcamentoDetalhe.hora_registro}</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Atendente</span>
-                <span className="text-gray-800">{orcamentoDetalhe.usuarios?.nome || 'SISTEMA'}</span>
-              </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 max-h-[40vh]">
-              <span className="text-[10px] font-black text-gray-400 uppercase px-1">Itens ({orcamentoDetalhe.orcamento_itens?.length || 0})</span>
-              {orcamentoDetalhe.orcamento_itens?.map((item: any) => {
-                const prod = item.produtos || {};
-                return (
-                  <div key={item.id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold">
-                    <div>
-                      <h4 className="text-gray-800 uppercase">{prod.descricao || 'PRODUTO'}</h4>
-                      <p className="text-[10px] text-gray-400">
-                        {item.quantidade} {item.unidade_medida || 'UN'} {item.embalagem > 1 ? `(Emb c/ ${item.embalagem})` : ''} x {(item.preco_final_unitario || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </p>
+              <div className="flex-1 flex flex-col gap-2">
+                <span className="text-[10px] font-black text-gray-400 uppercase px-1">Itens ({orcamentoDetalhe.orcamento_itens?.length || 0})</span>
+                {orcamentoDetalhe.orcamento_itens?.map((item: any) => {
+                  const prod = item.produtos || {};
+                  return (
+                    <div key={item.id} className="p-3 bg-white border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold shadow-sm">
+                      <div>
+                        <h4 className="text-gray-800 uppercase">{prod.descricao || 'PRODUTO'}</h4>
+                        <p className="text-[10px] text-gray-400">
+                          {item.quantidade} {item.unidade_medida || 'UN'} {item.embalagem > 1 ? `(Emb c/ ${item.embalagem})` : ''} x {(item.preco_final_unitario || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                      </div>
+                      <span className="font-mono text-[#09797a]">
+                        {(item.valor_total_item || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
                     </div>
-                    <span className="font-mono text-[#09797a]">
-                      {(item.valor_total_item || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+
+              <div className="bg-emerald-100/70 border border-emerald-300 p-3 rounded-2xl flex justify-between items-center font-black">
+                <span className="text-xs text-emerald-900 uppercase">Valor Total:</span>
+                <span className="font-mono text-base text-emerald-950">
+                  {(orcamentoDetalhe.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
             </div>
 
-            <div className="bg-emerald-100/70 border border-emerald-300 p-3 rounded-2xl flex justify-between items-center font-black">
-              <span className="text-xs text-emerald-900 uppercase">Valor Total:</span>
-              <span className="font-mono text-base text-emerald-950">
-                {(orcamentoDetalhe.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </span>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+            <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 p-4 flex justify-end gap-2 flex-shrink-0">
               <button
                 type="button"
                 onClick={() => setOrcamentoDetalhe(null)}
