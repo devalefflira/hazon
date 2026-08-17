@@ -62,10 +62,47 @@ type TelaAtiva =
   | 'trocas';
 
 export default function App() {
-  const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
-  const [permissoesUsuario, setPermissoesUsuario] = useState<string[]>([]);
-  const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>('login');
+  // 1. Inicializa o usuário direto do localStorage para não perder sessão no F5
+  const [usuario, setUsuario] = useState<UsuarioLogado | null>(() => {
+    try {
+      const salvo = localStorage.getItem('hazon_user');
+      return salvo ? JSON.parse(salvo) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // 2. Inicializa as permissões do usuário salvas
+  const [permissoesUsuario, setPermissoesUsuario] = useState<string[]>(() => {
+    try {
+      const salvas = localStorage.getItem('hazon_permissoes');
+      return salvas ? JSON.parse(salvas) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // 3. Inicializa a tela onde o usuário estava antes do F5
+  const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>(() => {
+    try {
+      const userSalvo = localStorage.getItem('hazon_user');
+      const telaSalva = localStorage.getItem('hazon_tela_ativa') as TelaAtiva;
+      if (userSalvo && telaSalva && telaSalva !== 'login') {
+        return telaSalva;
+      }
+      return userSalvo ? 'home' : 'login';
+    } catch {
+      return 'login';
+    }
+  });
+
   const [tokenAcesso, setTokenAcesso] = useState<string | null>(null);
+
+  // Função auxiliar para mudar tela e persistir no storage
+  const mudarTela = (novaTela: TelaAtiva) => {
+    setTelaAtiva(novaTela);
+    localStorage.setItem('hazon_tela_ativa', novaTela);
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -74,15 +111,16 @@ export default function App() {
 
     if (tokenCotacao) {
       setTokenAcesso(tokenCotacao);
-      setTelaAtiva('responder_cotacao');
+      mudarTela('responder_cotacao');
     } else if (tokenPedido) {
       setTokenAcesso(tokenPedido);
-      setTelaAtiva('formalizar_pedido_externo');
+      mudarTela('formalizar_pedido_externo');
     }
   }, []);
 
   const handleLoginSuccess = async (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);
+    localStorage.setItem('hazon_user', JSON.stringify(usuarioLogado));
 
     try {
       const { data } = await supabase
@@ -93,18 +131,22 @@ export default function App() {
 
       const liberados = (data || []).map((p: { modulo_nome: string }) => p.modulo_nome);
       setPermissoesUsuario(liberados);
+      localStorage.setItem('hazon_permissoes', JSON.stringify(liberados));
     } catch (err) {
       console.error('Erro ao buscar permissões do usuário:', err);
       setPermissoesUsuario([]);
     }
 
-    setTelaAtiva('home');
+    mudarTela('home');
   };
 
   const handleLogout = () => {
     setUsuario(null);
     setPermissoesUsuario([]);
-    setTelaAtiva('login');
+    localStorage.removeItem('hazon_user');
+    localStorage.removeItem('hazon_permissoes');
+    localStorage.removeItem('hazon_tela_ativa');
+    mudarTela('login');
   };
 
   if (telaAtiva === 'responder_cotacao' && tokenAcesso) {
@@ -117,36 +159,36 @@ export default function App() {
 
   if (telaAtiva === 'clientes') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Clientes onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <Clientes onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'ofertas') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Ofertas onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
+    return <Ofertas onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
   }
 
   if (telaAtiva === 'vencimentos') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return (
       <Vencimentos
-        onVoltarParaHome={() => setTelaAtiva('home')}
+        onVoltarParaHome={() => mudarTela('home')}
         usuarioLogado={usuario}
-        onDirecionarParaAvaria={() => setTelaAtiva('avarias')}
+        onDirecionarParaAvaria={() => mudarTela('avarias')}
       />
     );
   }
 
   if (telaAtiva === 'trocas') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Trocas onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
+    return <Trocas onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
   }
 
   if (telaAtiva === 'notificacoes') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return (
       <Notificacoes
-        onVoltarParaHome={() => setTelaAtiva('home')}
-        onNavegarParaVencimentos={() => setTelaAtiva('vencimentos')}
+        onVoltarParaHome={() => mudarTela('home')}
+        onNavegarParaVencimentos={() => mudarTela('vencimentos')}
         usuarioLogado={usuario}
       />
     );
@@ -160,63 +202,63 @@ export default function App() {
         usuarioLogadoId={usuario.id}
         permissoesDoUsuario={permissoesUsuario}
         onLogout={handleLogout}
-        onNavegarParaCategorias={() => setTelaAtiva('categorias')}
-        onNavegarParaUsuarios={() => setTelaAtiva('usuarios')}
-        onNavegarParaPermissoes={() => setTelaAtiva('permissoes')}
-        onNavegarParaFornecedores={() => setTelaAtiva('fornecedores')}
-        onNavegarParaVendedores={() => setTelaAtiva('vendedores')}
-        onNavegarParaProdutos={() => setTelaAtiva('produtos')}
-        onNavegarParaInventario={() => setTelaAtiva('inventario')}
-        onNavegarParaNotaFalta={() => setTelaAtiva('nota-falta')}
-        onNavegarParaCotacoes={() => setTelaAtiva('cotacoes')}
-        onNavegarParaPedidos={() => setTelaAtiva('pedidos')}
-        onNavegarParaTarefas={() => setTelaAtiva('tarefas')}
-        onNavegarParaAvarias={() => setTelaAtiva('avarias')}
-        onNavegarParaConfCega={() => setTelaAtiva('conf-cega')}
-        onNavegarParaRelatorios={() => setTelaAtiva('relatorios')}
-        onNavegarParaTemperatura={() => setTelaAtiva('temperatura')}
-        onNavegarParaOrcamentos={() => setTelaAtiva('orcamentos')}
-        onNavegarParaClientes={() => setTelaAtiva('clientes')}
-        onNavegarParaOfertas={() => setTelaAtiva('ofertas')}
-        onNavegarParaVencimentos={() => setTelaAtiva('vencimentos')}
-        onNavegarParaTrocas={() => setTelaAtiva('trocas')}
-        onNavegarParaNotificacoes={() => setTelaAtiva('notificacoes')}
+        onNavegarParaCategorias={() => mudarTela('categorias')}
+        onNavegarParaUsuarios={() => mudarTela('usuarios')}
+        onNavegarParaPermissoes={() => mudarTela('permissoes')}
+        onNavegarParaFornecedores={() => mudarTela('fornecedores')}
+        onNavegarParaVendedores={() => mudarTela('vendedores')}
+        onNavegarParaProdutos={() => mudarTela('produtos')}
+        onNavegarParaInventario={() => mudarTela('inventario')}
+        onNavegarParaNotaFalta={() => mudarTela('nota-falta')}
+        onNavegarParaCotacoes={() => mudarTela('cotacoes')}
+        onNavegarParaPedidos={() => mudarTela('pedidos')}
+        onNavegarParaTarefas={() => mudarTela('tarefas')}
+        onNavegarParaAvarias={() => mudarTela('avarias')}
+        onNavegarParaConfCega={() => mudarTela('conf-cega')}
+        onNavegarParaRelatorios={() => mudarTela('relatorios')}
+        onNavegarParaTemperatura={() => mudarTela('temperatura')}
+        onNavegarParaOrcamentos={() => mudarTela('orcamentos')}
+        onNavegarParaClientes={() => mudarTela('clientes')}
+        onNavegarParaOfertas={() => mudarTela('ofertas')}
+        onNavegarParaVencimentos={() => mudarTela('vencimentos')}
+        onNavegarParaTrocas={() => mudarTela('trocas')}
+        onNavegarParaNotificacoes={() => mudarTela('notificacoes')}
       />
     );
   }
 
-  if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => setTelaAtiva('home')} />;
-  if (usuario && telaAtiva === 'usuarios') return <Usuarios onVoltarParaHome={() => setTelaAtiva('home')} />;
-  if (usuario && telaAtiva === 'permissoes') return <Permissoes onVoltarParaHome={() => setTelaAtiva('home')} />;
-  if (usuario && telaAtiva === 'fornecedores') return <Fornecedores onVoltarParaHome={() => setTelaAtiva('home')} />;
-  if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => setTelaAtiva('home')} />;
-  if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => setTelaAtiva('home')} />;
+  if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => mudarTela('home')} />;
+  if (usuario && telaAtiva === 'usuarios') return <Usuarios onVoltarParaHome={() => mudarTela('home')} />;
+  if (usuario && telaAtiva === 'permissoes') return <Permissoes onVoltarParaHome={() => mudarTela('home')} />;
+  if (usuario && telaAtiva === 'fornecedores') return <Fornecedores onVoltarParaHome={() => mudarTela('home')} />;
+  if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => mudarTela('home')} />;
+  if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => mudarTela('home')} />;
 
   if (telaAtiva === 'orcamentos') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Orcamentos usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <Orcamentos usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'cotacoes') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Cotacoes usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <Cotacoes usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'pedidos') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Pedidos usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <Pedidos usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'tarefas') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Tarefas usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <Tarefas usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'avarias') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return (
       <Avarias
-        onVoltarParaHome={() => setTelaAtiva('home')}
+        onVoltarParaHome={() => mudarTela('home')}
         usuarioLogado={usuario}
         usuarioLogadoId={usuario.id}
       />
@@ -225,26 +267,26 @@ export default function App() {
 
   if (telaAtiva === 'conf-cega') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <ConfCega usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <ConfCega usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'relatorios') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Relatorios onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <Relatorios onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'temperatura') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Temperatura usuarioLogadoId={usuario.id} onVoltarParaHome={() => setTelaAtiva('home')} />;
+    return <Temperatura usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'inventario') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Inventario onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
+    return <Inventario onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
   }
 
   if (telaAtiva === 'nota-falta') {
-    return <NotaFalta onVoltarParaHome={() => setTelaAtiva('home')} usuarioLogado={usuario} />;
+    return <NotaFalta onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
   }
 
   return <Login onLoginSuccess={handleLoginSuccess} />;
