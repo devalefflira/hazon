@@ -576,7 +576,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                         <button
                           type="button"
                           onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'ENCARTE')}
-                          className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                          className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
                           title="Relatório simplificado apenas com Descrição e Preço de Oferta"
                         >
                           🎨 Encarte
@@ -728,104 +728,116 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       </div>
 
-      {/* MODAL: NOVA OFERTA / EDIÇÃO DE ITENS (LISTA SUGERIDA) */}
+      {/* MODAL: NOVA OFERTA / EDIÇÃO DE ITENS (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
       {modalNovaOferta && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
+          <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-2xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
+            
+            {/* Header Sticky */}
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <h3 className="text-[#09797a] font-black text-base uppercase">
                 {codigoEdicaoAtual ? `EDITAR LISTA SUGERIDA (${codigoEdicaoAtual})` : 'NOVA OFERTA - LISTA SUGERIDA'}
               </h3>
-              <button type="button" onClick={() => setModalNovaOferta(false)} className="text-gray-400 font-bold text-base">✕</button>
-            </div>
-
-            <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl grid grid-cols-2 gap-2 text-xs font-bold">
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Data / Hora</span>
-                <span className="text-gray-800">{agoraData} às {agoraHora}</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Usuário</span>
-                <span className="text-gray-800">{nomeUser}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2 relative">
-              <input
-                type="text"
-                placeholder="Bipe o EAN ou digite o nome/código do produto..."
-                value={termoBuscaProduto}
-                onChange={(e) => setTermoBuscaProduto(e.target.value)}
-                className="flex-1 h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
-              />
-
-              {produtosEncontrados.length > 0 && (
-                <div className="absolute top-12 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-40 overflow-y-auto z-30 divide-y divide-gray-100">
-                  {produtosEncontrados.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleAdicionarProduto(p)}
-                      className="w-full text-left p-3 hover:bg-emerald-50/50 flex justify-between items-center text-xs font-bold text-gray-800 uppercase"
-                    >
-                      <span>{p.codprod} - {p.descricao}</span>
-                      <span className="text-[#09797a] font-mono">+ Adicionar</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 max-h-[35vh]">
-              <table className="w-full text-left text-xs font-bold">
-                <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
-                  <tr>
-                    <th className="p-2">CODPROD</th>
-                    <th className="p-2">DESCRIÇÃO</th>
-                    <th className="p-2 text-right">CUSTO REAL</th>
-                    <th className="p-2 text-right">PVENDA</th>
-                    <th className="p-2 text-center">AÇÃO</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {itensEmEdicao.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-6 text-center text-gray-400 italic text-xs">
-                        Nenhum produto adicionado à lista.
-                      </td>
-                    </tr>
-                  ) : (
-                    itensEmEdicao.map((item) => (
-                      <tr key={item.temp_id} className="hover:bg-gray-50">
-                        <td className="p-2 font-mono text-[#09797a]">{item.codprod}</td>
-                        <td className="p-2 uppercase">{item.descricao}</td>
-                        <td className="p-2 text-right font-mono text-gray-500">
-                          {item.preco_custo_real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td className="p-2 text-right font-mono text-gray-800">
-                          {item.preco_venda_tabela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td className="p-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoverProduto(item.temp_id)}
-                            className="text-red-500 font-bold px-2 py-1 rounded"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
                 onClick={() => setModalNovaOferta(false)}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo Rolável */}
+            <div className="overflow-y-auto flex flex-col gap-3 p-4 sm:p-6 flex-1 bg-slate-50/40">
+              <div className="bg-white border border-gray-200 p-3.5 rounded-2xl grid grid-cols-2 gap-2 text-xs font-bold shadow-sm">
+                <div>
+                  <span className="text-[9px] font-black text-gray-400 block uppercase">Data / Hora</span>
+                  <span className="text-gray-800">{agoraData} às {agoraHora}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-black text-gray-400 block uppercase">Usuário</span>
+                  <span className="text-gray-800">{nomeUser}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 relative">
+                <input
+                  type="text"
+                  placeholder="Bipe o EAN ou digite o nome/código do produto..."
+                  value={termoBuscaProduto}
+                  onChange={(e) => setTermoBuscaProduto(e.target.value)}
+                  className="flex-1 h-11 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
+                />
+
+                {produtosEncontrados.length > 0 && (
+                  <div className="absolute top-12 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-40 overflow-y-auto z-30 divide-y divide-gray-100">
+                    {produtosEncontrados.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleAdicionarProduto(p)}
+                        className="w-full text-left p-3 hover:bg-emerald-50/50 flex justify-between items-center text-xs font-bold text-gray-800 uppercase"
+                      >
+                        <span>{p.codprod} - {p.descricao}</span>
+                        <span className="text-[#09797a] font-mono">+ Adicionar</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 bg-white shadow-sm">
+                <table className="w-full text-left text-xs font-bold">
+                  <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
+                    <tr>
+                      <th className="p-2">CODPROD</th>
+                      <th className="p-2">DESCRIÇÃO</th>
+                      <th className="p-2 text-right">CUSTO REAL</th>
+                      <th className="p-2 text-right">PVENDA</th>
+                      <th className="p-2 text-center">AÇÃO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {itensEmEdicao.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-gray-400 italic text-xs">
+                          Nenhum produto adicionado à lista.
+                        </td>
+                      </tr>
+                    ) : (
+                      itensEmEdicao.map((item) => (
+                        <tr key={item.temp_id} className="hover:bg-gray-50">
+                          <td className="p-2 font-mono text-[#09797a]">{item.codprod}</td>
+                          <td className="p-2 uppercase">{item.descricao}</td>
+                          <td className="p-2 text-right font-mono text-gray-500">
+                            {item.preco_custo_real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="p-2 text-right font-mono text-gray-800">
+                            {item.preco_venda_tabela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoverProduto(item.temp_id)}
+                              className="text-red-500 font-bold px-2 py-1 rounded hover:bg-red-50"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer Sticky */}
+            <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setModalNovaOferta(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase hover:bg-gray-200 transition-all"
               >
                 Cancelar
               </button>
@@ -833,9 +845,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                 type="button"
                 disabled={salvando || itensEmEdicao.length === 0}
                 onClick={() => handleSalvarOfertaSugerida(false)}
-                className="flex-1 py-3 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-2xl text-xs font-black uppercase"
+                className="flex-1 py-3 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-2xl text-xs font-black uppercase transition-all"
               >
-                Salvar na Lista Sugerida
+                Salvar na Lista
               </button>
               <button
                 type="button"
@@ -843,94 +855,106 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                 onClick={() => handleSalvarOfertaSugerida(true)}
                 className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
               >
-                Seguir para Revisar/Aprovar →
+                Seguir para Revisar →
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: REVISAR / APROVAR */}
+      {/* MODAL: REVISAR / APROVAR (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
       {ofertaEmRevisao && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
+          <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-2xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
+            
+            {/* Header Sticky */}
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <div>
                 <span className="text-[10px] uppercase font-black text-amber-700">Fase de Revisão</span>
                 <h3 className="text-[#09797a] font-black text-base uppercase">
                   REVISAR / APROVAR OFERTA {ofertaEmRevisao.codigo_customizado}
                 </h3>
               </div>
-              <button type="button" onClick={() => setOfertaEmRevisao(null)} className="text-gray-400 font-bold text-base">✕</button>
-            </div>
-
-            <div className="flex justify-between items-center text-xs font-bold text-gray-600 bg-gray-50 p-3 rounded-2xl">
-              <span>Selecione os produtos que serão aprovados para precificação:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const todosIds = (ofertaEmRevisao.oferta_itens || []).map((it: any) => it.id);
-                  if (itensRevisaoSelecionados.length === todosIds.length) {
-                    setItensRevisaoSelecionados([]);
-                  } else {
-                    setItensRevisaoSelecionados(todosIds);
-                  }
-                }}
-                className="text-[#09797a] underline font-black text-[11px] uppercase"
-              >
-                {itensRevisaoSelecionados.length === (ofertaEmRevisao.oferta_itens || []).length ? 'Desmarcar Todos' : 'Marcar Todos'}
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 max-h-[40vh]">
-              <table className="w-full text-left text-xs font-bold">
-                <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
-                  <tr>
-                    <th className="p-2 text-center w-10">OK</th>
-                    <th className="p-2">CODPROD</th>
-                    <th className="p-2">DESCRIÇÃO</th>
-                    <th className="p-2 text-right">CUSTO REAL</th>
-                    <th className="p-2 text-right">PVENDA</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(ofertaEmRevisao.oferta_itens || []).map((item: any) => {
-                    const prod = item.produtos || {};
-                    const isChecked = itensRevisaoSelecionados.includes(item.id);
-                    return (
-                      <tr
-                        key={item.id}
-                        onClick={() => toggleItemRevisao(item.id)}
-                        className={`cursor-pointer transition-all ${isChecked ? 'bg-emerald-50/60' : 'hover:bg-gray-50 opacity-60'}`}
-                      >
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => { }}
-                            className="w-4 h-4 text-[#09797a] rounded border-gray-300"
-                          />
-                        </td>
-                        <td className="p-2 font-mono text-[#09797a]">{prod.codprod}</td>
-                        <td className="p-2 uppercase">{prod.descricao}</td>
-                        <td className="p-2 text-right font-mono text-gray-500">
-                          {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td className="p-2 text-right font-mono text-gray-800">
-                          {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
                 onClick={() => setOfertaEmRevisao(null)}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo Rolável */}
+            <div className="overflow-y-auto flex flex-col gap-3 p-4 sm:p-6 flex-1 bg-slate-50/40">
+              <div className="flex justify-between items-center text-xs font-bold text-gray-600 bg-white border border-gray-200 p-3 rounded-2xl shadow-sm">
+                <span>Selecione os produtos para aprovar:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const todosIds = (ofertaEmRevisao.oferta_itens || []).map((it: any) => it.id);
+                    if (itensRevisaoSelecionados.length === todosIds.length) {
+                      setItensRevisaoSelecionados([]);
+                    } else {
+                      setItensRevisaoSelecionados(todosIds);
+                    }
+                  }}
+                  className="text-[#09797a] underline font-black text-[11px] uppercase"
+                >
+                  {itensRevisaoSelecionados.length === (ofertaEmRevisao.oferta_itens || []).length ? 'Desmarcar Todos' : 'Marcar Todos'}
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 bg-white shadow-sm">
+                <table className="w-full text-left text-xs font-bold">
+                  <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
+                    <tr>
+                      <th className="p-2 text-center w-10">OK</th>
+                      <th className="p-2">CODPROD</th>
+                      <th className="p-2">DESCRIÇÃO</th>
+                      <th className="p-2 text-right">CUSTO REAL</th>
+                      <th className="p-2 text-right">PVENDA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(ofertaEmRevisao.oferta_itens || []).map((item: any) => {
+                      const prod = item.produtos || {};
+                      const isChecked = itensRevisaoSelecionados.includes(item.id);
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => toggleItemRevisao(item.id)}
+                          className={`cursor-pointer transition-all ${isChecked ? 'bg-emerald-50/60' : 'hover:bg-gray-50 opacity-60'}`}
+                        >
+                          <td className="p-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => { }}
+                              className="w-4 h-4 text-[#09797a] rounded border-gray-300 pointer-events-none"
+                            />
+                          </td>
+                          <td className="p-2 font-mono text-[#09797a]">{prod.codprod}</td>
+                          <td className="p-2 uppercase">{prod.descricao}</td>
+                          <td className="p-2 text-right font-mono text-gray-500">
+                            {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="p-2 text-right font-mono text-gray-800">
+                            {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer Sticky */}
+            <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setOfertaEmRevisao(null)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase hover:bg-gray-200 transition-all"
               >
                 Fechar
               </button>
@@ -955,119 +979,131 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* TELA DE PRECIFICAÇÃO */}
+      {/* MODAL: PRECIFICAÇÃO (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
       {ofertaEmPrecificacao && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
+          <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-2xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
+            
+            {/* Header Sticky */}
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <h3 className="text-[#09797a] font-black text-base uppercase">
                 PRECIFICAR OFERTA {ofertaEmPrecificacao.codigo_customizado}
               </h3>
-              <button type="button" onClick={() => setOfertaEmPrecificacao(null)} className="text-gray-400 font-bold text-base">✕</button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase">Data Inicial *</label>
-                <input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase">Data Final *</label>
-                <input
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase">Tipo de Oferta *</label>
-              <select
-                value={tipoOferta}
-                onChange={(e) => setTipoOferta(e.target.value)}
-                className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
-              >
-                {TIPOS_OFERTA_OPCOES.map((t) => (
-                  <option key={t} value={t}>{t.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
-
-            {tipoOferta === 'Data Comemorativa' && (
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase">Nome da Data Comemorativa *</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Dia dos Pais, Aniversário..."
-                  value={tipoOfertaCustom}
-                  onChange={(e) => setTipoOfertaCustom(e.target.value)}
-                  className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
-                />
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 max-h-[35vh]">
-              <table className="w-full text-left text-xs font-bold">
-                <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
-                  <tr>
-                    <th className="p-2">CODPROD</th>
-                    <th className="p-2">DESCRIÇÃO</th>
-                    <th className="p-2 text-right">CUSTO REAL</th>
-                    <th className="p-2 text-right">PVENDA</th>
-                    <th className="p-2 text-right w-32">OFERTA (R$)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(ofertaEmPrecificacao.oferta_itens || []).map((item: any) => {
-                    const prod = item.produtos || {};
-                    return (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="p-2 font-mono text-[#09797a]">{prod.codprod}</td>
-                        <td className="p-2 uppercase">{prod.descricao}</td>
-                        <td className="p-2 text-right font-mono text-gray-500">
-                          {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td className="p-2 text-right font-mono text-gray-800">
-                          {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td className="p-2 text-right">
-                          <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            placeholder="0.00"
-                            value={precosOfertaMap[item.id] ?? ''}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setPrecosOfertaMap((prev) => ({
-                                ...prev,
-                                [item.id]: val === '' ? '' : Number(val)
-                              }));
-                            }}
-                            className="w-28 h-9 text-xs bg-emerald-50 border border-emerald-300 px-2 rounded-xl text-right font-mono font-black text-emerald-900"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
                 onClick={() => setOfertaEmPrecificacao(null)}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo Rolável */}
+            <div className="overflow-y-auto flex flex-col gap-3 p-4 sm:p-6 flex-1 bg-slate-50/40">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Data Inicial *</label>
+                  <input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Data Final *</label>
+                  <input
+                    type="date"
+                    value={dataFim}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Tipo de Oferta *</label>
+                <select
+                  value={tipoOferta}
+                  onChange={(e) => setTipoOferta(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:border-[#09797a]"
+                >
+                  {TIPOS_OFERTA_OPCOES.map((t) => (
+                    <option key={t} value={t}>{t.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+
+              {tipoOferta === 'Data Comemorativa' && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Nome da Data Comemorativa *</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Dia dos Pais, Aniversário..."
+                    value={tipoOfertaCustom}
+                    onChange={(e) => setTipoOfertaCustom(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:border-[#09797a]"
+                  />
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 bg-white shadow-sm">
+                <table className="w-full text-left text-xs font-bold">
+                  <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
+                    <tr>
+                      <th className="p-2">CODPROD</th>
+                      <th className="p-2">DESCRIÇÃO</th>
+                      <th className="p-2 text-right">CUSTO REAL</th>
+                      <th className="p-2 text-right">PVENDA</th>
+                      <th className="p-2 text-right w-32">OFERTA (R$)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(ofertaEmPrecificacao.oferta_itens || []).map((item: any) => {
+                      const prod = item.produtos || {};
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="p-2 font-mono text-[#09797a]">{prod.codprod}</td>
+                          <td className="p-2 uppercase">{prod.descricao}</td>
+                          <td className="p-2 text-right font-mono text-gray-500">
+                            {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="p-2 text-right font-mono text-gray-800">
+                            {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="p-2 text-right">
+                            <input
+                              type="number"
+                              min={0}
+                              step="any"
+                              placeholder="0.00"
+                              value={precosOfertaMap[item.id] ?? ''}
+                              onWheel={(e) => e.currentTarget.blur()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPrecosOfertaMap((prev) => ({
+                                  ...prev,
+                                  [item.id]: val === '' ? '' : Number(val)
+                                }));
+                              }}
+                              className="w-28 h-9 text-xs bg-emerald-50 border border-emerald-300 px-2 rounded-xl text-right font-mono font-black text-emerald-900 focus:bg-white"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer Sticky */}
+            <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setOfertaEmPrecificacao(null)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase hover:bg-gray-200 transition-all"
               >
                 Cancelar
               </button>
@@ -1084,22 +1120,31 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* MODAL: VER DETALHES DE OFERTA */}
+      {/* MODAL: VER DETALHES DE OFERTA (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
       {ofertaVerDetalhes && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
+          <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
+            
+            {/* Header Sticky */}
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <h3 className="text-[#09797a] font-black text-base uppercase">
                 ITENS DA OFERTA {ofertaVerDetalhes.codigo_customizado}
               </h3>
-              <button type="button" onClick={() => setOfertaVerDetalhes(null)} className="text-gray-400 font-bold text-base">✕</button>
+              <button
+                type="button"
+                onClick={() => setOfertaVerDetalhes(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2 max-h-[50vh] pr-1">
+            {/* Conteúdo Rolável */}
+            <div className="overflow-y-auto flex flex-col gap-2 p-4 sm:p-6 flex-1 bg-slate-50/40">
               {(ofertaVerDetalhes.oferta_itens || []).map((item: any) => {
                 const prod = item.produtos || {};
                 return (
-                  <div key={item.id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold">
+                  <div key={item.id} className="p-3 bg-white border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold shadow-sm">
                     <div>
                       <span className="text-[9px] font-mono text-[#09797a] bg-[#09797a]/10 px-1.5 py-0.5 rounded">
                         Cód: {prod.codprod}
@@ -1114,13 +1159,16 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               })}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setOfertaVerDetalhes(null)}
-              className="w-full py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
-            >
-              Fechar
-            </button>
+            {/* Footer Sticky */}
+            <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 p-4 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setOfertaVerDetalhes(null)}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl text-xs font-bold uppercase transition-all"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
