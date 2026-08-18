@@ -982,13 +982,13 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* FLUXO DE PRECIFICAÇÃO EM 2 PASSOS (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
+      {/* FLUXO DE PRECIFICAÇÃO EM 2 PASSOS (JANELA CHEIA CORRIGIDA PARA MOBILE) */}
       {ofertaEmPrecificacao && (
-        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
-          <div className="w-full h-full sm:h-auto sm:max-h-[94vh] sm:max-w-3xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
+        <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-hidden">
+          <div className="w-full h-full sm:h-auto sm:max-h-[94vh] sm:max-w-3xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100 h-[100dvh]">
             
-            {/* Header Sticky */}
-            <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
+            {/* Header Fixo */}
+            <div className="bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0 z-10">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-teal-50 text-[#09797a]">
@@ -1011,9 +1011,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </button>
             </div>
 
-            {/* PASSO 1: DATA INICIAL, DATA FINAL E TIPO DE OFERTA */}
+            {/* PASSO 1: DATAS E TIPO */}
             {passoPrecificacao === 1 && (
-              <div className="overflow-y-auto flex flex-col gap-4 p-4 sm:p-6 flex-1 bg-slate-50/40 justify-center">
+              <div className="overflow-y-auto flex-1 p-4 sm:p-6 bg-slate-50/40 flex flex-col justify-center min-h-0">
                 <div className="bg-white border border-gray-200 p-4 sm:p-6 rounded-3xl shadow-sm flex flex-col gap-4">
                   <span className="text-xs font-black uppercase text-gray-700 border-b border-gray-100 pb-2">
                     1. Defina o Período e Tipo da Campanha
@@ -1072,10 +1072,10 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </div>
             )}
 
-            {/* PASSO 2: TABELA DE PRECIFICAÇÃO EM TELA CHEIA (SEM ROLAGEM HORIZONTAL E COM ESPAÇO MÁXIMO) */}
+            {/* PASSO 2: TABELA COM ROLAGEM INDEPENDENTE FLUIDA */}
             {passoPrecificacao === 2 && (
-              <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-white flex flex-col">
-                <div className="w-full border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+              <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 bg-white p-2 sm:p-4">
+                <div className="w-full border border-gray-100 rounded-2xl overflow-hidden shadow-sm pb-24">
                   <table className="w-full text-left text-xs font-bold border-collapse">
                     <thead className="bg-slate-50 text-[10px] text-gray-400 uppercase border-b border-gray-200 sticky top-0 z-10">
                       <tr>
@@ -1090,24 +1090,20 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                         const prod = item.produtos || {};
                         return (
                           <tr key={item.id} className="hover:bg-emerald-50/30">
-                            {/* Coluna Descrição ocupando largura confortável */}
                             <td className="p-3">
                               <span className="uppercase text-gray-800 font-black block leading-tight text-xs">
                                 {prod.descricao || 'PRODUTO'}
                               </span>
                             </td>
 
-                            {/* Custo Real */}
                             <td className="p-3 text-center font-mono text-gray-500 whitespace-nowrap text-xs">
                               {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
 
-                            {/* Preço de Venda da Tabela */}
                             <td className="p-3 text-center font-mono text-gray-800 whitespace-nowrap text-xs">
                               {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
 
-                            {/* Campo de Input Oferta (Estilizado como na foto) */}
                             <td className="p-3 text-right">
                               <input
                                 type="number"
@@ -1135,8 +1131,8 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </div>
             )}
 
-            {/* Footer Sticky */}
-            <div className="sticky bottom-0 z-20 bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0">
+            {/* Footer Fixo */}
+            <div className="bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0 z-20">
               {passoPrecificacao === 1 ? (
                 <>
                   <button
@@ -1157,7 +1153,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                         alert('Informe o nome da data comemorativa.');
                         return;
                       }
-                      setPassoPrecificacao(2); // Avança para a tabela em tela cheia
+                      setPassoPrecificacao(2);
                     }}
                     className="flex-2 py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
                   >
