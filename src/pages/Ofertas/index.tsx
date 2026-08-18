@@ -50,8 +50,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   const [ofertaEmRevisao, setOfertaEmRevisao] = useState<any | null>(null);
   const [itensRevisaoSelecionados, setItensRevisaoSelecionados] = useState<string[]>([]);
 
-  // Precificação
+  // Precificação (Fluxo em 2 Passos)
   const [ofertaEmPrecificacao, setOfertaEmPrecificacao] = useState<any | null>(null);
+  const [passoPrecificacao, setPassoPrecificacao] = useState<1 | 2>(1);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [tipoOferta, setTipoOferta] = useState(TIPOS_OFERTA_OPCOES[0]);
@@ -262,6 +263,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
 
   const handleAbrirPrecificacao = (oferta: any) => {
     setOfertaEmPrecificacao(oferta);
+    setPassoPrecificacao(1); // Sempre inicia no Passo 1 (Datas e Tipo de Oferta)
     setDataInicio(oferta.data_inicio || '');
     setDataFim(oferta.data_fim || '');
     setTipoOferta(oferta.tipo_oferta || TIPOS_OFERTA_OPCOES[0]);
@@ -277,6 +279,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   const handleSalvarPrecificacao = async () => {
     if (!dataInicio || !dataFim) {
       alert('Informe o período inicial e final da oferta.');
+      setPassoPrecificacao(1);
       return;
     }
 
@@ -576,7 +579,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                         <button
                           type="button"
                           onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'ENCARTE')}
-                          className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+                          className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
                           title="Relatório simplificado apenas com Descrição e Preço de Oferta"
                         >
                           🎨 Encarte
@@ -979,16 +982,26 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* MODAL: PRECIFICAÇÃO (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
+      {/* FLUXO DE PRECIFICAÇÃO EM 2 PASSOS (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
       {ofertaEmPrecificacao && (
         <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
-          <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-2xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
+          <div className="w-full h-full sm:h-auto sm:max-h-[94vh] sm:max-w-3xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
             
             {/* Header Sticky */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
-              <h3 className="text-[#09797a] font-black text-base uppercase">
-                PRECIFICAR OFERTA {ofertaEmPrecificacao.codigo_customizado}
-              </h3>
+            <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-teal-50 text-[#09797a]">
+                    Passo {passoPrecificacao} de 2
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase">
+                    {passoPrecificacao === 1 ? 'Período & Campanha' : 'Preços dos Produtos'}
+                  </span>
+                </div>
+                <h3 className="text-[#09797a] font-black text-base uppercase mt-0.5">
+                  PRECIFICAR OFERTA {ofertaEmPrecificacao.codigo_customizado}
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setOfertaEmPrecificacao(null)}
@@ -998,124 +1011,180 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </button>
             </div>
 
-            {/* Conteúdo Rolável */}
-            <div className="overflow-y-auto flex flex-col gap-3 p-4 sm:p-6 flex-1 bg-slate-50/40">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Data Inicial *</label>
-                  <input
-                    type="date"
-                    value={dataInicio}
-                    onChange={(e) => setDataInicio(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
-                  />
-                </div>
+            {/* PASSO 1: DATA INICIAL, DATA FINAL E TIPO DE OFERTA */}
+            {passoPrecificacao === 1 && (
+              <div className="overflow-y-auto flex flex-col gap-4 p-4 sm:p-6 flex-1 bg-slate-50/40 justify-center">
+                <div className="bg-white border border-gray-200 p-4 sm:p-6 rounded-3xl shadow-sm flex flex-col gap-4">
+                  <span className="text-xs font-black uppercase text-gray-700 border-b border-gray-100 pb-2">
+                    1. Defina o Período e Tipo da Campanha
+                  </span>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Data Final *</label>
-                  <input
-                    type="date"
-                    value={dataFim}
-                    onChange={(e) => setDataFim(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:border-[#09797a]"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Data Inicial *</label>
+                      <input
+                        type="date"
+                        required
+                        value={dataInicio}
+                        onChange={(e) => setDataInicio(e.target.value)}
+                        className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white focus:border-[#09797a]"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Data Final *</label>
+                      <input
+                        type="date"
+                        required
+                        value={dataFim}
+                        onChange={(e) => setDataFim(e.target.value)}
+                        className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 focus:bg-white focus:border-[#09797a]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Tipo de Oferta *</label>
+                    <select
+                      value={tipoOferta}
+                      onChange={(e) => setTipoOferta(e.target.value)}
+                      className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:bg-white focus:border-[#09797a]"
+                    >
+                      {TIPOS_OFERTA_OPCOES.map((t) => (
+                        <option key={t} value={t}>{t.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {tipoOferta === 'Data Comemorativa' && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Nome da Data Comemorativa *</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Dia dos Pais, Aniversário, Black Friday..."
+                        value={tipoOfertaCustom}
+                        onChange={(e) => setTipoOfertaCustom(e.target.value)}
+                        className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:bg-white focus:border-[#09797a]"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
 
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Tipo de Oferta *</label>
-                <select
-                  value={tipoOferta}
-                  onChange={(e) => setTipoOferta(e.target.value)}
-                  className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:border-[#09797a]"
-                >
-                  {TIPOS_OFERTA_OPCOES.map((t) => (
-                    <option key={t} value={t}>{t.toUpperCase()}</option>
-                  ))}
-                </select>
-              </div>
+            {/* PASSO 2: TABELA DE PRECIFICAÇÃO EM TELA CHEIA (SEM ROLAGEM HORIZONTAL E COM ESPAÇO MÁXIMO) */}
+            {passoPrecificacao === 2 && (
+              <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-white flex flex-col">
+                <div className="w-full border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-xs font-bold border-collapse">
+                    <thead className="bg-slate-50 text-[10px] text-gray-400 uppercase border-b border-gray-200 sticky top-0 z-10">
+                      <tr>
+                        <th className="p-3 text-left w-2/5">DESCRIÇÃO</th>
+                        <th className="p-3 text-center whitespace-nowrap">CUSTO REAL</th>
+                        <th className="p-3 text-center whitespace-nowrap">PVENDA</th>
+                        <th className="p-3 text-right whitespace-nowrap w-28 sm:w-32">OFERTA (R$)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(ofertaEmPrecificacao.oferta_itens || []).map((item: any) => {
+                        const prod = item.produtos || {};
+                        return (
+                          <tr key={item.id} className="hover:bg-emerald-50/30">
+                            {/* Coluna Descrição ocupando largura confortável */}
+                            <td className="p-3">
+                              <span className="uppercase text-gray-800 font-black block leading-tight text-xs">
+                                {prod.descricao || 'PRODUTO'}
+                              </span>
+                            </td>
 
-              {tipoOferta === 'Data Comemorativa' && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Nome da Data Comemorativa *</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Dia dos Pais, Aniversário..."
-                    value={tipoOfertaCustom}
-                    onChange={(e) => setTipoOfertaCustom(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:border-[#09797a]"
-                  />
+                            {/* Custo Real */}
+                            <td className="p-3 text-center font-mono text-gray-500 whitespace-nowrap text-xs">
+                              {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+
+                            {/* Preço de Venda da Tabela */}
+                            <td className="p-3 text-center font-mono text-gray-800 whitespace-nowrap text-xs">
+                              {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+
+                            {/* Campo de Input Oferta (Estilizado como na foto) */}
+                            <td className="p-3 text-right">
+                              <input
+                                type="number"
+                                min={0}
+                                step="any"
+                                placeholder="0.00"
+                                value={precosOfertaMap[item.id] ?? ''}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setPrecosOfertaMap((prev) => ({
+                                    ...prev,
+                                    [item.id]: val === '' ? '' : Number(val)
+                                  }));
+                                }}
+                                className="w-full h-10 text-sm bg-emerald-50/70 border border-emerald-300 focus:border-[#09797a] focus:bg-white px-2 rounded-2xl text-right font-mono font-black text-emerald-900 outline-none transition-all"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-
-              <div className="flex-1 overflow-y-auto border border-gray-200 rounded-2xl p-2 bg-white shadow-sm">
-                <table className="w-full text-left text-xs font-bold">
-                  <thead className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
-                    <tr>
-                      <th className="p-2">CODPROD</th>
-                      <th className="p-2">DESCRIÇÃO</th>
-                      <th className="p-2 text-right">CUSTO REAL</th>
-                      <th className="p-2 text-right">PVENDA</th>
-                      <th className="p-2 text-right w-32">OFERTA (R$)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(ofertaEmPrecificacao.oferta_itens || []).map((item: any) => {
-                      const prod = item.produtos || {};
-                      return (
-                        <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="p-2 font-mono text-[#09797a]">{prod.codprod}</td>
-                          <td className="p-2 uppercase">{prod.descricao}</td>
-                          <td className="p-2 text-right font-mono text-gray-500">
-                            {(item.preco_custo_real || prod.custoreal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                          </td>
-                          <td className="p-2 text-right font-mono text-gray-800">
-                            {(item.preco_venda_tabela || prod.pvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                          </td>
-                          <td className="p-2 text-right">
-                            <input
-                              type="number"
-                              min={0}
-                              step="any"
-                              placeholder="0.00"
-                              value={precosOfertaMap[item.id] ?? ''}
-                              onWheel={(e) => e.currentTarget.blur()}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setPrecosOfertaMap((prev) => ({
-                                  ...prev,
-                                  [item.id]: val === '' ? '' : Number(val)
-                                }));
-                              }}
-                              className="w-28 h-9 text-xs bg-emerald-50 border border-emerald-300 px-2 rounded-xl text-right font-mono font-black text-emerald-900 focus:bg-white"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
               </div>
-            </div>
+            )}
 
             {/* Footer Sticky */}
-            <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setOfertaEmPrecificacao(null)}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase hover:bg-gray-200 transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={salvando}
-                onClick={handleSalvarPrecificacao}
-                className="flex-1 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
-              >
-                Salvar e Concluir Oferta
-              </button>
+            <div className="sticky bottom-0 z-20 bg-white border-t border-gray-100 p-4 flex gap-2 flex-shrink-0">
+              {passoPrecificacao === 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setOfertaEmPrecificacao(null)}
+                    className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase hover:bg-gray-200 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!dataInicio || !dataFim) {
+                        alert('Informe as datas de início e fim da oferta.');
+                        return;
+                      }
+                      if (tipoOferta === 'Data Comemorativa' && !tipoOfertaCustom.trim()) {
+                        alert('Informe o nome da data comemorativa.');
+                        return;
+                      }
+                      setPassoPrecificacao(2); // Avança para a tabela em tela cheia
+                    }}
+                    className="flex-2 py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+                  >
+                    Avançar para Precificar Produtos →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPassoPrecificacao(1)}
+                    className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase hover:bg-gray-200 transition-all"
+                  >
+                    ← Voltar Datas
+                  </button>
+                  <button
+                    type="button"
+                    disabled={salvando}
+                    onClick={handleSalvarPrecificacao}
+                    className="flex-2 py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+                  >
+                    {salvando ? 'Salvando...' : 'Salvar e Concluir Oferta'}
+                  </button>
+                </>
+              )}
             </div>
+
           </div>
         </div>
       )}
