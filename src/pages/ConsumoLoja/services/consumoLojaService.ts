@@ -1,11 +1,13 @@
 // src/pages/ConsumoLoja/services/consumoLojaService.ts
 import { supabase } from '../../../lib/supabaseClient';
-import type { ItemConsumoForm } from '../types/consumoLoja.types';
+import type { ItemConsumoForm, ConsumoLojaItemView } from '../types/consumoLoja.types';
 
 export const consumoLojaService = {
   async buscarProdutos(termo: string) {
     const palavras = termo.trim().split(/\s+/).filter(Boolean);
-    let query = supabase.from('produtos').select('id, codprod, codbarra, descricao, departamento, custoreal, unidade');
+    let query = supabase
+      .from('produtos')
+      .select('id, codprod, codbarra, descricao, departamento, custoreal, unidade');
 
     if (palavras.length === 1) {
       const p = palavras[0];
@@ -20,7 +22,12 @@ export const consumoLojaService = {
     return data;
   },
 
-  async buscarItensConsumo(dataInicio?: string, dataFim?: string, departamento?: string, local?: string) {
+  async buscarItensConsumo(
+    dataInicio?: string,
+    dataFim?: string,
+    departamento?: string,
+    local?: string
+  ): Promise<ConsumoLojaItemView[]> {
     let query = supabase
       .from('consumo_loja_itens')
       .select(`
@@ -29,8 +36,19 @@ export const consumoLojaService = {
         departamento,
         valor_total_item,
         quantidade,
-        produtos ( descricao ),
-        consumo_loja_mestre!inner ( data_registro )
+        unidade_medida,
+        observacao,
+        produtos (
+          codprod,
+          descricao
+        ),
+        consumo_loja_mestre!inner (
+          data_registro,
+          hora_registro,
+          usuarios (
+            nome
+          )
+        )
       `);
 
     if (dataInicio) query = query.gte('consumo_loja_mestre.data_registro', dataInicio);
@@ -43,33 +61,45 @@ export const consumoLojaService = {
 
     return (data || []).map((item: any) => ({
       id: item.id,
+      codprod: item.produtos?.codprod,
       descricao_produto: item.produtos?.descricao || 'Produto não identificado',
       local: item.local,
       departamento: item.departamento || '-',
       valor_total_item: Number(item.valor_total_item || 0),
       quantidade: Number(item.quantidade || 0),
-      data_registro: item.consumo_loja_mestre?.data_registro
+      unidade_medida: item.unidade_medida || 'UN',
+      observacao: item.observacao,
+      data_registro: item.consumo_loja_mestre?.data_registro,
+      hora_registro: item.consumo_loja_mestre?.hora_registro || '00:00:00',
+      usuario_nome: item.consumo_loja_mestre?.usuarios?.nome || 'Sistema'
     }));
   },
 
   async salvarRegistroConsumo(usuarioId: string, itens: ItemConsumoForm[], observacao?: string) {
     const valorTotal = itens.reduce((acc, curr) => acc + curr.valor_total_item, 0);
     const codigoCustomizado = `CSM-${Date.now()}`;
+    const agora = new Date();
+    const dataAtual = agora.toLocaleDateString('sv-SE');
+    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     const { data: mestre, error: errorMestre } = await supabase
       .from('consumo_loja_mestre')
-      .insert([{
-        codigo_customizado: codigoCustomizado,
-        usuario_id: usuarioId,
-        valor_total: valorTotal,
-        observacao
-      }])
+      .insert([
+        {
+          codigo_customizado: codigoCustomizado,
+          usuario_id: usuarioId,
+          valor_total: valorTotal,
+          data_registro: dataAtual,
+          hora_registro: horaAtual,
+          observacao
+        }
+      ])
       .select('id')
       .single();
 
     if (errorMestre) throw errorMestre;
 
-    const payloadItens = itens.map(item => ({
+    const payloadItens = itens.map((item) => ({
       consumo_mestre_id: mestre.id,
       produto_id: item.produto_id,
       quantidade: item.quantidade,

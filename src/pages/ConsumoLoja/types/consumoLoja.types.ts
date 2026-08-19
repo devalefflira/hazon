@@ -1,3 +1,5 @@
+// src/pages/ConsumoLoja/types/consumoLoja.types.ts
+
 export interface ProdutoBusca {
   id: string;
   codprod: string;
@@ -23,10 +25,15 @@ export interface ItemConsumoForm {
 
 export interface ConsumoLojaItemView {
   id: string;
+  codprod?: string;
   descricao_produto: string;
   local: string;
   departamento: string;
   valor_total_item: number;
   quantidade: number;
+  unidade_medida: string;
+  observacao?: string;
   data_registro: string;
+  hora_registro: string;
+  usuario_nome: string;
 }
