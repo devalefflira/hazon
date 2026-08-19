@@ -23,7 +23,8 @@ export const LISTA_MODULOS_SISTEMA = [
   'Clientes',
   'Ofertas',
   'Vencimentos',
-  'Trocas'
+  'Trocas',
+  'ConsumoLoja'
 ];
 
 export const permissoesService = {

@@ -135,6 +135,11 @@ export default function Home(props: HomeProps) {
         <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
       </svg>
     ),
+    ConsumoLoja: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+      </svg>
+    ),
     Trocas: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
@@ -346,6 +351,18 @@ export default function Home(props: HomeProps) {
         borderCor: 'border-red-200',
         iconeBg: 'bg-red-600 text-white',
         textoCor: 'text-red-950'
+      },
+      {
+        id: 'consumo-loja',
+        nome: 'CONSUMO LOJA',
+        descricao: 'Controle de Materiais Internos',
+        tela: 'consumo-loja',
+        callbackProp: 'onNavegarParaConsumoLoja',
+        icone: Icones.ConsumoLoja,
+        bgGradiente: 'from-teal-50 to-emerald-50/50 hover:from-teal-100/70 hover:to-emerald-100/70',
+        borderCor: 'border-teal-200',
+        iconeBg: 'bg-teal-700 text-white',
+        textoCor: 'text-teal-950'
       },
       {
         id: 'trocas',

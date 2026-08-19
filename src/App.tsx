@@ -17,6 +17,7 @@ import { Pedidos } from './pages/Pedidos';
 import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
 import { Tarefas } from './pages/Tarefas';
 import Avarias from './pages/Avarias';
+import ConsumoLoja from './pages/ConsumoLoja';
 import ConfCega from './pages/ConfCega';
 import Relatorios from './pages/Relatorios';
 import Temperatura from './pages/Temperatura';
@@ -51,6 +52,7 @@ type TelaAtiva =
   | 'formalizar_pedido_externo'
   | 'tarefas'
   | 'avarias'
+  | 'consumo-loja'
   | 'conf-cega'
   | 'relatorios'
   | 'temperatura'
@@ -214,6 +216,7 @@ export default function App() {
         onNavegarParaPedidos={() => mudarTela('pedidos')}
         onNavegarParaTarefas={() => mudarTela('tarefas')}
         onNavegarParaAvarias={() => mudarTela('avarias')}
+        onNavegarParaConsumoLoja={() => mudarTela('consumo-loja')}
         onNavegarParaConfCega={() => mudarTela('conf-cega')}
         onNavegarParaRelatorios={() => mudarTela('relatorios')}
         onNavegarParaTemperatura={() => mudarTela('temperatura')}
@@ -258,6 +261,17 @@ export default function App() {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return (
       <Avarias
+        onVoltarParaHome={() => mudarTela('home')}
+        usuarioLogado={usuario}
+        usuarioLogadoId={usuario.id}
+      />
+    );
+  }
+
+  if (telaAtiva === 'consumo-loja') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <ConsumoLoja
         onVoltarParaHome={() => mudarTela('home')}
         usuarioLogado={usuario}
         usuarioLogadoId={usuario.id}
