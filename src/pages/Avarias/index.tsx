@@ -18,6 +18,9 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
   const [loading, setLoading] = useState(false);
   const [modalRegistroAberto, setModalRegistroAberto] = useState(false);
 
+  // Controle do acordeão de filtros (Padrão: retraído)
+  const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
+
   // Filtros
   const [dataInicio, setDataInicio] = useState<string>('');
   const [dataFim, setDataFim] = useState<string>('');
@@ -60,7 +63,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     carregarDados();
   }, []);
 
-  // Formatação segura de data DD/MM/YYYY sem deslocamento de timezone
+  // Formatação segura de data DD/MM/YYYY sem timezone offset
   const formatarDataSegura = (dataStr?: string) => {
     if (!dataStr) return '-';
     const partes = dataStr.split('T')[0].split('-');
@@ -71,12 +74,21 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     return dataStr;
   };
 
-  // Filtragem
+  // Cálculo das datas do mês atual (padrão quando o usuário não preencher período)
+  const [primeiroDiaMesAtual, hojeFormatado] = useMemo(() => {
+    const agora = new Date();
+    const ano = agora.getFullYear();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    const dia = String(agora.getDate()).padStart(2, '0');
+    return [`${ano}-${mes}-01`, `${ano}-${mes}-${dia}`];
+  }, []);
+
+  // Filtragem da Lista de Cards
   const avariasFiltradas = useMemo(() => {
     return avarias.filter((item: AvariaRecord) => {
       const dataItem = item.data_registro ? item.data_registro.split('T')[0] : '';
 
-      // Período
+      // Período especificado pelo usuário
       if (dataInicio && dataItem < dataInicio) return false;
       if (dataFim && dataItem > dataFim) return false;
 
@@ -99,19 +111,53 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     });
   }, [avarias, dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel]);
 
-  // Resetar página quando filtros mudarem
-  useEffect(() => {
-    setPaginaAtual(1);
-  }, [dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel, itensPorPagina]);
-
-  // Totalizador de Prejuízo
+  // Totalizador de Prejuízo: Apenas DESCARTE, CONSUMO INTERNO e DOAÇÃO (Exclui TROCA / TROCA FORNECEDOR)
+  // Por padrão considera o mês atual se não houver filtro de data manual
   const totalPrejuizo = useMemo(() => {
-    return avariasFiltradas.reduce((acc, a) => {
+    return avarias.reduce((acc, a) => {
+      const dest = (a.destinacao || '').toLowerCase();
+      // Não conta se for Troca
+      if (dest.includes('troca')) return acc;
+
+      const dataItem = a.data_registro ? a.data_registro.split('T')[0] : '';
+
+      // Se usuário filtrou datas manualmente:
+      if (dataInicio || dataFim) {
+        if (dataInicio && dataItem < dataInicio) return acc;
+        if (dataFim && dataItem > dataFim) return acc;
+      } else {
+        // Padrão: Mês atual
+        if (dataItem < primeiroDiaMesAtual || dataItem > hojeFormatado) return acc;
+      }
+
+      // Aplica demais filtros caso estejam ativos
+      if (motivoSel !== 'TODOS' && a.motivos_avaria?.descricao !== motivoSel) return acc;
+      if (destinacaoSel !== 'TODAS' && a.destinacao !== destinacaoSel) return acc;
+      if (departamentoSel !== 'TODOS' && a.produtos?.departamento !== departamentoSel) return acc;
+      if (secaoSel !== 'TODOS' && a.produtos?.secao !== secaoSel) return acc;
+      if (categoriaSel !== 'TODOS' && a.produtos?.categoria !== categoriaSel) return acc;
+
       const qtd = Number(a.quantidade || 0);
       const custo = Number(a.preco_custo_na_perda || 0);
       return acc + qtd * custo;
     }, 0);
-  }, [avariasFiltradas]);
+  }, [
+    avarias,
+    dataInicio,
+    dataFim,
+    primeiroDiaMesAtual,
+    hojeFormatado,
+    motivoSel,
+    destinacaoSel,
+    departamentoSel,
+    secaoSel,
+    categoriaSel
+  ]);
+
+  // Resetar página quando filtros mudarem
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel, itensPorPagina]);
 
   // Itens Paginados
   const totalPaginas = Math.ceil(avariasFiltradas.length / itensPorPagina) || 1;
@@ -175,149 +221,171 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
           </button>
         </div>
 
-        {/* PAINEL DE FILTROS AVANÇADOS */}
-        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
+        {/* PAINEL DE FILTROS AVANÇADOS (RETRÁTIL) */}
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3 transition-all">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-              Filtros Avançados
-            </span>
-            {temFiltroAtivo && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">
+                Filtros Avançados
+              </span>
+              {temFiltroAtivo && (
+                <span className="w-2 h-2 rounded-full bg-[#09797a]" title="Filtros aplicados" />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {temFiltroAtivo && (
+                <button
+                  type="button"
+                  onClick={limparFiltros}
+                  className="text-[10px] font-bold text-red-600 hover:underline uppercase mr-1"
+                >
+                  Limpar
+                </button>
+              )}
               <button
                 type="button"
-                onClick={limparFiltros}
-                className="text-[10px] font-bold text-red-600 hover:underline uppercase"
+                onClick={() => setFiltrosExpandidos((prev) => !prev)}
+                className="w-7 h-7 rounded-xl bg-white border border-slate-300 text-[#09797a] font-black text-sm flex items-center justify-center shadow-sm hover:bg-slate-100 transition-all"
+                title={filtrosExpandidos ? 'Recolher Filtros' : 'Expandir Filtros'}
               >
-                Limpar Filtros
+                {filtrosExpandidos ? '−' : '+'}
               </button>
-            )}
-          </div>
-
-          {/* LINHA 1: MOTIVO & DESTINAÇÃO */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Motivo</label>
-              <select
-                value={motivoSel}
-                onChange={(e) => setMotivoSel(e.target.value)}
-                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-              >
-                <option value="TODOS">⚠️ MOTIVO: TODOS</option>
-                {motivos.map((m) => (
-                  <option key={m.id} value={m.descricao}>{m.descricao.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Destinação</label>
-              <select
-                value={destinacaoSel}
-                onChange={(e) => setDestinacaoSel(e.target.value)}
-                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-              >
-                <option value="TODAS">📦 DESTINAÇÃO: TODAS</option>
-                <option value="Descarte">DESCARTE</option>
-                <option value="Troca">TROCA</option>
-                <option value="Consumo Interno">CONSUMO INTERNO</option>
-                <option value="Doação">DOAÇÃO</option>
-              </select>
             </div>
           </div>
 
-          {/* LINHA 2: PERÍODO (DATA INICIAL E FINAL) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
-              <input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
-              />
-            </div>
+          {/* CAMPOS EXPANSÍVEIS */}
+          {filtrosExpandidos && (
+            <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/80 animate-fadeIn">
+              {/* LINHA 1: MOTIVO & DESTINAÇÃO */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Motivo</label>
+                  <select
+                    value={motivoSel}
+                    onChange={(e) => setMotivoSel(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                  >
+                    <option value="TODOS">⚠️ MOTIVO: TODOS</option>
+                    {motivos.map((m) => (
+                      <option key={m.id} value={m.descricao}>{m.descricao.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
-              <input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
-              />
-            </div>
-          </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Destinação</label>
+                  <select
+                    value={destinacaoSel}
+                    onChange={(e) => setDestinacaoSel(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                  >
+                    <option value="TODAS">📦 DESTINAÇÃO: TODAS</option>
+                    <option value="Descarte">DESCARTE</option>
+                    <option value="Troca">TROCA</option>
+                    <option value="Consumo Interno">CONSUMO INTERNO</option>
+                    <option value="Doação">DOAÇÃO</option>
+                  </select>
+                </div>
+              </div>
 
-          {/* LINHA 3: DEPARTAMENTO, SEÇÃO E CATEGORIA */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Departamento</label>
-              <select
-                value={departamentoSel}
-                onChange={(e) => setDepartamentoSel(e.target.value)}
-                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-              >
-                <option value="TODOS">DEPTO: TODOS</option>
-                {opcoesDepartamentos.map((dep) => (
-                  <option key={dep} value={dep}>{dep.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
+              {/* LINHA 2: PERÍODO (DATA INICIAL E FINAL) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
+                  <input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+                  />
+                </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Seção</label>
-              <select
-                value={secaoSel}
-                onChange={(e) => setSecaoSel(e.target.value)}
-                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-              >
-                <option value="TODOS">SEÇÃO: TODAS</option>
-                {opcoesSecoes.map((sec) => (
-                  <option key={sec} value={sec}>{sec.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
+                  <input
+                    type="date"
+                    value={dataFim}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+                  />
+                </div>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Categoria</label>
-              <select
-                value={categoriaSel}
-                onChange={(e) => setCategoriaSel(e.target.value)}
-                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-              >
-                <option value="TODOS">CAT: TODAS</option>
-                {opcoesCategorias.map((cat) => (
-                  <option key={cat} value={cat}>{cat.toUpperCase()}</option>
-                ))}
-              </select>
+              {/* LINHA 3: DEPARTAMENTO, SEÇÃO E CATEGORIA */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Departamento</label>
+                  <select
+                    value={departamentoSel}
+                    onChange={(e) => setDepartamentoSel(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                  >
+                    <option value="TODOS">DEPTO: TODOS</option>
+                    {opcoesDepartamentos.map((dep) => (
+                      <option key={dep} value={dep}>{dep.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Seção</label>
+                  <select
+                    value={secaoSel}
+                    onChange={(e) => setSecaoSel(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                  >
+                    <option value="TODOS">SEÇÃO: TODAS</option>
+                    {opcoesSecoes.map((sec) => (
+                      <option key={sec} value={sec}>{sec.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Categoria</label>
+                  <select
+                    value={categoriaSel}
+                    onChange={(e) => setCategoriaSel(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                  >
+                    <option value="TODOS">CAT: TODAS</option>
+                    {opcoesCategorias.map((cat) => (
+                      <option key={cat} value={cat}>{cat.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* TOTALIZADOR DE PREJUÍZO & SELETOR DE QUANTIDADE POR PÁGINA */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-red-50/70 border border-red-200 px-4 py-3 rounded-2xl">
+        {/* CARD TOTALIZADOR DO PREJUÍZO */}
+        <div className="bg-red-50/70 border border-red-200 px-4 py-3 rounded-2xl flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-black text-red-900 uppercase">Total Prejuízo:</span>
             <span className="font-mono text-base sm:text-lg font-black text-red-600">
               - {totalPrejuizo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase ml-2">
-              ({avariasFiltradas.length} itens)
-            </span>
           </div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase">
+            {!dataInicio && !dataFim ? '(MÊS ATUAL)' : `(${avariasFiltradas.length} ITENS)`}
+          </span>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
-            <select
-              value={itensPorPagina}
-              onChange={(e) => setItensPorPagina(Number(e.target.value))}
-              className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-2.5 py-1.5 outline-none focus:border-[#09797a]"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
+        {/* CAMPO: EXIBIR POR PÁG (FORA DO CARD, LOGO ABAIXO) */}
+        <div className="flex items-center justify-end gap-2 px-1">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
+          <select
+            value={itensPorPagina}
+            onChange={(e) => setItensPorPagina(Number(e.target.value))}
+            className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-3 py-1.5 outline-none focus:border-[#09797a] shadow-sm cursor-pointer"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
         </div>
 
         {/* LISTAGEM DOS CARDS */}
@@ -364,8 +432,16 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
                         Resp: <strong className="text-slate-600">{av.usuarios?.nome || 'Sistema'}</strong>
                       </span>
                     </div>
+
+                    {/* OBSERVAÇÃO DO CARD */}
+                    {av.observacao && (
+                      <div className="text-[10px] text-slate-500 italic mt-2 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
+                        Obs: {av.observacao}
+                      </div>
+                    )}
                   </div>
 
+                  {/* BLOCO DE VALOR, DATA E HORA */}
                   <div className="text-right flex-shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto flex sm:flex-col justify-between items-end">
                     <span className="text-sm font-black text-red-600 font-mono">
                       - R$ {valorPerda.toFixed(2).replace('.', ',')}
@@ -434,7 +510,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
 
       </div>
 
-      {/* MODAL REGISTRAR AVARIA COM AS PROPS EXATAS */}
+      {/* MODAL REGISTRAR AVARIA */}
       {modalRegistroAberto && (
         <RegistrarAvariaModal
           motivos={motivos}
