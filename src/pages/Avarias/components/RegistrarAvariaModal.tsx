@@ -58,7 +58,7 @@ export default function RegistrarAvariaModal({
     const timer = setTimeout(async () => {
       try {
         const res = await avariasService.buscarProdutos(termoBuscaProduto);
-        setProdutosEncontrados(res);
+        setProdutosEncontrados(res || []);
       } catch (err) {
         console.error(err);
       }

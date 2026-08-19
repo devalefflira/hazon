@@ -70,15 +70,27 @@ export const avariasService = {
   async buscarProdutos(termo: string): Promise<any[]> {
     if (!termo.trim()) return [];
 
-    const pattern = termo.trim().replace(/\s+/g, '%').replace(/%+/g, '%');
-
-    const { data, error } = await supabase
+    const palavras = termo.trim().split(/\s+/).filter(Boolean);
+    let query = supabase
       .from('produtos')
-      .select('id, codprod, descricao, codbarra, unidade, custoreal, departamento, secao, categoria')
-      .or(`codbarra.ilike.%${pattern}%,codprod.ilike.%${pattern}%,descricao.ilike.%${pattern}%`)
-      .limit(10);
+      .select('id, codprod, descricao, codbarra, unidade, custoreal, departamento, secao, categoria');
 
-    if (error) throw error;
+    if (palavras.length === 1) {
+      const p = palavras[0];
+      query = query.or(`codprod.ilike.%${p}%,codbarra.ilike.%${p}%,descricao.ilike.%${p}%`);
+    } else {
+      // Cria o padrão %palavra1%palavra2%... para buscar em qualquer ordem na descrição
+      const pattern = `%${palavras.join('%')}%`;
+      query = query.ilike('descricao', pattern);
+    }
+
+    const { data, error } = await query.limit(20);
+
+    if (error) {
+      console.error('Erro ao buscar produtos:', error);
+      throw error;
+    }
+
     return data || [];
   },
 
