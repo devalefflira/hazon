@@ -1,59 +1,57 @@
 // Arquivo: src/pages/NotaFalta/index.tsx
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { notaFaltaService } from './services/notaFaltaService';
 import { gerarPdfNotaFalta } from './utils/gerarPdfNotaFalta';
 
 interface NotaFaltaProps {
-  onVoltarParaHome: () => void;
+  onVoltarParaHome?: () => void;
   usuarioLogado?: any;
+  usuarioLogadoId?: string;
 }
 
-const SECOES_OPCOES = [
-  'Cereais', 'Enlatados', 'Massas', 'Laticínios', 'Bebidas',
-  'Limpeza', 'Higiene Pessoal', 'Perfumaria', 'Frios',
-  'Hortifruti', 'Açougue', 'Padaria', 'Bazar', 'Pet/Agro Depósito'
-];
+export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: NotaFaltaProps) {
+  const idUsuarioFinal = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
 
-export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFaltaProps) {
-  const [notasRaw, setNotasRaw] = useState<any[]>([]);
+  const [notas, setNotas] = useState<any[]>([]);
   const [motivos, setMotivos] = useState<any[]>([]);
+  const [setores, setSetores] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState<'PENDENTES' | 'CONCLUIDAS'>('PENDENTES');
 
-  // Modal 1: Identificação Inicial
-  const [mostrarModalInicio, setMostrarModalInicio] = useState(false);
-  const [secaoSelecionada, setSecaoSelecionada] = useState(SECOES_OPCOES[0]);
+  // Controle de Tela Cheia (Substitui os modais)
+  const [telaNovaNota, setTelaNovaNota] = useState(false);
+  const [telaVerDetalhes, setTelaVerDetalhes] = useState<any | null>(null);
 
-  // Modal 2: Adicionar / Editar Itens da Nota
-  const [emEdicaoNota, setEmEdicaoNota] = useState(false);
-  const [codigoLoteAtual, setCodigoLoteAtual] = useState<string | null>(null);
-  const [nomeResponsavelAtual, setNomeResponsavelAtual] = useState('');
-  const [itensEmLote, setItensEmLote] = useState<any[]>([]);
+  // Filtros Avançados
+  const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const [setorSel, setSetorSel] = useState('TODOS');
+  const [statusSel, setStatusSel] = useState('TODOS');
 
-  // Campos do formulário do item individual
+  // Form Nova Nota de Falta
+  const [setorSelecionadoForm, setSetorSelecionadoForm] = useState('Geral');
   const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
   const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
-  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
-  const [motivoId, setMotivoId] = useState('');
-  const [qtdRestante, setQtdRestante] = useState<number | ''>(1);
-  const [unidade, setUnidade] = useState<string>('UN');
+  const [itensNovaNota, setItensNovaNota] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  // Modal de Resumo (Exclusivo para Concluídas)
-  const [loteDetalhe, setLoteDetalhe] = useState<any | null>(null);
+  // Paginação
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [itensPorPagina, setItensPorPagina] = useState(10);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [dadosNotas, dadosMotivos] = await Promise.all([
+      const [listaNotas, listaMotivos, listaSetores] = await Promise.all([
         notaFaltaService.listarNotasFalta(),
-        notaFaltaService.listarMotivosFalta()
+        notaFaltaService.listarMotivosFalta(),
+        notaFaltaService.listarSetores()
       ]);
-      setNotasRaw(dadosNotas);
-      setMotivos(dadosMotivos);
-      if (dadosMotivos.length > 0) setMotivoId(dadosMotivos[0].id);
-    } catch (err) {
-      console.error(err);
+      setNotas(listaNotas);
+      setMotivos(listaMotivos);
+      setSetores(listaSetores);
+    } catch (err: any) {
+      console.error('Erro ao carregar dados de Nota de Falta:', err);
     } finally {
       setLoading(false);
     }
@@ -63,9 +61,9 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
     carregarDados();
   }, []);
 
-  // Busca autocomplete de produtos
+  // Autocomplete Inteligente de Produtos (Fragmentos com %)
   useEffect(() => {
-    if (!termoBuscaProduto.trim() || produtoSelecionado) {
+    if (!termoBuscaProduto.trim()) {
       setProdutosEncontrados([]);
       return;
     }
@@ -80,534 +78,677 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado }: NotaFalta
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [termoBuscaProduto, produtoSelecionado]);
+  }, [termoBuscaProduto]);
 
-  // Identifica se o motivo selecionado é "Estoque Zero"
-  const motivoSelecionadoObj = motivos.find((m) => m.id === motivoId);
-  const isEstoqueZero = motivoSelecionadoObj?.descricao?.toUpperCase().includes('ESTOQUE ZERO');
-
-  // Abrir Modal de Nova Falta
-  const handleAbrirNovaFalta = () => {
-    setCodigoLoteAtual(null);
-    setItensEmLote([]);
-    setMostrarModalInicio(true);
+  const formatarDataSegura = (dataStr?: string) => {
+    if (!dataStr) return '-';
+    const partes = dataStr.split('T')[0].split('-');
+    if (partes.length === 3) {
+      const [ano, mes, dia] = partes;
+      return `${dia}/${mes}/${ano}`;
+    }
+    return dataStr;
   };
 
-  const handleIniciarNovaFalta = (e: React.FormEvent) => {
-    e.preventDefault();
-    const nomeLogado = usuarioLogado?.nome || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.nome || 'RESPONSÁVEL';
-    setNomeResponsavelAtual(nomeLogado);
-    setMostrarModalInicio(false);
-    setCodigoLoteAtual(null);
-    setEmEdicaoNota(true);
-    setItensEmLote([]);
-  };
+  // Agrupamento por código de Nota de Falta
+  const notasAgrupadas = useMemo(() => {
+    const grupos: Record<string, any> = {};
 
-  const handleAdicionarItemNaLista = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!produtoSelecionado) {
-      alert('Selecione um produto.');
+    notas.forEach((item) => {
+      const cod = item.codigo_customizado || 'NF-SEM-CODIGO';
+      if (!grupos[cod]) {
+        grupos[cod] = {
+          codigo_customizado: cod,
+          setor_nome: item.setor_nome || 'Geral',
+          data_registro: item.data_registro,
+          hora_registro: item.hora_registro,
+          usuario_nome: item.usuarios?.nome || 'Sistema',
+          status_cotacao: item.status_cotacao || 'Pendente',
+          itens: []
+        };
+      }
+      grupos[cod].itens.push(item);
+    });
+
+    return Object.values(grupos);
+  }, [notas]);
+
+  // Filtragem
+  const notasFiltradas = useMemo(() => {
+    return notasAgrupadas.filter((grupo: any) => {
+      const dataItem = grupo.data_registro ? grupo.data_registro.split('T')[0] : '';
+
+      if (dataInicio && dataItem < dataInicio) return false;
+      if (dataFim && dataItem > dataFim) return false;
+
+      if (setorSel !== 'TODOS' && grupo.setor_nome?.toUpperCase() !== setorSel.toUpperCase()) {
+        return false;
+      }
+
+      if (statusSel !== 'TODOS' && grupo.status_cotacao !== statusSel) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [notasAgrupadas, dataInicio, dataFim, setorSel, statusSel]);
+
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [dataInicio, dataFim, setorSel, statusSel, itensPorPagina]);
+
+  const totalPaginas = Math.ceil(notasFiltradas.length / itensPorPagina) || 1;
+  const indexInicial = (paginaAtual - 1) * itensPorPagina;
+  const notasPaginadas = notasFiltradas.slice(indexInicial, indexInicial + itensPorPagina);
+
+  const handleAdicionarProduto = (prod: any) => {
+    if (itensNovaNota.some((i) => i.produto_id === prod.id)) {
+      alert('Este produto já foi adicionado na lista.');
       return;
     }
 
-    // Se for Estoque Zero, zera a quantidade e usa 'UN'
-    const finalQtd = isEstoqueZero ? 0 : Number(qtdRestante || 0);
-    const finalUnidade = isEstoqueZero ? 'UN' : unidade;
+    const motivoPadrao = motivos[0]?.id || '';
 
-    const novoItem = {
-      temp_id: Math.random().toString(),
-      produto: produtoSelecionado,
-      produto_id: produtoSelecionado.id,
-      motivo_falta_id: motivoId,
-      motivo_descricao: motivoSelecionadoObj?.descricao || 'NÃO INFORMADO',
-      quantidade_restante: finalQtd,
-      unidade_restante: finalUnidade
-    };
+    setItensNovaNota((prev) => [
+      ...prev,
+      {
+        produto_id: prod.id,
+        codprod: prod.codprod,
+        descricao: prod.descricao,
+        departamento: prod.departamento || 'GERAL',
+        unidade_restante: prod.unidade || 'UN',
+        quantidade_restante: 1,
+        motivo_falta_id: motivoPadrao
+      }
+    ]);
 
-    setItensEmLote((prev) => [...prev, novoItem]);
-
-    setProdutoSelecionado(null);
     setTermoBuscaProduto('');
-    setQtdRestante(1);
-    setUnidade('UN');
+    setProdutosEncontrados([]);
   };
 
-  const handleRemoverItemLote = (tempId: string) => {
-    setItensEmLote((prev) => prev.filter((i) => i.temp_id !== tempId));
+  const handleRemoverItem = (prodId: string) => {
+    setItensNovaNota((prev) => prev.filter((i) => i.produto_id !== prodId));
   };
 
-  const handlePersistirLote = async (statusFinal: 'Pendente' | 'Concluida') => {
-    if (itensEmLote.length === 0) {
-      alert('Adicione ao menos um item para salvar ou pausar a nota.');
+  const handleSalvarNovaNota = async () => {
+    if (itensNovaNota.length === 0) {
+      alert('Adicione ao menos um produto na Nota de Falta.');
       return;
     }
 
     try {
       setSalvando(true);
-      const usuarioObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
-      const usuarioIdFinal = usuarioObj?.id;
-      const respNomeFinal = nomeResponsavelAtual || usuarioObj?.nome || 'RESPONSÁVEL';
-
-      await notaFaltaService.salvarLoteNotasFalta({
-        codigo_customizado: codigoLoteAtual,
-        responsavel_nome: respNomeFinal,
-        secao_nome: secaoSelecionada,
-        usuario_id: usuarioIdFinal,
-        status: statusFinal,
-        itens: itensEmLote.map((i) => ({
-          produto_id: i.produto_id,
-          motivo_falta_id: i.motivo_falta_id,
-          quantidade_restante: i.quantidade_restante,
-          unidade_restante: i.unidade_restante
+      await notaFaltaService.salvarItensNotaFalta({
+        usuario_id: idUsuarioFinal,
+        setor_nome: setorSelecionadoForm,
+        itens: itensNovaNota.map((it) => ({
+          produto_id: it.produto_id,
+          motivo_falta_id: it.motivo_falta_id,
+          quantidade_restante: Number(it.quantidade_restante || 1),
+          unidade_restante: it.unidade_restante || 'UN'
         }))
       });
 
-      alert(
-        statusFinal === 'Pendente'
-          ? `Nota de falta da seção ${secaoSelecionada} pausada e salva na aba Pendentes!`
-          : `Nota de falta da seção ${secaoSelecionada} concluída com sucesso!`
-      );
-
-      setEmEdicaoNota(false);
-      setCodigoLoteAtual(null);
-      setItensEmLote([]);
+      alert('Nota de Falta registrada com sucesso!');
+      setTelaNovaNota(false);
+      setItensNovaNota([]);
+      setSetorSelecionadoForm('Geral');
       carregarDados();
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao processar a nota de falta.');
+    } catch (err: any) {
+      alert('Erro ao salvar Nota de Falta: ' + err.message);
     } finally {
       setSalvando(false);
     }
   };
 
-  const handleCancelarLote = () => {
-    if (confirm('Deseja cancelar o preenchimento desta nota? Os itens desta sessão serão descartados.')) {
-      setEmEdicaoNota(false);
-      setCodigoLoteAtual(null);
-      setItensEmLote([]);
-    }
-  };
-
-  const handleClicarNoCard = (lote: any) => {
-    if (abaAtiva === 'PENDENTES') {
-      setNomeResponsavelAtual(lote.responsavel_nome || 'RESPONSÁVEL');
-      setSecaoSelecionada(lote.secao_nome || SECOES_OPCOES[0]);
-      setCodigoLoteAtual(lote.codigo);
-      setItensEmLote(
-        lote.itens.map((item: any) => ({
-          temp_id: item.id || Math.random().toString(),
-          produto: item.produtos || { id: item.produto_id, descricao: 'PRODUTO' },
-          produto_id: item.produto_id,
-          motivo_falta_id: item.motivo_falta_id,
-          motivo_descricao: item.motivos_falta?.descricao || 'NÃO INFORMADO',
-          quantidade_restante: item.quantidade_restante,
-          unidade_restante: item.unidade_restante || 'UN'
-        }))
-      );
-      setEmEdicaoNota(true);
-    } else {
-      setLoteDetalhe(lote);
-    }
-  };
-
-  // Agrupamento por código customizado
-  const lotesAgrupados = Object.values(
-    notasRaw.reduce((acc: Record<string, any>, item: any) => {
-      const chave = item.codigo_customizado || item.id;
-      if (!acc[chave]) {
-        acc[chave] = {
-          codigo: chave,
-          created_at: item.created_at,
-          data_registro: item.data_registro,
-          hora_registro: item.hora_registro,
-          responsavel_nome: item.usuarios?.nome || 'RESPONSÁVEL',
-          secao_nome: item.setor_nome || 'GERAL',
-          status: item.status_cotacao || 'Pendente',
-          itens: []
-        };
-      }
-      acc[chave].itens.push(item);
-      return acc;
-    }, {})
-  );
-
-  const lotesPendentes = lotesAgrupados.filter(
-    (l) => l.status === 'Pendente' || l.status === 'Pausada' || l.status === 'EM_ANDAMENTO'
-  );
-  const lotesConcluidos = lotesAgrupados.filter(
-    (l) => l.status === 'Concluida' || l.status === 'CONCLUIDA'
-  );
-
-  const listaExibida = abaAtiva === 'PENDENTES' ? lotesPendentes : lotesConcluidos;
-
-  return (
-    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
-      <div className="w-full max-w-2xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
-        
-        {/* HEADER */}
-        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={onVoltarParaHome} className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none">←</button>
-            <div>
-              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">NOTA DE FALTA</h1>
-              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Registro de Rupturas de Estoque</p>
+  // 1. TELA CHEIA: REGISTRAR NOVA NOTA DE FALTA
+  if (telaNovaNota) {
+    return (
+      <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+        <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
+          
+          {/* Header Fixo */}
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setTelaNovaNota(false)}
+                className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+              >
+                ←
+              </button>
+              <div>
+                <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">NOVA NOTA DE FALTA</h1>
+                <p className="text-[11px] text-slate-400 font-bold mt-1 tracking-wide">
+                  Registro e Apontamento de Ruptura de Estoque
+                </p>
+              </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleAbrirNovaFalta}
-            className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
-          >
-            📝 Registrar Nova Falta
-          </button>
-        </div>
 
-        {/* ABAS */}
-        <div className="bg-gray-100 p-1 rounded-2xl flex text-xs font-black">
-          <button
-            type="button"
-            onClick={() => setAbaAtiva('PENDENTES')}
-            className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${abaAtiva === 'PENDENTES' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'}`}
-          >
-            PENDENTES ({lotesPendentes.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setAbaAtiva('CONCLUIDAS')}
-            className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${abaAtiva === 'CONCLUIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'}`}
-          >
-            CONCLUÍDAS ({lotesConcluidos.length})
-          </button>
-        </div>
+          {/* Seleção de Seção / Setor com a opção GERAL */}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
+            <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+              1. Selecione a Seção de Origem
+            </span>
 
-        {/* LISTAGEM DE NOTAS */}
-        <div className="flex-1 flex flex-col gap-2">
-          {loading ? (
-            <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando notas...</div>
-          ) : listaExibida.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-              Nenhuma nota de falta registrada nesta aba.
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Seção / Departamento</label>
+              <select
+                value={setorSelecionadoForm}
+                onChange={(e) => setSetorSelecionadoForm(e.target.value)}
+                className="w-full h-11 text-xs bg-white border border-slate-300 rounded-xl px-3 font-black text-[#09797a] uppercase outline-none focus:border-[#09797a]"
+              >
+                <option value="Geral">📦 GERAL (MISTURAR ITENS DE DIVERSOS DEPARTAMENTOS)</option>
+                {setores
+                  .filter((s) => s.nome?.toUpperCase() !== 'GERAL')
+                  .map((s) => (
+                    <option key={s.id} value={s.nome}>{s.nome.toUpperCase()}</option>
+                  ))}
+              </select>
             </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {listaExibida.map((lote) => {
-                const dataFmt = lote.data_registro
-                  ? new Date(lote.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')
-                  : new Date(lote.created_at).toLocaleDateString('pt-BR');
+          </div>
 
-                return (
-                  <div
-                    key={lote.codigo}
-                    onClick={() => handleClicarNoCard(lote)}
-                    className="p-3.5 bg-gray-50 hover:bg-emerald-50/40 border border-gray-200 rounded-2xl flex justify-between items-center cursor-pointer transition-all active:scale-[0.99]"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded-md uppercase">
-                          {lote.codigo}
-                        </span>
-                        <span className="text-[9px] font-mono font-bold text-gray-400">
-                          {dataFmt} às {lote.hora_registro || ''}
-                        </span>
+          {/* Busca de Produtos Inteligente */}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
+            <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+              2. Adicionar Produtos em Ruptura
+            </span>
+
+            <div className="flex flex-col gap-1 relative">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Buscar Produto</label>
+              <input
+                type="text"
+                placeholder="Bipe o código de barras ou digite parte do nome / código..."
+                value={termoBuscaProduto}
+                onChange={(e) => setTermoBuscaProduto(e.target.value)}
+                className="w-full h-11 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 focus:border-[#09797a]"
+              />
+
+              {produtosEncontrados.length > 0 && (
+                <div className="absolute top-18 left-0 right-0 z-30 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto divide-y divide-slate-100">
+                  {produtosEncontrados.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleAdicionarProduto(p)}
+                      className="w-full text-left p-3 hover:bg-teal-50/60 flex justify-between items-center text-xs font-bold text-slate-800 uppercase transition-all"
+                    >
+                      <div>
+                        <div>{p.codprod} - {p.descricao}</div>
+                        <span className="text-[10px] text-slate-400 font-mono">Depto: {p.departamento || '-'} • Un: {p.unidade || 'UN'}</span>
                       </div>
-                      <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                        Resp: {lote.responsavel_nome} | Seção: {lote.secao_nome}
+                      <span className="text-[10px] font-black text-[#09797a]">+ Inserir</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Lista de Itens Inseridos */}
+          <div className="flex-1 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-3 bg-slate-50/50">
+            <span className="text-[10px] font-black uppercase text-slate-400 block px-1">
+              Itens na Nota ({itensNovaNota.length})
+            </span>
+
+            {itensNovaNota.length === 0 ? (
+              <div className="p-10 text-center text-slate-400 text-xs font-bold italic">
+                Nenhum produto inserido. Busque o item acima para adicionar à Nota de Falta.
+              </div>
+            ) : (
+              itensNovaNota.map((it, idx) => (
+                <div
+                  key={it.produto_id}
+                  className="p-3.5 bg-white border border-slate-200 rounded-2xl flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 shadow-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-mono text-[#09797a] bg-teal-50 px-1.5 py-0.5 rounded font-black">
+                        {it.codprod}
+                      </span>
+                      <h4 className="text-xs font-black text-slate-800 uppercase leading-snug">
+                        {it.descricao}
                       </h4>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase">
-                        Qtd de Itens: <strong className="text-[#09797a]">{lote.itens.length}</strong>
-                      </p>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-medium mt-1">
+                      Depto: <strong className="text-slate-600">{it.departamento}</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    {/* Motivo */}
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Motivo</label>
+                      <select
+                        value={it.motivo_falta_id}
+                        onChange={(e) => {
+                          const novo = [...itensNovaNota];
+                          novo[idx].motivo_falta_id = e.target.value;
+                          setItensNovaNota(novo);
+                        }}
+                        className="h-9 text-xs bg-slate-50 border border-slate-200 rounded-xl px-2 font-bold text-slate-800 uppercase"
+                      >
+                        {motivos.map((m) => (
+                          <option key={m.id} value={m.id}>{m.descricao.toUpperCase()}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Quantidade Restante */}
+                    <div className="flex flex-col gap-0.5 w-24">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Qtd Restante</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={it.quantidade_restante}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        onChange={(e) => {
+                          const novo = [...itensNovaNota];
+                          novo[idx].quantidade_restante = e.target.value === '' ? '' : Number(e.target.value);
+                          setItensNovaNota(novo);
+                        }}
+                        className="h-9 text-xs bg-slate-50 border border-slate-200 rounded-xl px-2 text-center font-bold text-slate-800"
+                      />
                     </div>
 
                     <button
                       type="button"
-                      className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase ${
-                        abaAtiva === 'PENDENTES' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
-                      }`}
+                      onClick={() => handleRemoverItem(it.produto_id)}
+                      className="w-9 h-9 mt-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold flex items-center justify-center transition-all"
                     >
-                      {abaAtiva === 'PENDENTES' ? 'Continuar' : 'Ver Detalhes'}
+                      ✕
                     </button>
                   </div>
-                );
-              })}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Rodapé Fixo */}
+          <div className="pt-2 border-t border-slate-100 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTelaNovaNota(false)}
+              className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold uppercase transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={salvando || itensNovaNota.length === 0}
+              onClick={handleSalvarNovaNota}
+              className="flex-2 py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+            >
+              {salvando ? 'Salvando...' : 'Salvar Nota de Falta'}
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // 2. TELA CHEIA: DETALHES DA NOTA DE FALTA
+  if (telaVerDetalhes) {
+    return (
+      <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+        <div className="w-full max-w-3xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
+          
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setTelaVerDetalhes(null)}
+                className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+              >
+                ←
+              </button>
+              <div>
+                <span className="text-[10px] font-mono font-black text-[#09797a] bg-teal-50 px-2 py-0.5 rounded">
+                  {telaVerDetalhes.codigo_customizado}
+                </span>
+                <h1 className="text-base sm:text-lg font-black text-slate-800 uppercase mt-0.5">
+                  DETALHES DA NOTA DE FALTA
+                </h1>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => gerarPdfNotaFalta(telaVerDetalhes, telaVerDetalhes.itens || [])}
+              className="bg-[#09797a] hover:bg-[#075f60] text-white px-3.5 py-2 rounded-xl text-xs font-black uppercase shadow-sm"
+            >
+              📄 Gerar PDF
+            </button>
+          </div>
+
+          {/* Dados Gerais */}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
+            <div>
+              <span className="text-[9px] text-slate-400 block uppercase">Seção / Depto</span>
+              <span className="text-slate-800">{telaVerDetalhes.setor_nome}</span>
+            </div>
+            <div>
+              <span className="text-[9px] text-slate-400 block uppercase">Data / Hora</span>
+              <span className="text-slate-800">{formatarDataSegura(telaVerDetalhes.data_registro)} às {telaVerDetalhes.hora_registro?.slice(0, 5)}</span>
+            </div>
+            <div>
+              <span className="text-[9px] text-slate-400 block uppercase">Responsável</span>
+              <span className="text-slate-800">{telaVerDetalhes.usuario_nome}</span>
+            </div>
+            <div>
+              <span className="text-[9px] text-slate-400 block uppercase">Status Cotação</span>
+              <span className="text-amber-800">{telaVerDetalhes.status_cotacao}</span>
+            </div>
+          </div>
+
+          {/* Itens */}
+          <div className="flex-1 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-3 bg-slate-50/50">
+            <span className="text-[10px] font-black uppercase text-slate-400 block px-1">
+              Produtos Registrados ({telaVerDetalhes.itens?.length || 0})
+            </span>
+
+            {telaVerDetalhes.itens?.map((it: any) => (
+              <div
+                key={it.id}
+                className="p-3 bg-white border border-slate-200 rounded-xl flex justify-between items-center text-xs font-bold shadow-sm"
+              >
+                <div>
+                  <span className="text-[9px] font-mono text-[#09797a] bg-teal-50 px-1.5 py-0.5 rounded">
+                    {it.produtos?.codprod || '-'}
+                  </span>
+                  <h4 className="text-xs font-black text-slate-800 uppercase mt-0.5">
+                    {it.produtos?.descricao || 'Produto'}
+                  </h4>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Motivo: <strong className="text-slate-600 uppercase">{it.motivos_falta?.descricao || 'Falta'}</strong>
+                  </div>
+                </div>
+
+                <div className="text-right font-mono">
+                  <span className="text-[9px] text-slate-400 block uppercase">Resta em Estoque</span>
+                  <strong className="text-slate-800 text-sm">{it.quantidade_restante} {it.unidade_restante || 'UN'}</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setTelaVerDetalhes(null)}
+              className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold uppercase transition-all"
+            >
+              Voltar à Lista
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // 3. TELA PRINCIPAL (LISTAGEM EM CARDS COM FILTROS RETRÁTEIS)
+  return (
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+      <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
+        
+        {/* HEADER */}
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onVoltarParaHome || (() => window.history.back())}
+              className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+            >
+              ←
+            </button>
+            <div>
+              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">NOTAS DE FALTA</h1>
+              <p className="text-[11px] text-slate-400 font-bold mt-1 tracking-wide">
+                Controle de Ruptura e Reposição de Estoque
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setTelaNovaNota(true)}
+            className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+          >
+            + NOVA NOTA
+          </button>
+        </div>
+
+        {/* FILTROS AVANÇADOS (RETRÁTIL + / -) */}
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3 transition-all">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">
+                Filtros Avançados
+              </span>
+              {(dataInicio || dataFim || setorSel !== 'TODOS' || statusSel !== 'TODOS') && (
+                <span className="w-2 h-2 rounded-full bg-[#09797a]" title="Filtros aplicados" />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {(dataInicio || dataFim || setorSel !== 'TODOS' || statusSel !== 'TODOS') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDataInicio('');
+                    setDataFim('');
+                    setSetorSel('TODOS');
+                    setStatusSel('TODOS');
+                  }}
+                  className="text-[10px] font-bold text-red-600 hover:underline uppercase mr-1"
+                >
+                  Limpar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setFiltrosExpandidos((prev) => !prev)}
+                className="w-7 h-7 rounded-xl bg-white border border-slate-300 text-[#09797a] font-black text-sm flex items-center justify-center shadow-sm hover:bg-slate-100 transition-all"
+                title={filtrosExpandidos ? 'Recolher Filtros' : 'Expandir Filtros'}
+              >
+                {filtrosExpandidos ? '−' : '+'}
+              </button>
+            </div>
+          </div>
+
+          {filtrosExpandidos && (
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-200/80">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
+                <input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
+                <input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Seção / Setor</label>
+                <select
+                  value={setorSel}
+                  onChange={(e) => setSetorSel(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  <option value="TODOS">TODOS</option>
+                  <option value="GERAL">GERAL</option>
+                  {setores
+                    .filter((s) => s.nome?.toUpperCase() !== 'GERAL')
+                    .map((s) => (
+                      <option key={s.id} value={s.nome}>{s.nome.toUpperCase()}</option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Status Cotação</label>
+                <select
+                  value={statusSel}
+                  onChange={(e) => setStatusSel(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  <option value="TODOS">TODOS</option>
+                  <option value="Pendente">PENDENTE</option>
+                  <option value="Cotado">COTADO</option>
+                  <option value="Pedido Gerado">PEDIDO GERADO</option>
+                </select>
+              </div>
             </div>
           )}
         </div>
 
-      </div>
+        {/* SELETOR DE QUANTIDADE POR PÁGINA */}
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-bold text-slate-500">
+            Total: <strong>{notasFiltradas.length}</strong> notas registradas
+          </span>
 
-      {/* MODAL 1: SELEÇÃO DA SEÇÃO */}
-      {mostrarModalInicio && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <form onSubmit={handleIniciarNovaFalta} className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-              <h3 className="text-[#09797a] font-black text-base uppercase">INICIAR NOTA DE FALTA</h3>
-              <button type="button" onClick={() => setMostrarModalInicio(false)} className="text-gray-400 font-bold text-base">✕</button>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Informe sua Seção</label>
-              <select
-                value={secaoSelecionada}
-                onChange={(e) => setSecaoSelecionada(e.target.value)}
-                className="w-full h-11 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase focus:outline-none focus:border-[#09797a]"
-              >
-                {SECOES_OPCOES.map((sec) => (
-                  <option key={sec} value={sec}>{sec.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all mt-2"
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
+            <select
+              value={itensPorPagina}
+              onChange={(e) => setItensPorPagina(Number(e.target.value))}
+              className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-3 py-1.5 outline-none focus:border-[#09797a] shadow-sm cursor-pointer"
             >
-              Iniciar Nota de Falta
-            </button>
-          </form>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
         </div>
-      )}
 
-      {/* MODAL 2: EDIÇÃO DE ITENS DA NOTA */}
-      {emEdicaoNota && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
-            
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-              <div>
-                <h3 className="text-[#09797a] font-black text-base uppercase">REGISTRAR RUPTURA DE ESTOQUE</h3>
-                <p className="text-[10px] text-gray-400 font-bold uppercase">Resp: {nomeResponsavelAtual} | Seção: {secaoSelecionada}</p>
-              </div>
-              <button type="button" onClick={() => handlePersistirLote('Pendente')} className="text-gray-400 font-bold text-base">✕</button>
+        {/* LISTAGEM DOS CARDS */}
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {loading ? (
+            <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">Carregando notas...</div>
+          ) : notasFiltradas.length === 0 ? (
+            <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
+              Nenhuma Nota de Falta encontrada para os filtros selecionados.
             </div>
-
-            {/* FORMULÁRIO DO ITEM */}
-            <form onSubmit={handleAdicionarItemNaLista} className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
-              <div className="flex flex-col gap-1 relative">
-                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Buscar Produto (Codprod, EAN ou Nome)</label>
-                <input
-                  type="text"
-                  value={termoBuscaProduto}
-                  onChange={(e) => {
-                    setTermoBuscaProduto(e.target.value);
-                    setProdutoSelecionado(null);
-                  }}
-                  placeholder="Bipe o EAN ou digite o termo..."
-                  className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800"
-                />
-
-                {produtosEncontrados.length > 0 && !produtoSelecionado && (
-                  <div className="absolute top-15 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-40 overflow-y-auto z-20 divide-y divide-gray-100">
-                    {produtosEncontrados.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setProdutoSelecionado(p);
-                          setTermoBuscaProduto(`${p.codprod} - ${p.descricao}`);
-                          setProdutosEncontrados([]);
-                        }}
-                        className="w-full text-left p-3 hover:bg-emerald-50/50 flex flex-col text-xs font-bold text-gray-800 uppercase"
-                      >
-                        <span>{p.codprod} - {p.descricao}</span>
-                      </button>
-                    ))}
+          ) : (
+            notasPaginadas.map((grupo: any) => (
+              <div
+                key={grupo.codigo_customizado}
+                className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[9px] font-mono font-black text-[#09797a] bg-teal-50 px-2 py-0.5 rounded">
+                      {grupo.codigo_customizado}
+                    </span>
+                    <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                      SEÇÃO: {grupo.setor_nome}
+                    </span>
+                    <span className="text-[9px] font-bold uppercase bg-amber-50 text-amber-800 px-2 py-0.5 rounded">
+                      {grupo.status_cotacao}
+                    </span>
                   </div>
-                )}
-              </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Motivo da Ruptura</label>
-                <select
-                  value={motivoId}
-                  onChange={(e) => setMotivoId(e.target.value)}
-                  className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
-                >
-                  {motivos.map((m) => (
-                    <option key={m.id} value={m.id}>{m.descricao.toUpperCase()}</option>
+                  <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
+                    {grupo.itens?.length || 0} PRODUTO(S) APONTADO(S) EM RUPTURA
+                  </h3>
+
+                  <div className="text-[10px] text-slate-400 font-medium mt-1">
+                    Resp: <strong className="text-slate-600">{grupo.usuario_nome}</strong>, em{' '}
+                    <strong>{formatarDataSegura(grupo.data_registro)}</strong>, às{' '}
+                    <strong>{grupo.hora_registro?.slice(0, 5) || '00:00'}</strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={() => setTelaVerDetalhes(grupo)}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-all"
+                  >
+                    Ver Itens
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => gerarPdfNotaFalta(grupo, grupo.itens || [])}
+                    className="px-3.5 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                  >
+                    📄 PDF
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* CONTROLES DE PAGINAÇÃO */}
+        {notasFiltradas.length > itensPorPagina && (
+          <div className="flex items-center justify-between border-t border-slate-100 pt-3 flex-shrink-0">
+            <span className="text-xs font-bold text-slate-500">
+              Página {paginaAtual} de {totalPaginas}
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={paginaAtual === 1}
+                onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+              >
+                ← Anterior
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPaginas || Math.abs(p - paginaAtual) <= 1)
+                  .map((p, idx, arr) => (
+                    <React.Fragment key={p}>
+                      {idx > 0 && arr[idx - 1] !== p - 1 && (
+                        <span className="text-xs text-slate-400 px-1">...</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setPaginaAtual(p)}
+                        className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${
+                          paginaAtual === p
+                            ? 'bg-[#09797a] text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    </React.Fragment>
                   ))}
-                </select>
               </div>
 
-              {/* OCULTA QUANTIDADE E TIPO DE UNIDADE CASO O MOTIVO SEJA "ESTOQUE ZERO" */}
-              {!isEstoqueZero && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Qtd Ainda Restante</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      required
-                      value={qtdRestante}
-                      onWheel={(e) => e.currentTarget.blur()}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setQtdRestante(val === '' ? '' : Number(val));
-                      }}
-                      className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Tipo de Unidade</label>
-                    <select
-                      value={unidade}
-                      onChange={(e) => setUnidade(e.target.value)}
-                      className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 text-center uppercase"
-                    >
-                      <option value="UN">UN - Unidade</option>
-                      <option value="CX">CX - Caixa</option>
-                      <option value="FD">FD - Fardo</option>
-                      <option value="KG">KG - Quilo</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={!produtoSelecionado}
-                className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-2.5 rounded-2xl text-xs font-black uppercase shadow-md transition-all disabled:opacity-40"
-              >
-                + Adicionar Item na Nota
-              </button>
-            </form>
-
-            {/* LISTA DE ITENS INCLUÍDOS */}
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2 max-h-[30vh] pr-1">
-              <span className="text-[10px] font-black text-gray-400 uppercase px-1">Itens Adicionados ({itensEmLote.length})</span>
-              {itensEmLote.length === 0 ? (
-                <div className="border border-dashed border-gray-200 p-6 text-center text-xs text-gray-400 italic rounded-2xl">
-                  Nenhum item adicionado ainda.
-                </div>
-              ) : (
-                itensEmLote.map((item) => (
-                  <div key={item.temp_id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold">
-                    <div>
-                      <h4 className="text-gray-800 uppercase">{item.produto.descricao}</h4>
-                      <p className="text-[10px] text-gray-400">Motivo: {item.motivo_descricao}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[#09797a] font-mono bg-emerald-100 px-2 py-1 rounded-lg">
-                        {item.quantidade_restante} {item.unidade_restante}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoverItemLote(item.temp_id)}
-                        className="text-red-500 font-bold text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* BOTÕES DE AÇÃO */}
-            <div className="pt-3 border-t border-gray-100 flex gap-2">
               <button
                 type="button"
-                onClick={handleCancelarLote}
-                className="flex-1 py-3 bg-red-50 text-red-600 hover:bg-red-100 rounded-2xl text-xs font-black uppercase"
+                disabled={paginaAtual === totalPaginas}
+                onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
               >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                disabled={salvando || itensEmLote.length === 0}
-                onClick={() => handlePersistirLote('Pendente')}
-                className="flex-1 py-3 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-2xl text-xs font-black uppercase disabled:opacity-40"
-              >
-                Pausar
-              </button>
-
-              <button
-                type="button"
-                disabled={salvando || itensEmLote.length === 0}
-                onClick={() => handlePersistirLote('Concluida')}
-                className="flex-2 py-3 bg-[#09797a] text-white hover:bg-[#075f60] rounded-2xl text-xs font-black uppercase shadow-md disabled:opacity-40"
-              >
-                Salvar Nota
+                Próxima →
               </button>
             </div>
-
           </div>
-        </div>
-      )}
+        )}
 
-      {/* MODAL DE RESUMO (EXCLUSIVO PARA CONCLUÍDAS) */}
-      {loteDetalhe && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
-            
-            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-              <div>
-                <span className="text-[9px] font-black text-gray-400 uppercase">Detalhes da Nota de Falta</span>
-                <h3 className="text-[#09797a] font-black text-base uppercase">{loteDetalhe.codigo}</h3>
-              </div>
-              <button type="button" onClick={() => setLoteDetalhe(null)} className="text-gray-400 font-bold text-base">✕</button>
-            </div>
-
-            <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl grid grid-cols-2 gap-2 text-xs font-bold">
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Responsável</span>
-                <span className="text-gray-800">{loteDetalhe.responsavel_nome}</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Seção / Setor</span>
-                <span className="text-gray-800">{loteDetalhe.secao_nome}</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Data/Hora</span>
-                <span className="text-gray-800">{loteDetalhe.data_registro} às {loteDetalhe.hora_registro}</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-black text-gray-400 block uppercase">Total de Itens</span>
-                <span className="text-gray-800">{loteDetalhe.itens.length}</span>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 max-h-[40vh]">
-              <span className="text-[10px] font-black text-gray-400 uppercase px-1">Itens Gravados</span>
-              {loteDetalhe.itens.map((item: any) => {
-                const prod = item.produtos || {};
-                const motivo = item.motivos_falta?.descricao || 'NÃO INFORMADO';
-                return (
-                  <div key={item.id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center text-xs font-bold">
-                    <div>
-                      <h4 className="text-gray-800 uppercase">{prod.descricao || 'PRODUTO NÃO ENCONTRADO'}</h4>
-                      <p className="text-[10px] text-gray-400">Motivo: {motivo}</p>
-                    </div>
-                    <div className="text-right font-mono font-black text-xs text-[#09797a] bg-emerald-100 px-2 py-1 rounded-lg">
-                      {item.quantidade_restante} {item.unidade_restante || 'UN'}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setLoteDetalhe(null)}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-600"
-              >
-                Fechar
-              </button>
-              <button
-                type="button"
-                onClick={() => gerarPdfNotaFalta(loteDetalhe, loteDetalhe.itens)}
-                className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-[#09797a] hover:bg-[#075f60] text-white shadow-md active:scale-95 transition-all"
-              >
-                🖨️ Exportar Nota PDF
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
