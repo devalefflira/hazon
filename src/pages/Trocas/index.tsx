@@ -314,6 +314,19 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     }
   };
 
+  const handleCancelarNegociacao = async (avariaIds: string[]) => {
+    if (!confirm('Deseja cancelar esta negociação e retornar os itens para o agrupamento?')) {
+      return;
+    }
+    try {
+      await (trocasService as any).cancelarNegociacao(avariaIds);
+      alert('Negociação cancelada. Os itens retornaram para a aba Agrupar.');
+      await carregarDados();
+    } catch (err: any) {
+      alert('Erro ao cancelar negociação: ' + err.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
       <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
@@ -586,7 +599,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                 )
               )}
 
-              {/* ABA 3: NEGOCIAR */}
+              {/* ABA 3: NEGOCIAR (COM BOTÃO ✕ PARA VOLTAR PARA AGRUPAR) */}
               {abaAtiva === 'NEGOCIAR' && (
                 gruposAba3.length === 0 ? (
                   <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
@@ -596,7 +609,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                   gruposAba3.map((grupo, idx) => (
                     <div
                       key={idx}
-                      className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+                      className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-slate-300 transition-all relative"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -630,6 +643,19 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                             Negociação: {grupo.anotacoes}
                           </div>
                         )}
+
+                        {/* BOTÃO CANCELAR (X) NO CANTO INFERIOR ESQUERDO */}
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => handleCancelarNegociacao(grupo.avaria_ids)}
+                            className="inline-flex items-center gap-1 text-[11px] font-black text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition-all active:scale-95"
+                            title="Cancelar Negociação e Retornar ao Agrupamento"
+                          >
+                            <span className="text-xs font-bold leading-none">✕</span>
+                            <span className="uppercase tracking-wider">Cancelar e voltar para Agrupar</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">

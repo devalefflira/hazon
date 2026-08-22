@@ -149,6 +149,19 @@ export const trocasService = {
     }
   },
 
+  // Cancelar negociação (retorna para 'Não iniciado' e volta para Agrupar)
+  async cancelarNegociacao(avariaIds: string[]): Promise<void> {
+    for (const id of avariaIds) {
+      await supabase
+        .from('trocas')
+        .update({
+          status: 'Não iniciado',
+          anotacoes: null
+        })
+        .eq('avaria_id', id);
+    }
+  },
+
   // 6. Confirmar Recebimento / Finalizar Ciclo
   async confirmarRecebimento(avariaIds: string[], usuarioId: string): Promise<void> {
     const agora = new Date();
