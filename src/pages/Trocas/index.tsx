@@ -11,6 +11,12 @@ interface TrocasProps {
 
 type PipelineTab = 'ITENS' | 'AGRUPAR' | 'NEGOCIAR' | 'FINALIZADAS';
 
+interface ModalConfirmarRecebimentoState {
+  fornecedorNome: string;
+  itens: any[];
+  avaria_ids: string[];
+}
+
 export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: TrocasProps) {
   const idUsuarioFinal = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
 
@@ -24,7 +30,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
 
-  // Filtro de Busca de Fornecedor (CNPJ, Razão Social, Fantasia - % ou parte)
+  // Filtro de Busca de Fornecedor
   const [termoBuscaFornecedor, setTermoBuscaFornecedor] = useState('');
 
   // Modais de Ação
@@ -36,7 +42,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
   const [textoNegociacao, setTextoNegociacao] = useState('');
   const [salvandoNegociacao, setSalvandoNegociacao] = useState(false);
 
-  const [modalConfirmarRecebimento, setModalConfirmarRecebimento] = useState<{ fornecedorNome: string; itens: any[] } | null>(null);
+  const [modalConfirmarRecebimento, setModalConfirmarRecebimento] = useState<ModalConfirmarRecebimentoState | null>(null);
   const [salvandoRecebimento, setSalvandoRecebimento] = useState(false);
 
   const [modalVerItensGrupo, setModalVerItensGrupo] = useState<{ titulo: string; itens: any[] } | null>(null);
@@ -68,7 +74,6 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     return dataStr;
   };
 
-  // Função auxiliar de match de fornecedor com suporte a % e múltiplas palavras
   const matchFornecedor = (fornNome: string, cnpj?: string, termo?: string) => {
     if (!termo || !termo.trim()) return true;
     const palavras = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -80,6 +85,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
   const itensFiltradosAba1 = useMemo(() => {
     return itens.filter((it) => {
       if (it.troca_realizada) return false;
+      if (it.status && it.status !== 'Não iniciado') return false;
 
       const temForn = it.fornecedor_id !== null && it.fornecedor_nome !== 'Não Identificado';
       if (toggleFornecedor === 'COM_FORNECEDOR' && !temForn) return false;
@@ -100,12 +106,18 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     });
   }, [itens, toggleFornecedor, dataInicio, dataFim, termoBuscaFornecedor, fornecedores]);
 
-  // --- AGRUPAMENTO ABA 2: AGRUPAR POR FORNECEDOR E SOMAR MESMO ITEM ---
+  // --- AGRUPAMENTO ABA 2: AGRUPAR ---
   const gruposAba2 = useMemo(() => {
-    const itensComForn = itens.filter((it) => !it.troca_realizada && it.fornecedor_id && it.fornecedor_nome !== 'Não Identificado');
+    const itensAptosParaAgrupar = itens.filter(
+      (it) => !it.troca_realizada && 
+              (!it.status || it.status === 'Não iniciado') && 
+              it.fornecedor_id && 
+              it.fornecedor_nome !== 'Não Identificado'
+    );
+
     const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; cnpj: string; itensAgrupados: any[]; avaria_ids: string[] }>();
 
-    itensComForn.forEach((it) => {
+    itensAptosParaAgrupar.forEach((it) => {
       const dt = it.data_coleta ? it.data_coleta.split('T')[0] : '';
       if (dataInicio && dt < dataInicio) return;
       if (dataFim && dt > dataFim) return;
@@ -245,7 +257,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     return Array.from(mapa.values());
   }, [itens, dataInicio, dataFim, termoBuscaFornecedor, fornecedores]);
 
-  // Ações
+  // Ações de Transição de Pipeline
   const handleSalvarFornecedor = async () => {
     if (!modalAtribuirFornecedor) return;
     try {
@@ -262,7 +274,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     try {
       await trocasService.enviarParaNegociar(avariaIds);
       alert('Itens enviados para o Pipeline de Negociação!');
-      carregarDados();
+      await carregarDados();
       setAbaAtiva('NEGOCIAR');
     } catch (err: any) {
       alert('Erro ao enviar para negociar: ' + err.message);
@@ -290,11 +302,10 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     if (!modalConfirmarRecebimento) return;
     try {
       setSalvandoRecebimento(true);
-      const avariaIds = modalConfirmarRecebimento.itens.map((i) => i.avaria_id);
-      await trocasService.confirmarRecebimento(avariaIds, idUsuarioFinal);
+      await trocasService.confirmarRecebimento(modalConfirmarRecebimento.avaria_ids, idUsuarioFinal);
       alert('Recebimento confirmado! Ciclo finalizado.');
       setModalConfirmarRecebimento(null);
-      carregarDados();
+      await carregarDados();
       setAbaAtiva('FINALIZADAS');
     } catch (err: any) {
       alert('Erro ao confirmar recebimento: ' + err.message);
@@ -337,7 +348,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
           >
             <span>1. Itens</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full font-mono">
-              {itens.filter((i) => !i.troca_realizada).length}
+              {itensFiltradosAba1.length}
             </span>
           </button>
 
@@ -384,7 +395,6 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
         {/* ÁREA DE FILTROS COM BUSCA INTELIGENTE POR FORNECEDOR */}
         <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
-            {/* Campo de Busca Inteligente de Fornecedor (CNPJ, Razão, Fantasia - % ou parte) */}
             <div className="flex flex-col gap-1 sm:col-span-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">Buscar Fornecedor (CNPJ / Nome / %)</label>
               <input
@@ -417,7 +427,6 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
             </div>
           </div>
 
-          {/* Toggle de Vínculo apenas na Aba 1 */}
           {abaAtiva === 'ITENS' && (
             <div className="flex items-center gap-2 pt-2 border-t border-slate-200/70">
               <span className="text-[10px] font-black uppercase text-slate-400">Filtrar Vínculo:</span>
@@ -460,11 +469,11 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
             <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">Carregando dados de trocas...</div>
           ) : (
             <>
-              {/* ABA 1: LISTAGEM INDIVIDUAL DE ITENS */}
+              {/* ABA 1: ITENS NÃO INICIADOS */}
               {abaAtiva === 'ITENS' && (
                 itensFiltradosAba1.length === 0 ? (
                   <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
-                    Nenhum item de troca encontrado para os filtros selecionados.
+                    Nenhum item pendente de identificação.
                   </div>
                 ) : (
                   itensFiltradosAba1.map((it) => (
@@ -516,7 +525,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                 )
               )}
 
-              {/* ABA 2: AGRUPAR POR FORNECEDOR E SOMAR MESMO ITEM */}
+              {/* ABA 2: AGRUPAR */}
               {abaAtiva === 'AGRUPAR' && (
                 gruposAba2.length === 0 ? (
                   <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
@@ -577,11 +586,11 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                 )
               )}
 
-              {/* ABA 3: NEGOCIAR (STATUS E / A / N) */}
+              {/* ABA 3: NEGOCIAR */}
               {abaAtiva === 'NEGOCIAR' && (
                 gruposAba3.length === 0 ? (
                   <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
-                    Nenhuma negociação em andamento.
+                    Nenhuma negociação pendente.
                   </div>
                 ) : (
                   gruposAba3.map((grupo, idx) => (
@@ -624,7 +633,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">
-                        {/* Botões de Status E / A / N */}
+                        {/* Botões E / A / N */}
                         <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
                           <button
                             type="button"
@@ -666,13 +675,14 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                           </button>
                         </div>
 
-                        {/* Botão de Recebimento (Joinha) */}
+                        {/* Botão Joinha */}
                         <button
                           type="button"
                           onClick={() => {
                             setModalConfirmarRecebimento({
                               fornecedorNome: grupo.fornecedor_nome,
-                              itens: grupo.itensAgrupados.map((it: any, i: number) => ({ ...it, avaria_id: grupo.avaria_ids[i] || grupo.avaria_ids[0] }))
+                              itens: grupo.itensAgrupados,
+                              avaria_ids: grupo.avaria_ids
                             });
                           }}
                           className="w-9 h-9 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl flex items-center justify-center text-base shadow-sm transition-all active:scale-95"
@@ -748,7 +758,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
 
       </div>
 
-      {/* MODAL 1: ATRIBUIR FORNECEDOR COM BUSCA INTELIGENTE */}
+      {/* MODAL 1: ATRIBUIR FORNECEDOR */}
       {modalAtribuirFornecedor && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 animate-fadeIn">
@@ -892,7 +902,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
             </p>
 
             <div className="flex-1 overflow-y-auto space-y-2 max-h-48 border border-slate-200 p-2 rounded-xl bg-slate-50">
-              {modalConfirmarRecebimento.itens.map((it, idx) => (
+              {modalConfirmarRecebimento.itens.map((it: any, idx: number) => (
                 <div key={idx} className="p-2 bg-white border border-slate-200 rounded-lg flex justify-between items-center text-xs font-bold">
                   <span className="uppercase text-slate-800">{it.descricao_produto}</span>
                   <span className="font-mono text-emerald-800">{it.quantidade} {it.unidade}</span>
@@ -921,7 +931,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
         </div>
       )}
 
-      {/* MODAL 4: VER LISTA / ITENS DO GRUPO */}
+      {/* MODAL 4: VER LISTA */}
       {modalVerItensGrupo && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 max-h-[85vh] animate-fadeIn">
