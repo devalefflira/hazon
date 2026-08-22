@@ -1,4 +1,4 @@
-// Arquivo: src/pages/Avarias/index.tsx
+// src/pages/Avarias/index.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { avariasService } from './services/avariasService';
 import type { AvariaRecord } from './types/avarias.types';
@@ -18,7 +18,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
   const [loading, setLoading] = useState(false);
   const [modalRegistroAberto, setModalRegistroAberto] = useState(false);
 
-  // Controle do acordeão de filtros (Padrão: retraído)
+  // Controle de acordeão de filtros (Padrão: retraído)
   const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
 
   // Filtros
@@ -63,7 +63,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     carregarDados();
   }, []);
 
-  // Formatação segura de data DD/MM/YYYY sem timezone offset
   const formatarDataSegura = (dataStr?: string) => {
     if (!dataStr) return '-';
     const partes = dataStr.split('T')[0].split('-');
@@ -74,7 +73,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     return dataStr;
   };
 
-  // Cálculo das datas do mês atual (padrão quando o usuário não preencher período)
+  // Mês Atual Padrão
   const [primeiroDiaMesAtual, hojeFormatado] = useMemo(() => {
     const agora = new Date();
     const ano = agora.getFullYear();
@@ -88,49 +87,38 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     return avarias.filter((item: AvariaRecord) => {
       const dataItem = item.data_registro ? item.data_registro.split('T')[0] : '';
 
-      // Período especificado pelo usuário
       if (dataInicio && dataItem < dataInicio) return false;
       if (dataFim && dataItem > dataFim) return false;
 
-      // Motivo
       if (motivoSel !== 'TODOS' && item.motivos_avaria?.descricao !== motivoSel) return false;
-
-      // Destinação
       if (destinacaoSel !== 'TODAS' && item.destinacao !== destinacaoSel) return false;
-
-      // Departamento
       if (departamentoSel !== 'TODOS' && item.produtos?.departamento !== departamentoSel) return false;
-
-      // Seção
       if (secaoSel !== 'TODOS' && item.produtos?.secao !== secaoSel) return false;
-
-      // Categoria
       if (categoriaSel !== 'TODOS' && item.produtos?.categoria !== categoriaSel) return false;
 
       return true;
     });
   }, [avarias, dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel]);
 
-  // Totalizador de Prejuízo: Apenas DESCARTE, CONSUMO INTERNO e DOAÇÃO (Exclui TROCA / TROCA FORNECEDOR)
-  // Por padrão considera o mês atual se não houver filtro de data manual
+  // TOTAL PREJUÍZO: DESCARTE + DOAÇÃO (Exclui TROCA e CONSUMO INTERNO)
   const totalPrejuizo = useMemo(() => {
     return avarias.reduce((acc, a) => {
       const dest = (a.destinacao || '').toLowerCase();
-      // Não conta se for Troca
-      if (dest.includes('troca')) return acc;
+      
+      // Permite apenas DESCARTE e DOAÇÃO
+      const isDescarteOuDoacao = dest.includes('descarte') || dest.includes('doação') || dest.includes('doacao');
+      if (!isDescarteOuDoacao) return acc;
 
       const dataItem = a.data_registro ? a.data_registro.split('T')[0] : '';
 
-      // Se usuário filtrou datas manualmente:
+      // Filtro manual ou padrão mês atual
       if (dataInicio || dataFim) {
         if (dataInicio && dataItem < dataInicio) return acc;
         if (dataFim && dataItem > dataFim) return acc;
       } else {
-        // Padrão: Mês atual
         if (dataItem < primeiroDiaMesAtual || dataItem > hojeFormatado) return acc;
       }
 
-      // Aplica demais filtros caso estejam ativos
       if (motivoSel !== 'TODOS' && a.motivos_avaria?.descricao !== motivoSel) return acc;
       if (destinacaoSel !== 'TODAS' && a.destinacao !== destinacaoSel) return acc;
       if (departamentoSel !== 'TODOS' && a.produtos?.departamento !== departamentoSel) return acc;
@@ -154,12 +142,10 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     categoriaSel
   ]);
 
-  // Resetar página quando filtros mudarem
   useEffect(() => {
     setPaginaAtual(1);
   }, [dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel, itensPorPagina]);
 
-  // Itens Paginados
   const totalPaginas = Math.ceil(avariasFiltradas.length / itensPorPagina) || 1;
   const indexInicial = (paginaAtual - 1) * itensPorPagina;
   const avariasPaginadas = avariasFiltradas.slice(indexInicial, indexInicial + itensPorPagina);
@@ -257,7 +243,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
           {/* CAMPOS EXPANSÍVEIS */}
           {filtrosExpandidos && (
             <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/80 animate-fadeIn">
-              {/* LINHA 1: MOTIVO & DESTINAÇÃO */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Motivo</label>
@@ -282,14 +267,13 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
                   >
                     <option value="TODAS">📦 DESTINAÇÃO: TODAS</option>
                     <option value="Descarte">DESCARTE</option>
-                    <option value="Troca">TROCA</option>
+                    <option value="Troca">TROCA FORNECEDOR</option>
                     <option value="Consumo Interno">CONSUMO INTERNO</option>
                     <option value="Doação">DOAÇÃO</option>
                   </select>
                 </div>
               </div>
 
-              {/* LINHA 2: PERÍODO (DATA INICIAL E FINAL) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
@@ -312,7 +296,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
                 </div>
               </div>
 
-              {/* LINHA 3: DEPARTAMENTO, SEÇÃO E CATEGORIA */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Departamento</label>
@@ -360,7 +343,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
           )}
         </div>
 
-        {/* CARD TOTALIZADOR DO PREJUÍZO */}
+        {/* CARD TOTALIZADOR DO PREJUÍZO (DESCARTE + DOAÇÃO) */}
         <div className="bg-red-50/70 border border-red-200 px-4 py-3 rounded-2xl flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-black text-red-900 uppercase">Total Prejuízo:</span>
@@ -369,11 +352,11 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
             </span>
           </div>
           <span className="text-[10px] font-bold text-slate-400 uppercase">
-            {!dataInicio && !dataFim ? '(MÊS ATUAL)' : `(${avariasFiltradas.length} ITENS)`}
+            {!dataInicio && !dataFim ? '(MÊS ATUAL: DESCARTE + DOAÇÃO)' : `(${avariasFiltradas.length} ITENS)`}
           </span>
         </div>
 
-        {/* CAMPO: EXIBIR POR PÁG (FORA DO CARD, LOGO ABAIXO) */}
+        {/* EXIBIR POR PÁG */}
         <div className="flex items-center justify-end gap-2 px-1">
           <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
           <select
@@ -388,7 +371,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
           </select>
         </div>
 
-        {/* LISTAGEM DOS CARDS */}
+        {/* LISTAGEM DOS CARDS COM OBSERVAÇÃO ANTES DO VALOR */}
         <div className="flex-1 overflow-y-auto space-y-3">
           {loading ? (
             <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">Carregando avarias...</div>
@@ -433,7 +416,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
                       </span>
                     </div>
 
-                    {/* OBSERVAÇÃO DO CARD */}
+                    {/* OBSERVAÇÃO ANTES DO VALOR */}
                     {av.observacao && (
                       <div className="text-[10px] text-slate-500 italic mt-2 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
                         Obs: {av.observacao}

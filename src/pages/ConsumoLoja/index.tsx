@@ -19,7 +19,8 @@ const LOCAIS_FILTRO = [
   'Depósito',
   'Açougue',
   'Padaria',
-  'Hortifruti'
+  'Hortifruti',
+  'Consumo Interno (Avaria)'
 ];
 
 export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: ConsumoLojaProps) {
@@ -67,6 +68,7 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
     if (!exibirNovo) carregarDados();
   }, [dataInicio, dataFim, departamento, local, exibirNovo]);
 
+  // Totalizador de Consumo Geral (Lançados no módulo + Avarias com destino Consumo Interno)
   const valorTotalSoma = useMemo(() => {
     return itens.reduce((acc, curr) => acc + Number(curr.valor_total_item || 0), 0);
   }, [itens]);
@@ -240,7 +242,7 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
           )}
         </div>
 
-        {/* VALOR TOTAL */}
+        {/* VALOR TOTAL SOMA */}
         <div className="bg-emerald-50/70 border border-emerald-200 px-4 py-3 rounded-2xl flex justify-between items-center">
           <span className="text-xs font-black text-emerald-950 uppercase tracking-wide">
             Valor Total do Consumo no Período:
@@ -259,57 +261,78 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
               Nenhum registro encontrado.
             </div>
           ) : (
-            itens.map((item) => (
-              <div
-                key={item.id}
-                className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {item.codprod && (
-                      <span className="text-[10px] font-mono font-bold text-slate-400">
-                        Cód: {item.codprod}
+            itens.map((item) => {
+              const isVindoDeAvaria =
+                (item.local || '').includes('Avaria') ||
+                (item.local || '').includes('Consumo Interno') ||
+                (item.observacao || '').includes('Avaria');
+
+              return (
+                <div
+                  key={item.id}
+                  className={`p-4 bg-white border rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 transition-all ${
+                    isVindoDeAvaria ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {item.codprod && (
+                        <span className="text-[10px] font-mono font-bold text-slate-400">
+                          Cód: {item.codprod}
+                        </span>
+                      )}
+                      <span
+                        className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
+                          isVindoDeAvaria
+                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {isVindoDeAvaria ? '⚡ AVARIA - DESTINO CONSUMO INTERNO' : `LOCAL: ${item.local}`}
                       </span>
+                    </div>
+
+                    <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
+                      {item.descricao_produto}
+                    </h3>
+
+                    <div className="text-[11px] text-slate-500 font-semibold mt-1">
+                      QTD: <strong className="text-slate-800">{item.quantidade} {item.unidade_medida}</strong>
+                    </div>
+
+                    <div className="text-[10px] text-slate-400 font-medium mt-1">
+                      Resp: <strong className="text-slate-600">{item.usuario_nome}</strong>, em{' '}
+                      <strong>{formatarDataSegura(item.data_registro)}</strong>, às{' '}
+                      <strong>{item.hora_registro?.slice(0, 8)}</strong>
+                    </div>
+
+                    {item.observacao && (
+                      <div className="text-[10px] text-slate-500 italic mt-1 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
+                        Obs: {item.observacao}
+                      </div>
                     )}
-                    <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                      LOCAL: {item.local}
+                  </div>
+
+                  <div className="flex items-center gap-3 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto justify-between sm:justify-end">
+                    <span className="text-sm sm:text-base font-black text-emerald-800 font-mono">
+                      R$ {item.valor_total_item.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
-                  </div>
 
-                  <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
-                    {item.descricao_produto}
-                  </h3>
-
-                  <div className="text-[11px] text-slate-500 font-semibold mt-1">
-                    QTD: <strong className="text-slate-800">{item.quantidade} {item.unidade_medida}</strong>
-                  </div>
-
-                  <div className="text-[10px] text-slate-400 font-medium mt-1">
-                    Resp: <strong className="text-slate-600">{item.usuario_nome}</strong>, em{' '}
-                    <strong>{formatarDataSegura(item.data_registro)}</strong>, às{' '}
-                    <strong>{item.hora_registro?.slice(0, 8)}</strong>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItemEmEdicao(item);
+                        setNovaQtd(item.quantidade);
+                        setNovoLocal(item.local);
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-[#09797a] hover:text-white text-slate-700 font-black text-xs rounded-xl uppercase transition-all shadow-sm active:scale-95"
+                    >
+                      Editar
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto justify-between sm:justify-end">
-                  <span className="text-sm sm:text-base font-black text-emerald-800 font-mono">
-                    R$ {item.valor_total_item.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setItemEmEdicao(item);
-                      setNovaQtd(item.quantidade);
-                      setNovoLocal(item.local);
-                    }}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-[#09797a] hover:text-white text-slate-700 font-black text-xs rounded-xl uppercase transition-all shadow-sm active:scale-95"
-                  >
-                    Editar
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -347,18 +370,20 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
                 />
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Local</label>
-                <select
-                  value={novoLocal}
-                  onChange={(e) => setNovoLocal(e.target.value)}
-                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-                >
-                  {LOCAIS_FILTRO.filter((l) => l !== 'Todos').map((l) => (
-                    <option key={l} value={l}>{l.toUpperCase()}</option>
-                  ))}
-                </select>
-              </div>
+              {!itemEmEdicao.id.startsWith('av-') && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Local</label>
+                  <select
+                    value={novoLocal}
+                    onChange={(e) => setNovoLocal(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                  >
+                    {LOCAIS_FILTRO.filter((l) => l !== 'Todos').map((l) => (
+                      <option key={l} value={l}>{l.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-2 border-t border-slate-100">
