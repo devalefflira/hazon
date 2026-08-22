@@ -117,5 +117,20 @@ export const consumoLojaService = {
 
     if (errorItens) throw errorItens;
     return true;
-  }
+  },
+  // Adicione este método dentro de consumoLojaService em src/pages/ConsumoLoja/services/consumoLojaService.ts
+  async atualizarItemConsumo(itemId: string, quantidade: number, local: string, custoUnitario: number) {
+    const valorTotalItem = quantidade * custoUnitario;
+    const { error } = await supabase
+      .from('consumo_loja_itens')
+      .update({
+        quantidade,
+        local,
+        valor_total_item: valorTotalItem
+      })
+      .eq('id', itemId);
+
+    if (error) throw error;
+    return true;
+  },
 };

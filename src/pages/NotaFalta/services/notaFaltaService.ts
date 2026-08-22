@@ -1,8 +1,7 @@
-// Arquivo: src/pages/NotaFalta/services/notaFaltaService.ts
+// src/pages/NotaFalta/services/notaFaltaService.ts
 import { supabase } from '../../../lib/supabaseClient';
 
 export const notaFaltaService = {
-  // 1. Buscar produtos por código, barras ou fragmentos da descrição
   async buscarProdutos(termo: string): Promise<any[]> {
     if (!termo.trim()) return [];
 
@@ -20,66 +19,18 @@ export const notaFaltaService = {
     }
 
     const { data, error } = await query.limit(20);
-    if (error) {
-      console.error('Erro ao buscar produtos:', error);
-      throw error;
-    }
-    return data || [];
-  },
-
-  // 2. Listar Motivos de Falta
-  async listarMotivosFalta(): Promise<any[]> {
-    const { data, error } = await supabase
-      .from('motivos_falta')
-      .select('*')
-      .order('descricao', { ascending: true });
-
     if (error) throw error;
     return data || [];
   },
 
-  // 3. Listar Setores / Seções (incluindo opção GERAL)
-  async listarSetores(): Promise<any[]> {
-    const { data, error } = await supabase
-      .from('categorias_setores')
-      .select('*')
-      .order('nome', { ascending: true });
-
-    if (error) throw error;
-
-    const lista = data || [];
-    // Garante a existência do setor/seção GERAL
-    const temGeral = lista.some((s: any) => s.nome?.toUpperCase() === 'GERAL');
-    if (!temGeral) {
-      return [{ id: 'geral-id', nome: 'Geral' }, ...lista];
-    }
-    return lista;
-  },
-
-  // 4. Listar Notas de Falta agrupadas ou individuais
   async listarNotasFalta(): Promise<any[]> {
     const { data, error } = await supabase
       .from('notas_falta')
       .select(`
         *,
-        produtos (
-          id,
-          codprod,
-          descricao,
-          codbarra,
-          unidade,
-          departamento,
-          secao,
-          categoria
-        ),
-        motivos_falta (
-          id,
-          descricao
-        ),
-        usuarios (
-          id,
-          nome
-        )
+        produtos ( id, codprod, descricao, codbarra, unidade, departamento ),
+        motivos_falta ( id, descricao ),
+        usuarios ( id, nome )
       `)
       .order('data_registro', { ascending: false })
       .order('hora_registro', { ascending: false });
@@ -88,39 +39,57 @@ export const notaFaltaService = {
     return data || [];
   },
 
-  // 5. Salvar novos itens da Nota de Falta
   async salvarItensNotaFalta(payload: {
+    codigo_customizado?: string;
     usuario_id: string;
-    setor_nome: string;
+    area: string;
+    local: string;
+    status: 'Em Andamento' | 'Salva' | 'Finalizada';
     itens: {
       produto_id: string;
-      motivo_falta_id: string;
-      quantidade_restante: number;
-      unidade_restante: string;
+      tipo_motivo: 'Estoque Baixo' | 'Estoque Zero';
+      quantidade_restante?: number;
+      unidade_restante?: string;
     }[];
   }): Promise<void> {
     const agora = new Date();
     const dataAtual = agora.toLocaleDateString('sv-SE');
     const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const codigoCustomizado = `NF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const codigo = payload.codigo_customizado || `NF-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const { data: motivoBanco } = await supabase.from('motivos_falta').select('id').limit(1).single();
+    const motivoFaltaIdFallback = motivoBanco?.id || '00000000-0000-0000-0000-000000000000';
+
+    // Remove itens prévios se for edição de nota pausada
+    if (payload.codigo_customizado) {
+      await supabase.from('notas_falta').delete().eq('codigo_customizado', payload.codigo_customizado);
+    }
 
     const registros = payload.itens.map((it) => ({
-      codigo_customizado: codigoCustomizado,
+      codigo_customizado: codigo,
       usuario_id: payload.usuario_id,
       produto_id: it.produto_id,
-      setor_nome: payload.setor_nome,
-      motivo_falta_id: it.motivo_falta_id,
-      quantidade_restante: it.quantidade_restante,
-      unidade_restante: it.unidade_restante,
-      status_cotacao: 'Pendente',
+      area: payload.area,
+      local: payload.local,
+      setor_nome: `${payload.area} - ${payload.local}`,
+      motivo_falta_id: motivoFaltaIdFallback,
+      quantidade_restante: it.tipo_motivo === 'Estoque Zero' ? 0 : it.quantidade_restante || 1,
+      unidade_restante: it.tipo_motivo === 'Estoque Zero' ? 'UN' : it.unidade_restante || 'UN',
+      status_cotacao: payload.status,
       data_registro: dataAtual,
       hora_registro: horaAtual
     }));
 
     const { error } = await supabase.from('notas_falta').insert(registros);
-    if (error) {
-      console.error('Erro ao salvar notas de falta:', error);
-      throw error;
-    }
+    if (error) throw error;
+  },
+
+  async finalizarCicloNota(codigoCustomizado: string): Promise<void> {
+    const { error } = await supabase
+      .from('notas_falta')
+      .update({ status_cotacao: 'Finalizada' })
+      .eq('codigo_customizado', codigoCustomizado);
+
+    if (error) throw error;
   }
 };

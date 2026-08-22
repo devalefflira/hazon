@@ -29,10 +29,14 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
   const [itens, setItens] = useState<ConsumoLojaItemView[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Controle de expansão dos filtros (padrão: recolhido)
-  const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
+  // Edição
+  const [itemEmEdicao, setItemEmEdicao] = useState<ConsumoLojaItemView | null>(null);
+  const [novaQtd, setNovaQtd] = useState<number>(1);
+  const [novoLocal, setNovoLocal] = useState<string>('Frente de Loja');
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   // Filtros
+  const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
   const [dataInicio, setDataInicio] = useState<string>('');
   const [dataFim, setDataFim] = useState<string>('');
   const [departamento, setDepartamento] = useState<string>('TODOS');
@@ -60,9 +64,7 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
   };
 
   useEffect(() => {
-    if (!exibirNovo) {
-      carregarDados();
-    }
+    if (!exibirNovo) carregarDados();
   }, [dataInicio, dataFim, departamento, local, exibirNovo]);
 
   const valorTotalSoma = useMemo(() => {
@@ -77,6 +79,30 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
       return `${dia}/${mes}/${ano}`;
     }
     return dataStr;
+  };
+
+  const handleSalvarEdicao = async () => {
+    if (!itemEmEdicao) return;
+    try {
+      setSalvandoEdicao(true);
+      const custoUnitario = itemEmEdicao.quantidade > 0 
+        ? itemEmEdicao.valor_total_item / itemEmEdicao.quantidade 
+        : 0;
+
+      await consumoLojaService.atualizarItemConsumo(
+        itemEmEdicao.id,
+        novaQtd,
+        novoLocal,
+        custoUnitario
+      );
+
+      setItemEmEdicao(null);
+      carregarDados();
+    } catch (err: any) {
+      alert('Erro ao atualizar item: ' + err.message);
+    } finally {
+      setSalvandoEdicao(false);
+    }
   };
 
   const temFiltroAtivo = Boolean(dataInicio) || Boolean(dataFim) || departamento !== 'TODOS' || local !== 'Todos';
@@ -125,7 +151,7 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
           </button>
         </div>
 
-        {/* FILTROS (RETRÁTIL COM BOTÃO + / -) */}
+        {/* FILTROS RETRÁTEIS */}
         <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3 transition-all">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
@@ -133,7 +159,7 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
                 Filtros de Pesquisa
               </span>
               {temFiltroAtivo && (
-                <span className="w-2 h-2 rounded-full bg-[#09797a]" title="Filtros aplicados" />
+                <span className="w-2 h-2 rounded-full bg-[#09797a]" />
               )}
             </div>
 
@@ -156,14 +182,12 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
                 type="button"
                 onClick={() => setFiltrosExpandidos((prev) => !prev)}
                 className="w-7 h-7 rounded-xl bg-white border border-slate-300 text-[#09797a] font-black text-sm flex items-center justify-center shadow-sm hover:bg-slate-100 transition-all"
-                title={filtrosExpandidos ? 'Recolher Filtros' : 'Expandir Filtros'}
               >
                 {filtrosExpandidos ? '−' : '+'}
               </button>
             </div>
           </div>
 
-          {/* CAMPOS EXPANSÍVEIS */}
           {filtrosExpandidos && (
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-200/80 animate-fadeIn">
               <div className="flex flex-col gap-1">
@@ -229,12 +253,10 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
         {/* LISTAGEM DOS CARDS */}
         <div className="flex-1 overflow-y-auto space-y-3">
           {loading ? (
-            <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">
-              Carregando consumo...
-            </div>
+            <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">Carregando...</div>
           ) : itens.length === 0 ? (
             <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
-              Nenhum registro de consumo encontrado para os filtros selecionados.
+              Nenhum registro encontrado.
             </div>
           ) : (
             itens.map((item) => (
@@ -243,7 +265,6 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
                 className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
               >
                 <div className="min-w-0 flex-1">
-                  {/* Código e Local */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {item.codprod && (
                       <span className="text-[10px] font-mono font-bold text-slate-400">
@@ -255,36 +276,37 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
                     </span>
                   </div>
 
-                  {/* Nome do Produto */}
                   <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
                     {item.descricao_produto}
                   </h3>
 
-                  {/* Quantidade */}
                   <div className="text-[11px] text-slate-500 font-semibold mt-1">
                     QTD: <strong className="text-slate-800">{item.quantidade} {item.unidade_medida}</strong>
                   </div>
 
-                  {/* Responsável, Data e Hora */}
                   <div className="text-[10px] text-slate-400 font-medium mt-1">
                     Resp: <strong className="text-slate-600">{item.usuario_nome}</strong>, em{' '}
                     <strong>{formatarDataSegura(item.data_registro)}</strong>, às{' '}
                     <strong>{item.hora_registro?.slice(0, 8)}</strong>
                   </div>
-
-                  {/* Observação (se houver) */}
-                  {item.observacao && (
-                    <div className="text-[10px] text-slate-500 italic mt-1 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
-                      Obs: {item.observacao}
-                    </div>
-                  )}
                 </div>
 
-                {/* Valor Total */}
-                <div className="text-right flex-shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto flex sm:flex-col justify-between items-end">
+                <div className="flex items-center gap-3 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto justify-between sm:justify-end">
                   <span className="text-sm sm:text-base font-black text-emerald-800 font-mono">
                     R$ {item.valor_total_item.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setItemEmEdicao(item);
+                      setNovaQtd(item.quantidade);
+                      setNovoLocal(item.local);
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-[#09797a] hover:text-white text-slate-700 font-black text-xs rounded-xl uppercase transition-all shadow-sm active:scale-95"
+                  >
+                    Editar
+                  </button>
                 </div>
               </div>
             ))
@@ -292,6 +314,74 @@ export default function ConsumoLoja({ onVoltarParaHome, usuarioLogado, usuarioLo
         </div>
 
       </div>
+
+      {/* MODAL DE EDIÇÃO DE ITEM */}
+      {itemEmEdicao && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 animate-fadeIn">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-black text-[#09797a] uppercase">Editar Registro de Consumo</h3>
+              <button
+                type="button"
+                onClick={() => setItemEmEdicao(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-xs font-bold text-slate-700 bg-slate-50 p-3 rounded-xl uppercase">
+              {itemEmEdicao.descricao_produto}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Quantidade ({itemEmEdicao.unidade_medida})</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  value={novaQtd}
+                  onChange={(e) => setNovaQtd(Number(e.target.value))}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Local</label>
+                <select
+                  value={novoLocal}
+                  onChange={(e) => setNovoLocal(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  {LOCAIS_FILTRO.filter((l) => l !== 'Todos').map((l) => (
+                    <option key={l} value={l}>{l.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setItemEmEdicao(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={salvandoEdicao || novaQtd <= 0}
+                onClick={handleSalvarEdicao}
+                className="flex-2 py-2.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md transition-all disabled:opacity-40"
+              >
+                {salvandoEdicao ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
