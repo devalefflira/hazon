@@ -24,11 +24,12 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
 
-  // Filtros Aba Agrupar / Negociar
-  const [fornecedorFiltro, setFornecedorFiltro] = useState('TODOS');
+  // Filtro de Busca de Fornecedor (CNPJ, Razão Social, Fantasia - % ou parte)
+  const [termoBuscaFornecedor, setTermoBuscaFornecedor] = useState('');
 
   // Modais de Ação
   const [modalAtribuirFornecedor, setModalAtribuirFornecedor] = useState<any | null>(null);
+  const [termoBuscaModalForn, setTermoBuscaModalForn] = useState('');
   const [fornecedorSelecionadoModal, setFornecedorSelecionadoModal] = useState<string>('');
 
   const [modalNegociacao, setModalNegociacao] = useState<{ fornecedorNome: string; itens: any[] } | null>(null);
@@ -67,43 +68,56 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     return dataStr;
   };
 
+  // Função auxiliar de match de fornecedor com suporte a % e múltiplas palavras
+  const matchFornecedor = (fornNome: string, cnpj?: string, termo?: string) => {
+    if (!termo || !termo.trim()) return true;
+    const palavras = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const textoBase = `${fornNome || ''} ${cnpj || ''}`.toLowerCase();
+    return palavras.every((p) => textoBase.includes(p.replace(/%/g, '')));
+  };
+
   // --- FILTRAGEM ABA 1: ITENS ---
   const itensFiltradosAba1 = useMemo(() => {
     return itens.filter((it) => {
-      // Exclui os já finalizados
       if (it.troca_realizada) return false;
 
-      // Toggle Fornecedor
       const temForn = it.fornecedor_id !== null && it.fornecedor_nome !== 'Não Identificado';
       if (toggleFornecedor === 'COM_FORNECEDOR' && !temForn) return false;
       if (toggleFornecedor === 'SEM_FORNECEDOR' && temForn) return false;
 
-      // Período
       const dt = it.data_coleta ? it.data_coleta.split('T')[0] : '';
       if (dataInicio && dt < dataInicio) return false;
       if (dataFim && dt > dataFim) return false;
 
+      if (termoBuscaFornecedor.trim()) {
+        const fornObj = fornecedores.find((f) => f.id === it.fornecedor_id);
+        if (!matchFornecedor(it.fornecedor_nome, fornObj?.cnpj, termoBuscaFornecedor)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [itens, toggleFornecedor, dataInicio, dataFim]);
+  }, [itens, toggleFornecedor, dataInicio, dataFim, termoBuscaFornecedor, fornecedores]);
 
   // --- AGRUPAMENTO ABA 2: AGRUPAR POR FORNECEDOR E SOMAR MESMO ITEM ---
   const gruposAba2 = useMemo(() => {
-    // Agrupa apenas itens que possuem fornecedor identificado e não finalizados
     const itensComForn = itens.filter((it) => !it.troca_realizada && it.fornecedor_id && it.fornecedor_nome !== 'Não Identificado');
-
-    const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; itensAgrupados: any[]; avaria_ids: string[] }>();
+    const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; cnpj: string; itensAgrupados: any[]; avaria_ids: string[] }>();
 
     itensComForn.forEach((it) => {
       const dt = it.data_coleta ? it.data_coleta.split('T')[0] : '';
       if (dataInicio && dt < dataInicio) return;
       if (dataFim && dt > dataFim) return;
-      if (fornecedorFiltro !== 'TODOS' && it.fornecedor_id !== fornecedorFiltro) return;
+
+      const fornObj = fornecedores.find((f) => f.id === it.fornecedor_id);
+      if (!matchFornecedor(it.fornecedor_nome, fornObj?.cnpj, termoBuscaFornecedor)) return;
 
       if (!mapa.has(it.fornecedor_id)) {
         mapa.set(it.fornecedor_id, {
           fornecedor_id: it.fornecedor_id,
           fornecedor_nome: it.fornecedor_nome,
+          cnpj: fornObj?.cnpj || '',
           itensAgrupados: [],
           avaria_ids: []
         });
@@ -112,7 +126,6 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
       const grupo = mapa.get(it.fornecedor_id)!;
       grupo.avaria_ids.push(it.avaria_id);
 
-      // Soma a quantidade do mesmo produto
       const prodExistente = grupo.itensAgrupados.find((p) => p.produto_id === it.produto_id);
       if (prodExistente) {
         prodExistente.quantidade += it.quantidade;
@@ -129,7 +142,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     });
 
     return Array.from(mapa.values());
-  }, [itens, dataInicio, dataFim, fornecedorFiltro]);
+  }, [itens, dataInicio, dataFim, termoBuscaFornecedor, fornecedores]);
 
   // --- AGRUPAMENTO ABA 3: NEGOCIAR ---
   const gruposAba3 = useMemo(() => {
@@ -137,13 +150,15 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
       (it) => !it.troca_realizada && (it.status === 'Enviado' || it.status === 'Aguardando' || it.status === 'Negociado')
     );
 
-    const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; status: string; anotacoes: string; itensAgrupados: any[]; avaria_ids: string[] }>();
+    const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; cnpj: string; status: string; anotacoes: string; itensAgrupados: any[]; avaria_ids: string[] }>();
 
     itensEmNegociacao.forEach((it) => {
       const dt = it.data_coleta ? it.data_coleta.split('T')[0] : '';
       if (dataInicio && dt < dataInicio) return;
       if (dataFim && dt > dataFim) return;
-      if (fornecedorFiltro !== 'TODOS' && it.fornecedor_id !== fornecedorFiltro) return;
+
+      const fornObj = fornecedores.find((f) => f.id === it.fornecedor_id);
+      if (!matchFornecedor(it.fornecedor_nome, fornObj?.cnpj, termoBuscaFornecedor)) return;
 
       const key = `${it.fornecedor_id || 'sem-forn'}_${it.status}`;
 
@@ -151,6 +166,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
         mapa.set(key, {
           fornecedor_id: it.fornecedor_id,
           fornecedor_nome: it.fornecedor_nome,
+          cnpj: fornObj?.cnpj || '',
           status: it.status,
           anotacoes: it.anotacoes,
           itensAgrupados: [],
@@ -177,25 +193,28 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     });
 
     return Array.from(mapa.values());
-  }, [itens, dataInicio, dataFim, fornecedorFiltro]);
+  }, [itens, dataInicio, dataFim, termoBuscaFornecedor, fornecedores]);
 
   // --- AGRUPAMENTO ABA 4: FINALIZADAS ---
   const gruposAba4 = useMemo(() => {
     const itensFinalizados = itens.filter((it) => it.troca_realizada);
-
-    const mapa = new Map<string, { fornecedor_nome: string; recebido_por_nome: string; recebido_data: string; recebido_hora: string; anotacoes: string; itensAgrupados: any[]; avaria_ids: string[] }>();
+    const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; cnpj: string; recebido_por_nome: string; recebido_data: string; recebido_hora: string; anotacoes: string; itensAgrupados: any[]; avaria_ids: string[] }>();
 
     itensFinalizados.forEach((it) => {
       const dt = it.recebido_data ? it.recebido_data.split('T')[0] : '';
       if (dataInicio && dt < dataInicio) return;
       if (dataFim && dt > dataFim) return;
-      if (fornecedorFiltro !== 'TODOS' && it.fornecedor_id !== fornecedorFiltro) return;
+
+      const fornObj = fornecedores.find((f) => f.id === it.fornecedor_id);
+      if (!matchFornecedor(it.fornecedor_nome, fornObj?.cnpj, termoBuscaFornecedor)) return;
 
       const key = `${it.fornecedor_id}_${it.recebido_data}_${it.recebido_hora}`;
 
       if (!mapa.has(key)) {
         mapa.set(key, {
+          fornecedor_id: it.fornecedor_id,
           fornecedor_nome: it.fornecedor_nome,
+          cnpj: fornObj?.cnpj || '',
           recebido_por_nome: it.recebido_por_nome || 'Sistema',
           recebido_data: it.recebido_data,
           recebido_hora: it.recebido_hora,
@@ -224,7 +243,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     });
 
     return Array.from(mapa.values());
-  }, [itens, dataInicio, dataFim, fornecedorFiltro]);
+  }, [itens, dataInicio, dataFim, termoBuscaFornecedor, fornecedores]);
 
   // Ações
   const handleSalvarFornecedor = async () => {
@@ -232,6 +251,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
     try {
       await trocasService.atribuirFornecedor(modalAtribuirFornecedor.avaria_id, fornecedorSelecionadoModal);
       setModalAtribuirFornecedor(null);
+      setTermoBuscaModalForn('');
       carregarDados();
     } catch (err: any) {
       alert('Erro ao atribuir fornecedor: ' + err.message);
@@ -361,103 +381,74 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
           </button>
         </div>
 
-        {/* ÁREA DE FILTROS ESPECÍFICA DE CADA ABA */}
+        {/* ÁREA DE FILTROS COM BUSCA INTELIGENTE POR FORNECEDOR */}
         <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
-          {abaAtiva === 'ITENS' && (
-            <div className="flex flex-col gap-3">
-              {/* Dois Toggles: Com Fornecedor / Sem Fornecedor */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase text-slate-400">Filtrar Vínculo:</span>
-                <div className="flex bg-white border border-slate-200 p-1 rounded-xl gap-1 text-[10px] font-black">
-                  <button
-                    type="button"
-                    onClick={() => setToggleFornecedor('TODOS')}
-                    className={`px-3 py-1 rounded-lg uppercase transition-all ${
-                      toggleFornecedor === 'TODOS' ? 'bg-[#09797a] text-white' : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    Todos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setToggleFornecedor('COM_FORNECEDOR')}
-                    className={`px-3 py-1 rounded-lg uppercase transition-all ${
-                      toggleFornecedor === 'COM_FORNECEDOR' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    Com Fornecedor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setToggleFornecedor('SEM_FORNECEDOR')}
-                    className={`px-3 py-1 rounded-lg uppercase transition-all ${
-                      toggleFornecedor === 'SEM_FORNECEDOR' ? 'bg-rose-600 text-white' : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    Sem Fornecedor
-                  </button>
-                </div>
-              </div>
-
-              {/* Período */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Coleta Inicial</label>
-                  <input
-                    type="date"
-                    value={dataInicio}
-                    onChange={(e) => setDataInicio(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Coleta Final</label>
-                  <input
-                    type="date"
-                    value={dataFim}
-                    onChange={(e) => setDataFim(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
-                  />
-                </div>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
+            {/* Campo de Busca Inteligente de Fornecedor (CNPJ, Razão, Fantasia - % ou parte) */}
+            <div className="flex flex-col gap-1 sm:col-span-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Buscar Fornecedor (CNPJ / Nome / %)</label>
+              <input
+                type="text"
+                placeholder="Digite o CNPJ ou nome do fornecedor..."
+                value={termoBuscaFornecedor}
+                onChange={(e) => setTermoBuscaFornecedor(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 focus:border-[#09797a]"
+              />
             </div>
-          )}
 
-          {abaAtiva !== 'ITENS' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div className="flex flex-col gap-1 sm:col-span-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Por Fornecedor</label>
-                <select
-                  value={fornecedorFiltro}
-                  onChange={(e) => setFornecedorFiltro(e.target.value)}
-                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase"
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
+              />
+            </div>
+          </div>
+
+          {/* Toggle de Vínculo apenas na Aba 1 */}
+          {abaAtiva === 'ITENS' && (
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200/70">
+              <span className="text-[10px] font-black uppercase text-slate-400">Filtrar Vínculo:</span>
+              <div className="flex bg-white border border-slate-200 p-1 rounded-xl gap-1 text-[10px] font-black">
+                <button
+                  type="button"
+                  onClick={() => setToggleFornecedor('TODOS')}
+                  className={`px-3 py-1 rounded-lg uppercase transition-all ${
+                    toggleFornecedor === 'TODOS' ? 'bg-[#09797a] text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
                 >
-                  <option value="TODOS">TODOS OS FORNECEDORES</option>
-                  {fornecedores.map((f) => (
-                    <option key={f.id} value={f.id}>{f.nome_fantasia?.toUpperCase() || f.razao_social?.toUpperCase()}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
-                <input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
-                <input
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
-                />
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setToggleFornecedor('COM_FORNECEDOR')}
+                  className={`px-3 py-1 rounded-lg uppercase transition-all ${
+                    toggleFornecedor === 'COM_FORNECEDOR' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Com Fornecedor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setToggleFornecedor('SEM_FORNECEDOR')}
+                  className={`px-3 py-1 rounded-lg uppercase transition-all ${
+                    toggleFornecedor === 'SEM_FORNECEDOR' ? 'bg-rose-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Sem Fornecedor
+                </button>
               </div>
             </div>
           )}
@@ -513,6 +504,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                           onClick={() => {
                             setModalAtribuirFornecedor(it);
                             setFornecedorSelecionadoModal(it.fornecedor_id || '');
+                            setTermoBuscaModalForn('');
                           }}
                           className="px-3.5 py-2 bg-slate-100 hover:bg-[#09797a] hover:text-white text-slate-700 rounded-xl text-xs font-black uppercase transition-all shadow-sm active:scale-95"
                         >
@@ -528,7 +520,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
               {abaAtiva === 'AGRUPAR' && (
                 gruposAba2.length === 0 ? (
                   <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
-                    Nenhum fornecedor com itens vinculados aguardando agrupamento. Identifique os fornecedores na aba "Itens".
+                    Nenhum fornecedor com itens vinculados aguardando agrupamento.
                   </div>
                 ) : (
                   gruposAba2.map((grupo) => (
@@ -537,9 +529,16 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                       className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
                     >
                       <div className="min-w-0 flex-1">
-                        <span className="text-[9px] font-bold uppercase bg-teal-50 text-[#09797a] px-2 py-0.5 rounded">
-                          FORNECEDOR
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] font-bold uppercase bg-teal-50 text-[#09797a] px-2 py-0.5 rounded">
+                            FORNECEDOR
+                          </span>
+                          {grupo.cnpj && (
+                            <span className="text-[10px] font-mono text-slate-400">
+                              CNPJ: {grupo.cnpj}
+                            </span>
+                          )}
+                        </div>
                         <h3 className="font-black text-sm text-slate-800 uppercase mt-1 leading-snug">
                           {grupo.fornecedor_nome}
                         </h3>
@@ -582,7 +581,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
               {abaAtiva === 'NEGOCIAR' && (
                 gruposAba3.length === 0 ? (
                   <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
-                    Nenhuma negociação em andamento. Envie itens através da aba "Agrupar".
+                    Nenhuma negociação em andamento.
                   </div>
                 ) : (
                   gruposAba3.map((grupo, idx) => (
@@ -595,6 +594,11 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                           <h3 className="font-black text-sm text-slate-800 uppercase leading-snug">
                             {grupo.fornecedor_nome}
                           </h3>
+                          {grupo.cnpj && (
+                            <span className="text-[10px] font-mono text-slate-400">
+                              CNPJ: {grupo.cnpj}
+                            </span>
+                          )}
                           <span
                             className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
                               grupo.status === 'Enviado'
@@ -662,7 +666,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                           </button>
                         </div>
 
-                        {/* Botão de Recebimento (Joinha) para enviar a Finalizadas */}
+                        {/* Botão de Recebimento (Joinha) */}
                         <button
                           type="button"
                           onClick={() => {
@@ -699,10 +703,15 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
                           <span className="text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
                             RECEBIDO / CONCLUÍDO
                           </span>
-                          <h3 className="font-black text-sm text-slate-800 uppercase leading-snug">
-                            {grupo.fornecedor_nome}
-                          </h3>
+                          {grupo.cnpj && (
+                            <span className="text-[10px] font-mono text-slate-400">
+                              CNPJ: {grupo.cnpj}
+                            </span>
+                          )}
                         </div>
+                        <h3 className="font-black text-sm text-slate-800 uppercase mt-1 leading-snug">
+                          {grupo.fornecedor_nome}
+                        </h3>
 
                         <p className="text-[11px] text-slate-500 font-medium mt-1">
                           <strong>{grupo.itensAgrupados.length}</strong> produtos repostos/trocados
@@ -739,7 +748,7 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
 
       </div>
 
-      {/* MODAL 1: ATRIBUIR FORNECEDOR */}
+      {/* MODAL 1: ATRIBUIR FORNECEDOR COM BUSCA INTELIGENTE */}
       {modalAtribuirFornecedor && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 animate-fadeIn">
@@ -758,18 +767,33 @@ export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoI
               {modalAtribuirFornecedor.codprod} - {modalAtribuirFornecedor.descricao_produto}
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Selecione o Fornecedor</label>
-              <select
-                value={fornecedorSelecionadoModal}
-                onChange={(e) => setFornecedorSelecionadoModal(e.target.value)}
-                className="w-full h-11 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-              >
-                <option value="">Selecione...</option>
-                {fornecedores.map((f) => (
-                  <option key={f.id} value={f.id}>{f.nome_fantasia?.toUpperCase() || f.razao_social?.toUpperCase()}</option>
-                ))}
-              </select>
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Filtrar Fornecedor (CNPJ ou Nome)</label>
+              <input
+                type="text"
+                placeholder="Digite para filtrar a lista..."
+                value={termoBuscaModalForn}
+                onChange={(e) => setTermoBuscaModalForn(e.target.value)}
+                className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
+              />
+
+              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
+                {fornecedores
+                  .filter((f) => matchFornecedor(f.nome_fantasia || f.razao_social, f.cnpj, termoBuscaModalForn))
+                  .map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFornecedorSelecionadoModal(f.id)}
+                      className={`w-full text-left p-2.5 text-xs font-bold flex flex-col uppercase transition-all ${
+                        fornecedorSelecionadoModal === f.id ? 'bg-teal-100/70 text-[#09797a]' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <span>{f.nome_fantasia || f.razao_social}</span>
+                      <span className="text-[9px] font-mono text-slate-400">CNPJ: {f.cnpj || 'Não informado'}</span>
+                    </button>
+                  ))}
+              </div>
             </div>
 
             <div className="flex gap-2 pt-2 border-t border-slate-100">
