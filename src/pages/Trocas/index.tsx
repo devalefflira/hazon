@@ -1,439 +1,939 @@
-// Arquivo: src/pages/Trocas/index.tsx
-import { useState, useEffect } from 'react';
+// src/pages/Trocas/index.tsx
+import { useState, useEffect, useMemo } from 'react';
 import { trocasService } from './services/trocasService';
-import type { TrocaItem } from './services/trocasService';
+import { gerarPdfRelatorioTroca } from './utils/gerarPdfTrocas';
 
 interface TrocasProps {
-  onVoltarParaHome: () => void;
+  onVoltarParaHome?: () => void;
   usuarioLogado?: any;
+  usuarioLogadoId?: string;
 }
 
-const STATUS_OPCOES = [
-  'Não iniciado',
-  'Comunicado ao fornecedor',
-  'Aguardando retorno do fornecedor',
-  'Negociação Finalizada'
-];
+type PipelineTab = 'ITENS' | 'AGRUPAR' | 'NEGOCIAR' | 'FINALIZADAS';
 
-export default function Trocas({ onVoltarParaHome, usuarioLogado }: TrocasProps) {
-  const [trocas, setTrocas] = useState<TrocaItem[]>([]);
+export default function Trocas({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: TrocasProps) {
+  const idUsuarioFinal = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+
+  const [itens, setItens] = useState<any[]>([]);
+  const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<PipelineTab>('ITENS');
 
-  // Aba ativa: 'NAO_REALIZADAS' ou 'REALIZADAS'
-  const [abaAtiva, setAbaAtiva] = useState<'NAO_REALIZADAS' | 'REALIZADAS'>('NAO_REALIZADAS');
+  // Filtros Globais / Aba Itens
+  const [toggleFornecedor, setToggleFornecedor] = useState<'TODOS' | 'COM_FORNECEDOR' | 'SEM_FORNECEDOR'>('TODOS');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
 
-  // Modal de Negociação
-  const [itemSelecionado, setItemSelecionado] = useState<TrocaItem | null>(null);
-  const [statusNegociacao, setStatusNegociacao] = useState('Não iniciado');
-  const [fornecedorId, setFornecedorId] = useState('');
-  const [termoBuscaForn, setTermoBuscaForn] = useState('');
-  const [fornecedoresSugeridos, setFornecedoresSugeridos] = useState<any[]>([]);
-  const [fornecedorSelecionado, setFornecedorSelecionado] = useState<any | null>(null);
-  const [anotacoes, setAnotacoes] = useState('');
-  const [previsaoTroca, setPrevisaoTroca] = useState('');
-  const [salvando, setSalvando] = useState(false);
+  // Filtros Aba Agrupar / Negociar
+  const [fornecedorFiltro, setFornecedorFiltro] = useState('TODOS');
 
-  const carregarTrocas = async () => {
+  // Modais de Ação
+  const [modalAtribuirFornecedor, setModalAtribuirFornecedor] = useState<any | null>(null);
+  const [fornecedorSelecionadoModal, setFornecedorSelecionadoModal] = useState<string>('');
+
+  const [modalNegociacao, setModalNegociacao] = useState<{ fornecedorNome: string; itens: any[] } | null>(null);
+  const [textoNegociacao, setTextoNegociacao] = useState('');
+  const [salvandoNegociacao, setSalvandoNegociacao] = useState(false);
+
+  const [modalConfirmarRecebimento, setModalConfirmarRecebimento] = useState<{ fornecedorNome: string; itens: any[] } | null>(null);
+  const [salvandoRecebimento, setSalvandoRecebimento] = useState(false);
+
+  const [modalVerItensGrupo, setModalVerItensGrupo] = useState<{ titulo: string; itens: any[] } | null>(null);
+
+  const carregarDados = async () => {
     try {
       setLoading(true);
-      const lista = await trocasService.listarTrocas();
-      setTrocas(lista);
-    } catch (err) {
-      console.error('Erro ao carregar trocas:', err);
+      const [listaItens, listaForn] = await Promise.all([
+        trocasService.listarItensTroca(),
+        trocasService.listarFornecedores()
+      ]);
+      setItens(listaItens);
+      setFornecedores(listaForn);
+    } catch (err: any) {
+      console.error('Erro ao carregar dados de trocas:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    carregarTrocas();
+    carregarDados();
   }, []);
 
-  // Busca fornecedor por digitação
-  useEffect(() => {
-    if (!termoBuscaForn.trim() || fornecedorSelecionado) {
-      setFornecedoresSugeridos([]);
-      return;
-    }
+  const formatarDataSegura = (dataStr?: string) => {
+    if (!dataStr) return '-';
+    const partes = dataStr.split('T')[0].split('-');
+    if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    return dataStr;
+  };
 
-    const timer = setTimeout(async () => {
-      try {
-        const res = await trocasService.buscarFornecedores(termoBuscaForn);
-        setFornecedoresSugeridos(res);
-      } catch (err) {
-        console.error(err);
+  // --- FILTRAGEM ABA 1: ITENS ---
+  const itensFiltradosAba1 = useMemo(() => {
+    return itens.filter((it) => {
+      // Exclui os já finalizados
+      if (it.troca_realizada) return false;
+
+      // Toggle Fornecedor
+      const temForn = it.fornecedor_id !== null && it.fornecedor_nome !== 'Não Identificado';
+      if (toggleFornecedor === 'COM_FORNECEDOR' && !temForn) return false;
+      if (toggleFornecedor === 'SEM_FORNECEDOR' && temForn) return false;
+
+      // Período
+      const dt = it.data_coleta ? it.data_coleta.split('T')[0] : '';
+      if (dataInicio && dt < dataInicio) return false;
+      if (dataFim && dt > dataFim) return false;
+
+      return true;
+    });
+  }, [itens, toggleFornecedor, dataInicio, dataFim]);
+
+  // --- AGRUPAMENTO ABA 2: AGRUPAR POR FORNECEDOR E SOMAR MESMO ITEM ---
+  const gruposAba2 = useMemo(() => {
+    // Agrupa apenas itens que possuem fornecedor identificado e não finalizados
+    const itensComForn = itens.filter((it) => !it.troca_realizada && it.fornecedor_id && it.fornecedor_nome !== 'Não Identificado');
+
+    const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; itensAgrupados: any[]; avaria_ids: string[] }>();
+
+    itensComForn.forEach((it) => {
+      const dt = it.data_coleta ? it.data_coleta.split('T')[0] : '';
+      if (dataInicio && dt < dataInicio) return;
+      if (dataFim && dt > dataFim) return;
+      if (fornecedorFiltro !== 'TODOS' && it.fornecedor_id !== fornecedorFiltro) return;
+
+      if (!mapa.has(it.fornecedor_id)) {
+        mapa.set(it.fornecedor_id, {
+          fornecedor_id: it.fornecedor_id,
+          fornecedor_nome: it.fornecedor_nome,
+          itensAgrupados: [],
+          avaria_ids: []
+        });
       }
-    }, 250);
 
-    return () => clearTimeout(timer);
-  }, [termoBuscaForn, fornecedorSelecionado]);
+      const grupo = mapa.get(it.fornecedor_id)!;
+      grupo.avaria_ids.push(it.avaria_id);
 
-  const handleAbrirModal = (item: TrocaItem) => {
-    setItemSelecionado(item);
-    setStatusNegociacao(item.status || 'Não iniciado');
-    setFornecedorId(item.fornecedor_id || item.fornecedor?.id || '');
-    setFornecedorSelecionado(item.fornecedor || null);
-    setTermoBuscaForn(item.fornecedor ? (item.fornecedor.nome_fantasia || item.fornecedor.razao_social) : '');
-    setAnotacoes(item.anotacoes || '');
-    setPrevisaoTroca(item.previsao_troca || '');
+      // Soma a quantidade do mesmo produto
+      const prodExistente = grupo.itensAgrupados.find((p) => p.produto_id === it.produto_id);
+      if (prodExistente) {
+        prodExistente.quantidade += it.quantidade;
+      } else {
+        grupo.itensAgrupados.push({
+          produto_id: it.produto_id,
+          codprod: it.codprod,
+          descricao_produto: it.descricao_produto,
+          unidade: it.unidade,
+          custoreal: it.custoreal,
+          quantidade: it.quantidade
+        });
+      }
+    });
+
+    return Array.from(mapa.values());
+  }, [itens, dataInicio, dataFim, fornecedorFiltro]);
+
+  // --- AGRUPAMENTO ABA 3: NEGOCIAR ---
+  const gruposAba3 = useMemo(() => {
+    const itensEmNegociacao = itens.filter(
+      (it) => !it.troca_realizada && (it.status === 'Enviado' || it.status === 'Aguardando' || it.status === 'Negociado')
+    );
+
+    const mapa = new Map<string, { fornecedor_id: string; fornecedor_nome: string; status: string; anotacoes: string; itensAgrupados: any[]; avaria_ids: string[] }>();
+
+    itensEmNegociacao.forEach((it) => {
+      const dt = it.data_coleta ? it.data_coleta.split('T')[0] : '';
+      if (dataInicio && dt < dataInicio) return;
+      if (dataFim && dt > dataFim) return;
+      if (fornecedorFiltro !== 'TODOS' && it.fornecedor_id !== fornecedorFiltro) return;
+
+      const key = `${it.fornecedor_id || 'sem-forn'}_${it.status}`;
+
+      if (!mapa.has(key)) {
+        mapa.set(key, {
+          fornecedor_id: it.fornecedor_id,
+          fornecedor_nome: it.fornecedor_nome,
+          status: it.status,
+          anotacoes: it.anotacoes,
+          itensAgrupados: [],
+          avaria_ids: []
+        });
+      }
+
+      const grupo = mapa.get(key)!;
+      grupo.avaria_ids.push(it.avaria_id);
+
+      const prodExistente = grupo.itensAgrupados.find((p) => p.produto_id === it.produto_id);
+      if (prodExistente) {
+        prodExistente.quantidade += it.quantidade;
+      } else {
+        grupo.itensAgrupados.push({
+          produto_id: it.produto_id,
+          codprod: it.codprod,
+          descricao_produto: it.descricao_produto,
+          unidade: it.unidade,
+          custoreal: it.custoreal,
+          quantidade: it.quantidade
+        });
+      }
+    });
+
+    return Array.from(mapa.values());
+  }, [itens, dataInicio, dataFim, fornecedorFiltro]);
+
+  // --- AGRUPAMENTO ABA 4: FINALIZADAS ---
+  const gruposAba4 = useMemo(() => {
+    const itensFinalizados = itens.filter((it) => it.troca_realizada);
+
+    const mapa = new Map<string, { fornecedor_nome: string; recebido_por_nome: string; recebido_data: string; recebido_hora: string; anotacoes: string; itensAgrupados: any[]; avaria_ids: string[] }>();
+
+    itensFinalizados.forEach((it) => {
+      const dt = it.recebido_data ? it.recebido_data.split('T')[0] : '';
+      if (dataInicio && dt < dataInicio) return;
+      if (dataFim && dt > dataFim) return;
+      if (fornecedorFiltro !== 'TODOS' && it.fornecedor_id !== fornecedorFiltro) return;
+
+      const key = `${it.fornecedor_id}_${it.recebido_data}_${it.recebido_hora}`;
+
+      if (!mapa.has(key)) {
+        mapa.set(key, {
+          fornecedor_nome: it.fornecedor_nome,
+          recebido_por_nome: it.recebido_por_nome || 'Sistema',
+          recebido_data: it.recebido_data,
+          recebido_hora: it.recebido_hora,
+          anotacoes: it.anotacoes,
+          itensAgrupados: [],
+          avaria_ids: []
+        });
+      }
+
+      const grupo = mapa.get(key)!;
+      grupo.avaria_ids.push(it.avaria_id);
+
+      const prodExistente = grupo.itensAgrupados.find((p) => p.produto_id === it.produto_id);
+      if (prodExistente) {
+        prodExistente.quantidade += it.quantidade;
+      } else {
+        grupo.itensAgrupados.push({
+          produto_id: it.produto_id,
+          codprod: it.codprod,
+          descricao_produto: it.descricao_produto,
+          unidade: it.unidade,
+          custoreal: it.custoreal,
+          quantidade: it.quantidade
+        });
+      }
+    });
+
+    return Array.from(mapa.values());
+  }, [itens, dataInicio, dataFim, fornecedorFiltro]);
+
+  // Ações
+  const handleSalvarFornecedor = async () => {
+    if (!modalAtribuirFornecedor) return;
+    try {
+      await trocasService.atribuirFornecedor(modalAtribuirFornecedor.avaria_id, fornecedorSelecionadoModal);
+      setModalAtribuirFornecedor(null);
+      carregarDados();
+    } catch (err: any) {
+      alert('Erro ao atribuir fornecedor: ' + err.message);
+    }
   };
 
-  const handleSalvarNegociacao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!itemSelecionado) return;
-
+  const handleEnviarParaNegociar = async (avariaIds: string[]) => {
     try {
-      setSalvando(true);
-      await trocasService.salvarNegociacao({
-        avaria_id: itemSelecionado.avaria_id,
-        fornecedor_id: fornecedorId || undefined,
-        status: statusNegociacao,
-        anotacoes: anotacoes,
-        previsao_troca: previsaoTroca || undefined
-      });
+      await trocasService.enviarParaNegociar(avariaIds);
+      alert('Itens enviados para o Pipeline de Negociação!');
+      carregarDados();
+      setAbaAtiva('NEGOCIAR');
+    } catch (err: any) {
+      alert('Erro ao enviar para negociar: ' + err.message);
+    }
+  };
 
-      alert('Negociação de troca salva com sucesso!');
-      setItemSelecionado(null);
-      carregarTrocas();
-    } catch (err) {
-      alert('Erro ao salvar negociação.');
+  const handleSalvarNegociacaoFeita = async () => {
+    if (!modalNegociacao) return;
+    try {
+      setSalvandoNegociacao(true);
+      const avariaIds = modalNegociacao.itens.map((i) => i.avaria_id);
+      await trocasService.atualizarStatusNegociacao(avariaIds, 'Negociado', textoNegociacao);
+      alert('Negociação registrada com sucesso!');
+      setModalNegociacao(null);
+      setTextoNegociacao('');
+      carregarDados();
+    } catch (err: any) {
+      alert('Erro ao registrar negociação: ' + err.message);
     } finally {
-      setSalvando(false);
+      setSalvandoNegociacao(false);
     }
   };
 
-  const handleConfirmarRecebimento = async (item: TrocaItem) => {
-    const userObj = usuarioLogado || JSON.parse(localStorage.getItem('hazon_user') || '{}');
-    if (!userObj?.id) {
-      alert('Usuário não autenticado.');
-      return;
-    }
-
-    const prodDesc = item.avaria?.produtos?.descricao || 'este item';
-    if (!confirm(`Confirmar que a troca do produto "${prodDesc}" chegou fisicamente na loja?`)) {
-      return;
-    }
-
+  const handleConfirmarRecebimentoFinal = async () => {
+    if (!modalConfirmarRecebimento) return;
     try {
-      await trocasService.confirmarRecebimentoTroca(item.avaria_id, userObj.id);
-      carregarTrocas();
-    } catch (err) {
-      alert('Erro ao confirmar recebimento da troca.');
+      setSalvandoRecebimento(true);
+      const avariaIds = modalConfirmarRecebimento.itens.map((i) => i.avaria_id);
+      await trocasService.confirmarRecebimento(avariaIds, idUsuarioFinal);
+      alert('Recebimento confirmado! Ciclo finalizado.');
+      setModalConfirmarRecebimento(null);
+      carregarDados();
+      setAbaAtiva('FINALIZADAS');
+    } catch (err: any) {
+      alert('Erro ao confirmar recebimento: ' + err.message);
+    } finally {
+      setSalvandoRecebimento(false);
     }
   };
-
-  // Separação das Abas
-  const trocasNaoRealizadas = trocas.filter((t: TrocaItem) => t.status !== 'Negociação Finalizada');
-  const trocasRealizadas = trocas.filter((t: TrocaItem) => t.status === 'Negociação Finalizada');
-
-  const listaExibicao = abaAtiva === 'NAO_REALIZADAS' ? trocasNaoRealizadas : trocasRealizadas;
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 font-sans flex flex-col items-center select-none">
-      <div className="w-full max-w-2xl bg-white rounded-4xl shadow-xl px-5 py-6 flex flex-col gap-4 min-h-[calc(100vh-32px)]">
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+      <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
         
         {/* HEADER */}
-        <div className="flex justify-between items-center w-full border-b border-gray-100 pb-3">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onVoltarParaHome}
-              className="p-2 hover:bg-gray-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+              onClick={onVoltarParaHome || (() => window.history.back())}
+              className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
             >
               ←
             </button>
             <div>
-              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">TROCAS</h1>
-              <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-wide">Acompanhamento e Negociação com Fornecedores</p>
+              <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">CONTROLE DE TROCAS</h1>
+              <p className="text-[11px] text-slate-400 font-bold mt-1 tracking-wide">
+                Gestão de Devoluções e Reposições com Fornecedores
+              </p>
             </div>
           </div>
         </div>
 
-        {/* ABAS */}
-        <div className="bg-gray-100 p-1 rounded-2xl flex text-xs font-black">
+        {/* 4 PIPELINES / ABAS */}
+        <div className="bg-slate-100 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs font-black">
           <button
             type="button"
-            onClick={() => setAbaAtiva('NAO_REALIZADAS')}
-            className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${
-              abaAtiva === 'NAO_REALIZADAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'
+            onClick={() => setAbaAtiva('ITENS')}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaAtiva === 'ITENS' ? 'bg-[#09797a] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Trocas Não Realizadas ({trocasNaoRealizadas.length})
+            <span>1. Itens</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full font-mono">
+              {itens.filter((i) => !i.troca_realizada).length}
+            </span>
           </button>
+
           <button
             type="button"
-            onClick={() => setAbaAtiva('REALIZADAS')}
-            className={`flex-1 py-2.5 rounded-xl uppercase transition-all ${
-              abaAtiva === 'REALIZADAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400'
+            onClick={() => setAbaAtiva('AGRUPAR')}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaAtiva === 'AGRUPAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Trocas Realizadas ({trocasRealizadas.length})
+            <span>2. Agrupar</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full font-mono">
+              {gruposAba2.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('NEGOCIAR')}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaAtiva === 'NEGOCIAR' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span>3. Negociar</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full font-mono">
+              {gruposAba3.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('FINALIZADAS')}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaAtiva === 'FINALIZADAS' ? 'bg-emerald-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span>4. Finalizadas</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full font-mono">
+              {gruposAba4.length}
+            </span>
           </button>
         </div>
 
-        {/* LISTAGEM */}
-        <div className="flex-1 flex flex-col gap-2.5 overflow-y-auto">
-          {loading ? (
-            <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando trocas...</div>
-          ) : listaExibicao.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-              Nenhuma troca encontrada nesta categoria.
-            </div>
-          ) : (
-            listaExibicao.map((item: TrocaItem) => {
-              const av = item.avaria || ({} as any);
-              const prod: any = av.produtos || {};
-              const dataColetaFmt = av.data_registro
-                ? new Date(av.data_registro + 'T00:00:00').toLocaleDateString('pt-BR')
-                : 'N/I';
-
-              const previsaoFmt = item.previsao_troca
-                ? new Date(item.previsao_troca + 'T00:00:00').toLocaleDateString('pt-BR')
-                : null;
-
-              const fornNome = item.fornecedor?.nome_fantasia || item.fornecedor?.razao_social;
-
-              return (
-                <div
-                  key={av.id}
-                  className="p-4 bg-white border border-gray-200 rounded-3xl flex flex-col gap-2 shadow-xs hover:border-[#09797a]/40 transition-all"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-lg uppercase">
-                        {av.codigo_customizado}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-gray-400">
-                        Cód: {prod.codprod || 'N/A'}
-                      </span>
-                    </div>
-
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl uppercase ${
-                      item.status === 'Negociação Finalizada' ? 'bg-emerald-100 text-emerald-800' :
-                      item.status === 'Não iniciado' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {item.status}
-                    </span>
-                  </div>
-
-                  <h3 className="font-black text-xs text-gray-800 uppercase leading-snug">
-                    {prod.descricao || 'PRODUTO NÃO IDENTIFICADO'}
-                  </h3>
-
-                  <div className="text-[10px] text-gray-500 font-bold uppercase flex items-center gap-2 flex-wrap">
-                    <span>QTD AVARIADA: <strong className="text-gray-800">{av.quantidade} {prod.unidade || 'UN'}</strong></span>
-                    <span>|</span>
-                    <span>COLETA: <strong className="text-gray-800">{dataColetaFmt}</strong></span>
-                    {fornNome && (
-                      <>
-                        <span>|</span>
-                        <span>FORNECEDOR: <strong className="text-[#09797a]">{fornNome}</strong></span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Informações adicionais na aba Realizadas */}
-                  {abaAtiva === 'REALIZADAS' && (
-                    <div className="flex flex-col gap-1 pt-1.5 border-t border-gray-100 text-[10px]">
-                      {previsaoFmt && (
-                        <span className="font-bold text-gray-600">
-                          📅 Previsão de Troca: <strong className="text-gray-800">{previsaoFmt}</strong>
-                        </span>
-                      )}
-                      {item.anotacoes && (
-                        <div className="bg-emerald-50/60 border border-emerald-200 text-emerald-900 p-2 rounded-xl">
-                          <strong className="uppercase">Anotações:</strong> {item.anotacoes}
-                        </div>
-                      )}
-
-                      {/* Identificação de recebimento na loja */}
-                      {item.troca_realizada ? (
-                        <div className="bg-emerald-100 text-emerald-900 font-bold p-2 rounded-xl mt-1 flex items-center gap-1.5 text-[10px] font-mono">
-                          <span>👍 Entregue na Loja</span>
-                          <span>- Recebido por <strong>{item.usuario_recebedor?.nome || 'USUÁRIO'}</strong> em {item.recebido_data ? new Date(item.recebido_data + 'T00:00:00').toLocaleDateString('pt-BR') : ''} às {item.recebido_hora || ''}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-
-                  {/* Ações */}
-                  <div className="flex justify-end items-center gap-2 pt-1 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => handleAbrirModal(item)}
-                      className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase transition-all"
-                    >
-                      ✏️ {abaAtiva === 'NAO_REALIZADAS' ? 'Negociar' : 'Editar'}
-                    </button>
-
-                    {abaAtiva === 'REALIZADAS' && !item.troca_realizada && (
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmarRecebimento(item)}
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase shadow-xs active:scale-95 transition-all flex items-center gap-1"
-                        title="Confirmar que a troca chegou na loja"
-                      >
-                        <span>👍</span> Confirmar Entrega
-                      </button>
-                    )}
-                  </div>
+        {/* ÁREA DE FILTROS ESPECÍFICA DE CADA ABA */}
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
+          {abaAtiva === 'ITENS' && (
+            <div className="flex flex-col gap-3">
+              {/* Dois Toggles: Com Fornecedor / Sem Fornecedor */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase text-slate-400">Filtrar Vínculo:</span>
+                <div className="flex bg-white border border-slate-200 p-1 rounded-xl gap-1 text-[10px] font-black">
+                  <button
+                    type="button"
+                    onClick={() => setToggleFornecedor('TODOS')}
+                    className={`px-3 py-1 rounded-lg uppercase transition-all ${
+                      toggleFornecedor === 'TODOS' ? 'bg-[#09797a] text-white' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setToggleFornecedor('COM_FORNECEDOR')}
+                    className={`px-3 py-1 rounded-lg uppercase transition-all ${
+                      toggleFornecedor === 'COM_FORNECEDOR' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Com Fornecedor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setToggleFornecedor('SEM_FORNECEDOR')}
+                    className={`px-3 py-1 rounded-lg uppercase transition-all ${
+                      toggleFornecedor === 'SEM_FORNECEDOR' ? 'bg-rose-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Sem Fornecedor
+                  </button>
                 </div>
-              );
-            })
+              </div>
+
+              {/* Período */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Coleta Inicial</label>
+                  <input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Coleta Final</label>
+                  <input
+                    type="date"
+                    value={dataFim}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {abaAtiva !== 'ITENS' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="flex flex-col gap-1 sm:col-span-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Por Fornecedor</label>
+                <select
+                  value={fornecedorFiltro}
+                  onChange={(e) => setFornecedorFiltro(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase"
+                >
+                  <option value="TODOS">TODOS OS FORNECEDORES</option>
+                  {fornecedores.map((f) => (
+                    <option key={f.id} value={f.id}>{f.nome_fantasia?.toUpperCase() || f.razao_social?.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
+                <input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
+                <input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* CONTEÚDO PRINCIPAL DAS ABAS */}
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {loading ? (
+            <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">Carregando dados de trocas...</div>
+          ) : (
+            <>
+              {/* ABA 1: LISTAGEM INDIVIDUAL DE ITENS */}
+              {abaAtiva === 'ITENS' && (
+                itensFiltradosAba1.length === 0 ? (
+                  <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
+                    Nenhum item de troca encontrado para os filtros selecionados.
+                  </div>
+                ) : (
+                  itensFiltradosAba1.map((it) => (
+                    <div
+                      key={it.avaria_id}
+                      className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] font-mono font-black text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                            {it.codigo_customizado || 'AV'}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-slate-400">
+                            Cód: {it.codprod || '-'}
+                          </span>
+                        </div>
+
+                        <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
+                          {it.descricao_produto}
+                        </h3>
+
+                        <div className="text-[11px] text-slate-500 font-semibold mt-1">
+                          QTD AVARIADA: <strong className="text-slate-800">{it.quantidade} {it.unidade}</strong> &nbsp;|&nbsp;
+                          COLETA: <strong className="text-slate-700">{formatarDataSegura(it.data_coleta)}</strong>
+                        </div>
+
+                        <div className="text-[10px] text-slate-500 font-medium mt-1">
+                          Fornecedor: <strong className={it.fornecedor_nome === 'Não Identificado' ? 'text-rose-600 font-black' : 'text-[#09797a] font-black'}>
+                            {it.fornecedor_nome}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setModalAtribuirFornecedor(it);
+                            setFornecedorSelecionadoModal(it.fornecedor_id || '');
+                          }}
+                          className="px-3.5 py-2 bg-slate-100 hover:bg-[#09797a] hover:text-white text-slate-700 rounded-xl text-xs font-black uppercase transition-all shadow-sm active:scale-95"
+                        >
+                          {it.fornecedor_nome === 'Não Identificado' ? 'Identificar Fornecedor' : 'Alterar Fornecedor'}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+
+              {/* ABA 2: AGRUPAR POR FORNECEDOR E SOMAR MESMO ITEM */}
+              {abaAtiva === 'AGRUPAR' && (
+                gruposAba2.length === 0 ? (
+                  <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
+                    Nenhum fornecedor com itens vinculados aguardando agrupamento. Identifique os fornecedores na aba "Itens".
+                  </div>
+                ) : (
+                  gruposAba2.map((grupo) => (
+                    <div
+                      key={grupo.fornecedor_id}
+                      className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[9px] font-bold uppercase bg-teal-50 text-[#09797a] px-2 py-0.5 rounded">
+                          FORNECEDOR
+                        </span>
+                        <h3 className="font-black text-sm text-slate-800 uppercase mt-1 leading-snug">
+                          {grupo.fornecedor_nome}
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                          Total: <strong>{grupo.itensAgrupados.length}</strong> produtos distintos somados (<strong>{grupo.avaria_ids.length}</strong> registros de avaria)
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">
+                        <button
+                          type="button"
+                          onClick={() => setModalVerItensGrupo({ titulo: grupo.fornecedor_nome, itens: grupo.itensAgrupados })}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-all"
+                        >
+                          Ver Lista
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => gerarPdfRelatorioTroca(grupo.fornecedor_nome, grupo.itensAgrupados)}
+                          className="px-3 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all"
+                        >
+                          📄 PDF
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleEnviarParaNegociar(grupo.avaria_ids)}
+                          className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+                        >
+                          Enviar p/ Negociar →
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+
+              {/* ABA 3: NEGOCIAR (STATUS E / A / N) */}
+              {abaAtiva === 'NEGOCIAR' && (
+                gruposAba3.length === 0 ? (
+                  <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
+                    Nenhuma negociação em andamento. Envie itens através da aba "Agrupar".
+                  </div>
+                ) : (
+                  gruposAba3.map((grupo, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-black text-sm text-slate-800 uppercase leading-snug">
+                            {grupo.fornecedor_nome}
+                          </h3>
+                          <span
+                            className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
+                              grupo.status === 'Enviado'
+                                ? 'bg-blue-100 text-blue-800'
+                                : grupo.status === 'Aguardando'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {grupo.status}
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 font-medium mt-1">
+                          <strong>{grupo.itensAgrupados.length}</strong> produtos somados
+                        </p>
+
+                        {grupo.anotacoes && (
+                          <div className="text-[10px] text-slate-500 italic mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            Negociação: {grupo.anotacoes}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">
+                        {/* Botões de Status E / A / N */}
+                        <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
+                          <button
+                            type="button"
+                            onClick={() => trocasService.atualizarStatusNegociacao(grupo.avaria_ids, 'Enviado').then(carregarDados)}
+                            className={`w-7 h-7 rounded-lg font-black text-xs transition-all ${
+                              grupo.status === 'Enviado' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-blue-50'
+                            }`}
+                            title="Enviado (E)"
+                          >
+                            E
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => trocasService.atualizarStatusNegociacao(grupo.avaria_ids, 'Aguardando').then(carregarDados)}
+                            className={`w-7 h-7 rounded-lg font-black text-xs transition-all ${
+                              grupo.status === 'Aguardando' ? 'bg-amber-500 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-amber-50'
+                            }`}
+                            title="Aguardando (A)"
+                          >
+                            A
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setModalNegociacao({
+                                fornecedorNome: grupo.fornecedor_nome,
+                                itens: grupo.itensAgrupados.map((it: any) => ({ ...it, avaria_id: grupo.avaria_ids[0] }))
+                              });
+                              setTextoNegociacao(grupo.anotacoes || '');
+                            }}
+                            className={`w-7 h-7 rounded-lg font-black text-xs transition-all ${
+                              grupo.status === 'Negociado' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-emerald-50'
+                            }`}
+                            title="Negociado (N)"
+                          >
+                            N
+                          </button>
+                        </div>
+
+                        {/* Botão de Recebimento (Joinha) para enviar a Finalizadas */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setModalConfirmarRecebimento({
+                              fornecedorNome: grupo.fornecedor_nome,
+                              itens: grupo.itensAgrupados.map((it: any, i: number) => ({ ...it, avaria_id: grupo.avaria_ids[i] || grupo.avaria_ids[0] }))
+                            });
+                          }}
+                          className="w-9 h-9 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl flex items-center justify-center text-base shadow-sm transition-all active:scale-95"
+                          title="Confirmar Recebimento / Finalizar"
+                        >
+                          👍
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+
+              {/* ABA 4: FINALIZADAS */}
+              {abaAtiva === 'FINALIZADAS' && (
+                gruposAba4.length === 0 ? (
+                  <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
+                    Nenhuma troca finalizada até o momento.
+                  </div>
+                ) : (
+                  gruposAba4.map((grupo, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+                            RECEBIDO / CONCLUÍDO
+                          </span>
+                          <h3 className="font-black text-sm text-slate-800 uppercase leading-snug">
+                            {grupo.fornecedor_nome}
+                          </h3>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 font-medium mt-1">
+                          <strong>{grupo.itensAgrupados.length}</strong> produtos repostos/trocados
+                        </p>
+
+                        <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                          Recebido por: <strong className="text-slate-600">{grupo.recebido_por_nome}</strong> em{' '}
+                          <strong>{formatarDataSegura(grupo.recebido_data)}</strong> às <strong>{grupo.recebido_hora?.slice(0, 5)}</strong>
+                        </div>
+
+                        {grupo.anotacoes && (
+                          <div className="text-[10px] text-slate-500 italic mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            Histórico: {grupo.anotacoes}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">
+                        <button
+                          type="button"
+                          onClick={() => setModalVerItensGrupo({ titulo: `Recebido: ${grupo.fornecedor_nome}`, itens: grupo.itensAgrupados })}
+                          className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-all"
+                        >
+                          Ver Itens
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+            </>
           )}
         </div>
 
       </div>
 
-      {/* MODAL DE NEGOCIAÇÃO DE TROCA */}
-      {itemSelecionado && (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4 select-none">
-          <form
-            onSubmit={handleSalvarNegociacao}
-            className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]"
-          >
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-              <h3 className="text-[#09797a] font-black text-base uppercase">
-                NEGOCIAR TROCA ({itemSelecionado.avaria.codigo_customizado})
-              </h3>
+      {/* MODAL 1: ATRIBUIR FORNECEDOR */}
+      {modalAtribuirFornecedor && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 animate-fadeIn">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-black text-[#09797a] uppercase">Identificar Fornecedor</h3>
               <button
                 type="button"
-                onClick={() => setItemSelecionado(null)}
-                className="text-gray-400 font-bold text-base"
+                onClick={() => setModalAtribuirFornecedor(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs"
               >
                 ✕
               </button>
             </div>
 
-            {/* DADOS DO PRODUTO NO TOPO DO MODAL */}
-            <div className="bg-gray-50 border border-gray-200 p-3.5 rounded-2xl flex flex-col gap-1 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-mono font-bold">Cód: {itemSelecionado.avaria.produtos?.codprod}</span>
-                <span className="text-red-600 font-black">Qtd: {itemSelecionado.avaria.quantidade} {itemSelecionado.avaria.produtos?.unidade || 'UN'}</span>
-              </div>
-              <h4 className="font-black text-gray-800 uppercase">
-                {itemSelecionado.avaria.produtos?.descricao}
-              </h4>
-              <span className="text-[10px] text-gray-400 font-mono">
-                Data Coleta: {itemSelecionado.avaria.data_registro ? new Date(itemSelecionado.avaria.data_registro + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/I'}
-              </span>
+            <div className="text-xs font-bold text-slate-700 bg-slate-50 p-3 rounded-xl uppercase">
+              {modalAtribuirFornecedor.codprod} - {modalAtribuirFornecedor.descricao_produto}
             </div>
 
-            <div className="overflow-y-auto flex flex-col gap-3 pr-1 flex-1">
-              {/* BUSCA DE FORNECEDOR POR DIGITAÇÃO */}
-              <div className="flex flex-col gap-1 relative">
-                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Fornecedor *</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Digite a razão social ou nome fantasia..."
-                    value={termoBuscaForn}
-                    onChange={(e) => {
-                      setTermoBuscaForn(e.target.value);
-                      setFornecedorSelecionado(null);
-                      setFornecedorId('');
-                    }}
-                    className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase pr-8"
-                  />
-                  {fornecedorSelecionado && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFornecedorSelecionado(null);
-                        setTermoBuscaForn('');
-                        setFornecedorId('');
-                      }}
-                      className="absolute right-2.5 top-2.5 text-gray-400 hover:text-red-500 font-bold text-xs"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-
-                {/* LISTA SUSPENSA DE FORNECEDORES */}
-                {fornecedoresSugeridos.length > 0 && !fornecedorSelecionado && (
-                  <div className="absolute top-15 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-40 overflow-y-auto z-30 divide-y divide-gray-100">
-                    {fornecedoresSugeridos.map((f: any) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => {
-                          setFornecedorSelecionado(f);
-                          setFornecedorId(f.id);
-                          setTermoBuscaForn(f.nome_fantasia || f.razao_social);
-                          setFornecedoresSugeridos([]);
-                        }}
-                        className="w-full text-left p-2.5 hover:bg-emerald-50 text-xs font-bold text-gray-800 uppercase flex flex-col"
-                      >
-                        <span>{f.nome_fantasia || f.razao_social}</span>
-                        <span className="text-[9px] text-gray-400 font-mono">CNPJ: {f.cnpj}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* STATUS DA NEGOCIAÇÃO */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase px-1">Status da Negociação *</label>
-                <select
-                  value={statusNegociacao}
-                  onChange={(e) => setStatusNegociacao(e.target.value)}
-                  className="w-full h-10 text-xs bg-gray-50 border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
-                >
-                  {STATUS_OPCOES.map((st) => (
-                    <option key={st} value={st}>{st.toUpperCase()}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* CAMPOS CONDICIONAIS: QUANDO STATUS FOR 'Negociação Finalizada' */}
-              {statusNegociacao === 'Negociação Finalizada' && (
-                <div className="flex flex-col gap-3 bg-emerald-50/50 border border-emerald-200 p-3 rounded-2xl animate-fade-in">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-emerald-800 uppercase px-1">Previsão de Troca (Data) *</label>
-                    <input
-                      type="date"
-                      required
-                      value={previsaoTroca}
-                      onChange={(e) => setPrevisaoTroca(e.target.value)}
-                      className="w-full h-10 text-xs bg-white border border-emerald-300 px-3 rounded-xl font-bold text-gray-800"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-emerald-800 uppercase px-1">Anotações da Negociação</label>
-                    <textarea
-                      rows={3}
-                      placeholder="Ex: Fornecedor confirmou o envio de 10 unidades na próxima quinta-feira..."
-                      value={anotacoes}
-                      onChange={(e) => setAnotacoes(e.target.value)}
-                      className="w-full text-xs bg-white border border-emerald-300 p-3 rounded-xl font-medium text-gray-800 uppercase"
-                    />
-                  </div>
-                </div>
-              )}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Selecione o Fornecedor</label>
+              <select
+                value={fornecedorSelecionadoModal}
+                onChange={(e) => setFornecedorSelecionadoModal(e.target.value)}
+                className="w-full h-11 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+              >
+                <option value="">Selecione...</option>
+                {fornecedores.map((f) => (
+                  <option key={f.id} value={f.id}>{f.nome_fantasia?.toUpperCase() || f.razao_social?.toUpperCase()}</option>
+                ))}
+              </select>
             </div>
 
-            {/* BOTÕES */}
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
+            <div className="flex gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setItemSelecionado(null)}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold uppercase"
+                onClick={() => setModalAtribuirFornecedor(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase"
               >
                 Cancelar
               </button>
               <button
-                type="submit"
-                disabled={salvando}
-                className="flex-1 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+                type="button"
+                onClick={handleSalvarFornecedor}
+                className="flex-2 py-2.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95"
               >
-                {salvando ? 'Salvando...' : 'Salvar Negociação'}
+                Salvar Fornecedor
               </button>
             </div>
-          </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: NEGOCIAÇÃO FEITA (N) */}
+      {modalNegociacao && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 animate-fadeIn">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <div>
+                <span className="text-[10px] font-black uppercase text-emerald-700">Status Negociado (N)</span>
+                <h3 className="text-sm font-black text-slate-800 uppercase">{modalNegociacao.fornecedorNome}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalNegociacao(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                Descreva como foi a negociação (ex: Bonificação, troca física, abatimento em duplicata) *
+              </label>
+              <textarea
+                rows={3}
+                required
+                value={textoNegociacao}
+                onChange={(e) => setTextoNegociacao(e.target.value)}
+                placeholder="Detalhes acordados com o fornecedor..."
+                className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 resize-none outline-none focus:bg-white focus:border-[#09797a]"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalNegociacao(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={salvandoNegociacao || !textoNegociacao.trim()}
+                onClick={handleSalvarNegociacaoFeita}
+                className="flex-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 disabled:opacity-40"
+              >
+                {salvandoNegociacao ? 'Salvando...' : 'Salvar Negociação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: CONFIRMAR RECEBIMENTO (JOINHA) */}
+      {modalConfirmarRecebimento && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 animate-fadeIn max-h-[90vh]">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <div>
+                <span className="text-[10px] font-black uppercase text-[#09797a]">Confirmação de Recebimento</span>
+                <h3 className="text-sm font-black text-slate-800 uppercase">{modalConfirmarRecebimento.fornecedorNome}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalConfirmarRecebimento(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs font-bold text-slate-600">
+              Confirma o recebimento dos itens abaixo pelo fornecedor?
+            </p>
+
+            <div className="flex-1 overflow-y-auto space-y-2 max-h-48 border border-slate-200 p-2 rounded-xl bg-slate-50">
+              {modalConfirmarRecebimento.itens.map((it, idx) => (
+                <div key={idx} className="p-2 bg-white border border-slate-200 rounded-lg flex justify-between items-center text-xs font-bold">
+                  <span className="uppercase text-slate-800">{it.descricao_produto}</span>
+                  <span className="font-mono text-emerald-800">{it.quantidade} {it.unidade}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalConfirmarRecebimento(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={salvandoRecebimento}
+                onClick={handleConfirmarRecebimentoFinal}
+                className="flex-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 disabled:opacity-40"
+              >
+                {salvandoRecebimento ? 'Confirmando...' : 'Sim, Confirmar Recebimento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: VER LISTA / ITENS DO GRUPO */}
+      {modalVerItensGrupo && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 border border-slate-100 max-h-[85vh] animate-fadeIn">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-black text-slate-800 uppercase">{modalVerItensGrupo.titulo}</h3>
+              <button
+                type="button"
+                onClick={() => setModalVerItensGrupo(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {modalVerItensGrupo.itens.map((it, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center text-xs font-bold">
+                  <div>
+                    <span className="text-[9px] font-mono text-slate-400 font-bold">Cód: {it.codprod}</span>
+                    <h4 className="text-xs font-black text-slate-800 uppercase mt-0.5">{it.descricao_produto}</h4>
+                  </div>
+                  <div className="text-right font-mono text-slate-800 text-sm">
+                    {it.quantidade} {it.unidade}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setModalVerItensGrupo(null)}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       )}
 
