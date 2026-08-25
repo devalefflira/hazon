@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { notaFaltaService } from './services/notaFaltaService';
 import { gerarPdfNotaFalta } from './utils/gerarPdfNotaFalta';
+import { gerarPdfNotaFaltaAgrupada } from './utils/gerarPdfNotaFaltaAgrupada';
 
 interface NotaFaltaProps {
   onVoltarParaHome?: () => void;
@@ -31,10 +32,14 @@ const UNIDADES_OPCOES = ['UN', 'CX', 'FD', 'SC', 'PC'];
 
 export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: NotaFaltaProps) {
   const idUsuarioFinal = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+  const usuarioLogadoNome = usuarioLogado?.nome || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.nome || 'Áleff Lira';
 
   const [notas, setNotas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [abaPipeline, setAbaPipeline] = useState<PipelineTab>('SALVAS');
+
+  // Seleção múltipla de notas para emissão agrupada
+  const [notasSelecionadasIds, setNotasSelecionadasIds] = useState<string[]>([]);
 
   // Filtros
   const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
@@ -43,7 +48,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
   const [areaFiltro, setAreaFiltro] = useState('TODAS');
   const [localFiltro, setLocalFiltro] = useState('TODOS');
 
-  // Fluxo de Criação
+  // Fluxo de Criação Original em 2 Etapas
   const [passoCriacao, setPassoCriacao] = useState<'FECHADO' | 'MODAL_LOCAL' | 'FORM_ITENS'>('FECHADO');
   const [areaEscolhida, setAreaEscolhida] = useState<string>(AREAS_DISPONIVEIS[0]);
   const [localEscolhido, setLocalEscolhido] = useState<string>('Geral');
@@ -83,7 +88,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
     carregarDados();
   }, []);
 
-  // Busca Inteligente
+  // Busca Inteligente de Produtos
   useEffect(() => {
     if (!termoBusca.trim() || produtoSelecionado) {
       setProdutosEncontrados([]);
@@ -101,7 +106,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
     return () => clearTimeout(timer);
   }, [termoBusca, produtoSelecionado]);
 
-  // Lista dinâmica de locais
+  // Lista dinâmica de locais conforme a área
   const listaLocaisAtuais = useMemo(() => {
     if (areaEscolhida === 'Fundo de Loja') return LOCAIS_FUNDO_LOJA;
     return LOCAIS_FRENTE_DEPOSITO;
@@ -111,7 +116,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
     setLocalEscolhido('Geral');
   }, [areaEscolhida]);
 
-  // Agrupamento por código
+  // Agrupamento por código de nota
   const notasAgrupadas = useMemo(() => {
     const grupos: Record<string, any> = {};
 
@@ -155,6 +160,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
 
   useEffect(() => {
     setPaginaAtual(1);
+    setNotasSelecionadasIds([]);
   }, [dataInicio, dataFim, areaFiltro, localFiltro, abaPipeline, itensPorPagina]);
 
   const totalPaginas = Math.ceil(notasFiltradas.length / itensPorPagina) || 1;
@@ -166,6 +172,36 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
     const partes = dataStr.split('T')[0].split('-');
     if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
     return dataStr;
+  };
+
+  // Funções de Seleção Múltipla
+  const toggleSelecionarNota = (codigoCustomizado: string) => {
+    setNotasSelecionadasIds((prev) =>
+      prev.includes(codigoCustomizado)
+        ? prev.filter((id) => id !== codigoCustomizado)
+        : [...prev, codigoCustomizado]
+    );
+  };
+
+  const toggleSelecionarTodas = () => {
+    if (notasSelecionadasIds.length === notasPaginadas.length) {
+      setNotasSelecionadasIds([]);
+    } else {
+      setNotasSelecionadasIds(notasPaginadas.map((n) => n.codigo_customizado));
+    }
+  };
+
+  const handleGerarNotaAgrupada = () => {
+    const notasParaEmitir = notasAgrupadas.filter((n) =>
+      notasSelecionadasIds.includes(n.codigo_customizado)
+    );
+
+    if (notasParaEmitir.length === 0) {
+      alert('Selecione ao menos uma nota de falta.');
+      return;
+    }
+
+    gerarPdfNotaFaltaAgrupada(notasParaEmitir, usuarioLogadoNome);
   };
 
   const handleAdicionarItemForm = () => {
@@ -185,6 +221,8 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
         codprod: produtoSelecionado.codprod,
         descricao: produtoSelecionado.descricao,
         custoreal: Number(produtoSelecionado.custoreal || 0),
+        pvenda: Number(produtoSelecionado.pvenda || 0),
+        codbarra: produtoSelecionado.codbarra || '-',
         tipo_motivo: tipoMotivo,
         quantidade_restante: tipoMotivo === 'Estoque Zero' ? 0 : Number(qtdRestante || 1),
         unidade_restante: tipoMotivo === 'Estoque Zero' ? 'UN' : unidadeRestante
@@ -363,7 +401,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
             </button>
           </div>
 
-          {/* Listagem Prévia com Último Custo */}
+          {/* Listagem Prévia dos Itens */}
           <div className="flex-1 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-3 bg-slate-50/50">
             <span className="text-[10px] font-black uppercase text-slate-400 block px-1">
               Itens Inseridos ({itensCriacao.length})
@@ -535,7 +573,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
           </div>
 
           {filtrosExpandidos && (
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-200 animate-fadeIn">
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
                 <input
@@ -563,7 +601,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                   onChange={(e) => setAreaFiltro(e.target.value)}
                   className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase"
                 >
-                  <option value="TODAS">TODAS</option>
+                  <option value="TODAS">TODAS AS ÁREAS</option>
                   {AREAS_DISPONIVEIS.map((a) => (
                     <option key={a} value={a}>{a.toUpperCase()}</option>
                   ))}
@@ -577,7 +615,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                   onChange={(e) => setLocalFiltro(e.target.value)}
                   className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase"
                 >
-                  <option value="TODOS">TODOS</option>
+                  <option value="TODOS">TODOS OS LOCAIS</option>
                   {Array.from(new Set([...LOCAIS_FRENTE_DEPOSITO, ...LOCAIS_FUNDO_LOJA])).map((l) => (
                     <option key={l} value={l}>{l.toUpperCase()}</option>
                   ))}
@@ -587,24 +625,50 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
           )}
         </div>
 
-        {/* CONTADOR E PAGINAÇÃO */}
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold text-slate-500">
-            Total: <strong>{notasFiltradas.length}</strong> notas registradas
-          </span>
+        {/* BARRA DE CONTROLE: CONTAGEM, SELEÇÃO E BOTÃO AGRUPADO */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500">
+              Total: <strong>{notasFiltradas.length}</strong> notas registradas
+            </span>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
-            <select
-              value={itensPorPagina}
-              onChange={(e) => setItensPorPagina(Number(e.target.value))}
-              className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-3 py-1.5 outline-none focus:border-[#09797a] shadow-sm"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+            {notasPaginadas.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleSelecionarTodas}
+                className="text-[10px] font-bold uppercase text-[#09797a] hover:underline"
+              >
+                {notasSelecionadasIds.length === notasPaginadas.length ? 'Desmarcar Página' : 'Selecionar Página'}
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* BOTÃO NOTA DE FALTA AGRUPADA */}
+            {notasSelecionadasIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleGerarNotaAgrupada}
+                className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 transition-all flex items-center gap-1.5 animate-fadeIn"
+              >
+                <span>📄</span>
+                <span>Nota de Falta Agrupada ({notasSelecionadasIds.length})</span>
+              </button>
+            )}
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Exibir por pág:</span>
+              <select
+                value={itensPorPagina}
+                onChange={(e) => setItensPorPagina(Number(e.target.value))}
+                className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-2.5 py-1.5 outline-none"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -617,106 +681,127 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               Nenhuma Nota de Falta nesta visualização.
             </div>
           ) : (
-            notasPaginadas.map((grupo: any) => (
-              <div
-                key={grupo.codigo_customizado}
-                className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[9px] font-mono font-black text-[#09797a] bg-teal-50 px-2 py-0.5 rounded">
-                      {grupo.codigo_customizado}
-                    </span>
-                    <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                      ÁREA: {grupo.area}
-                    </span>
-                    <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                      LOCAL: {grupo.local}
-                    </span>
-                    <span
-                      className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
-                        grupo.status === 'Finalizada'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : grupo.status === 'Em Andamento'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-teal-50 text-[#09797a]'
-                      }`}
-                    >
-                      {grupo.status}
-                    </span>
+            notasPaginadas.map((grupo: any) => {
+              const selecionada = notasSelecionadasIds.includes(grupo.codigo_customizado);
+
+              return (
+                <div
+                  key={grupo.codigo_customizado}
+                  className={`p-4 bg-white border rounded-2xl shadow-sm flex flex-col gap-3 transition-all ${
+                    selecionada ? 'border-[#09797a] bg-teal-50/20 ring-1 ring-[#09797a]' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      {/* CHECKBOX DE SELEÇÃO */}
+                      <input
+                        type="checkbox"
+                        checked={selecionada}
+                        onChange={() => toggleSelecionarNota(grupo.codigo_customizado)}
+                        className="w-5 h-5 mt-0.5 rounded border-slate-300 text-[#09797a] focus:ring-[#09797a] cursor-pointer"
+                      />
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] font-mono font-black text-[#09797a] bg-teal-50 px-2 py-0.5 rounded">
+                            {grupo.codigo_customizado}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                            ÁREA: {grupo.area}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                            LOCAL: {grupo.local}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
+                              grupo.status === 'Finalizada'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : grupo.status === 'Em Andamento'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-teal-50 text-[#09797a]'
+                            }`}
+                          >
+                            {grupo.status}
+                          </span>
+                        </div>
+
+                        <h3 className="font-black text-sm text-slate-800 uppercase mt-1 leading-snug">
+                          {grupo.itens?.length || 0} PRODUTO(S) APONTADO(S) EM RUPTURA
+                        </h3>
+
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                          Resp: <strong className="text-slate-600">{grupo.usuario_nome}</strong>, em{' '}
+                          <strong>{formatarDataSegura(grupo.data_registro)}</strong>, às{' '}
+                          <strong>{grupo.hora_registro?.slice(0, 5) || '00:00'}</strong>
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
-                    {grupo.itens?.length || 0} PRODUTO(S) APONTADO(S) EM RUPTURA
-                  </h3>
+                  {/* AÇÕES INFERIORES DO CARD */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    {grupo.status === 'Em Andamento' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAreaEscolhida(grupo.area);
+                          setLocalEscolhido(grupo.local);
+                          setCodigoNotaEmEdicao(grupo.codigo_customizado);
+                          setItensCriacao(
+                            (grupo.itens || []).map((it: any) => ({
+                              produto_id: it.produto_id,
+                              codprod: it.produtos?.codprod,
+                              descricao: it.produtos?.descricao,
+                              custoreal: Number(it.produtos?.custoreal || 0),
+                              pvenda: Number(it.produtos?.pvenda || 0),
+                              codbarra: it.produtos?.codbarra || '-',
+                              tipo_motivo: it.quantidade_restante === 0 ? 'Estoque Zero' : 'Estoque Baixo',
+                              quantidade_restante: it.quantidade_restante,
+                              unidade_restante: it.unidade_restante || 'UN'
+                            }))
+                          );
+                          setPassoCriacao('FORM_ITENS');
+                        }}
+                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all"
+                      >
+                        ▶ Retomar
+                      </button>
+                    )}
 
-                  <div className="text-[10px] text-slate-400 font-medium mt-1">
-                    Resp: <strong className="text-slate-600">{grupo.usuario_nome}</strong>, em{' '}
-                    <strong>{formatarDataSegura(grupo.data_registro)}</strong>, às{' '}
-                    <strong>{grupo.hora_registro?.slice(0, 5) || '00:00'}</strong>
+                    <button
+                      type="button"
+                      onClick={() => setNotaParaVerItens(grupo)}
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-all"
+                    >
+                      Ver Itens
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => gerarPdfNotaFalta(grupo, grupo.itens || [])}
+                      className="px-3.5 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all"
+                    >
+                      📄 PDF
+                    </button>
+
+                    {(grupo.status === 'Salva' || grupo.status === 'Pendente') && (
+                      <button
+                        type="button"
+                        onClick={() => setNotaParaFinalizar(grupo)}
+                        className="w-8 h-8 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl flex items-center justify-center text-sm transition-all active:scale-95"
+                        title="Finalizar Ciclo"
+                      >
+                        👍
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0">
-                  {grupo.status === 'Em Andamento' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAreaEscolhida(grupo.area);
-                        setLocalEscolhido(grupo.local);
-                        setCodigoNotaEmEdicao(grupo.codigo_customizado);
-                        setItensCriacao(
-                          (grupo.itens || []).map((it: any) => ({
-                            produto_id: it.produto_id,
-                            codprod: it.produtos?.codprod,
-                            descricao: it.produtos?.descricao,
-                            custoreal: Number(it.produtos?.custoreal || 0),
-                            tipo_motivo: it.quantidade_restante === 0 ? 'Estoque Zero' : 'Estoque Baixo',
-                            quantidade_restante: it.quantidade_restante,
-                            unidade_restante: it.unidade_restante || 'UN'
-                          }))
-                        );
-                        setPassoCriacao('FORM_ITENS');
-                      }}
-                      className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all"
-                    >
-                      ▶ Retomar
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setNotaParaVerItens(grupo)}
-                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-all"
-                  >
-                    Ver Itens
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => gerarPdfNotaFalta(grupo, grupo.itens || [])}
-                    className="px-3.5 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all"
-                  >
-                    📄 PDF
-                  </button>
-
-                  {(grupo.status === 'Salva' || grupo.status === 'Pendente') && (
-                    <button
-                      type="button"
-                      onClick={() => setNotaParaFinalizar(grupo)}
-                      className="w-9 h-9 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl flex items-center justify-center text-base shadow-sm transition-all active:scale-95"
-                      title="Finalizar Ciclo (Itens Pedidos)"
-                    >
-                      👍
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
-        {/* CONTROLES DE PAGINAÇÃO */}
+        {/* PAGINAÇÃO */}
         {notasFiltradas.length > itensPorPagina && (
           <div className="flex items-center justify-between border-t border-slate-100 pt-3 flex-shrink-0">
             <span className="text-xs font-bold text-slate-500">
@@ -732,25 +817,6 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               >
                 ← Anterior
               </button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
-                  .filter((p) => p === 1 || p === totalPaginas || Math.abs(p - paginaAtual) <= 1)
-                  .map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPaginaAtual(p)}
-                      className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${
-                        paginaAtual === p
-                          ? 'bg-[#09797a] text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-              </div>
 
               <button
                 type="button"
@@ -868,7 +934,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
           <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[85vh] animate-fadeIn">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
               <div>
-                <span className="text-[10px] font-mono font-black text-[#09797a] bg-teal-50 px-2 py-0.5 rounded">
+                <span className="text-[9px] font-mono font-black text-[#09797a] bg-teal-50 px-2 py-0.5 rounded">
                   {notaParaVerItens.codigo_customizado}
                 </span>
                 <h3 className="text-sm font-black text-slate-800 uppercase mt-0.5">
