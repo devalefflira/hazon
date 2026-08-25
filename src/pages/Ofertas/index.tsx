@@ -20,7 +20,6 @@ type AbaPrincipalOfertas = 'SUGERIDAS' | 'REVISAR_APROVAR' | 'PRECIFICAR' | 'CON
 
 export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProps) {
   const [ofertas, setOfertas] = useState<any[]>([]);
-  const [sugestoesPesquisa, setSugestoesPesquisa] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // 4 Fases Principais
@@ -67,12 +66,8 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   const carregarOfertas = async () => {
     try {
       setLoading(true);
-      const [dados, itensPesquisa] = await Promise.all([
-        ofertasService.listarOfertas(),
-        ofertasService.buscarSugestoesPesquisaPreco?.() || []
-      ]);
+      const dados = await ofertasService.listarOfertas();
       setOfertas(dados);
-      setSugestoesPesquisa(itensPesquisa || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -268,7 +263,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
 
   const handleAbrirPrecificacao = (oferta: any) => {
     setOfertaEmPrecificacao(oferta);
-    setPassoPrecificacao(1); // Sempre inicia no Passo 1 (Datas e Tipo de Oferta)
+    setPassoPrecificacao(1);
     setDataInicio(oferta.data_inicio || '');
     setDataFim(oferta.data_fim || '');
     setTipoOferta(oferta.tipo_oferta || TIPOS_OFERTA_OPCOES[0]);
@@ -320,22 +315,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
     } finally {
       setSalvando(false);
     }
-  };
-
-  const handleIncluirItemPesquisaNaOferta = (item: any) => {
-    setCodigoEdicaoAtual(null);
-    setItensEmEdicao([
-      {
-        temp_id: Math.random().toString(),
-        produto_id: item.produto_id,
-        codprod: item.codprod,
-        descricao: item.descricao,
-        preco_custo_real: item.preco_custo,
-        preco_venda_tabela: item.preco_venda_atual,
-        preco_oferta: item.preco_sugerido_oferta
-      }
-    ]);
-    setModalNovaOferta(true);
   };
 
   const ofertasSugeridas = ofertas.filter((o) => o.status === 'Lista Sugerida' || o.status === 'Em Andamento');
@@ -451,65 +430,37 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
             <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando ofertas...</div>
           ) : (
             <>
-              {/* ABA 1: LISTA SUGERIDA */}
+              {/* ABA 1: LISTA SUGERIDA (CARDS AGRUPADOS COM TAG DE ORIGEM) */}
               {abaPrincipal === 'SUGERIDAS' && (
-                <div className="flex flex-col gap-3">
-                  {/* Itens sugeridos vindos de Pesquisa de Preços */}
-                  {sugestoesPesquisa.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider px-1">
-                        ⚡ Oportunidades Concorrenciais (Pesquisa de Preços)
-                      </span>
-                      {sugestoesPesquisa.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3.5 bg-amber-50/40 border border-amber-200 rounded-2xl flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 shadow-xs"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[9px] font-mono font-black text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded">
-                                ORIGEM: PESQUISA ({item.codigo_pesquisa})
-                              </span>
-                              <span className="text-[10px] text-slate-500 font-bold">
-                                vs {item.concorrente_nome}
-                              </span>
-                            </div>
+                ofertasSugeridas.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+                    Nenhuma oferta na Lista Sugerida. Clique em "+ Nova Oferta" para começar.
+                  </div>
+                ) : (
+                  ofertasSugeridas.map((ofe) => {
+                    const isOrigemPesquisa =
+                      ofe.codigo_customizado?.includes('PESQ') ||
+                      ofe.tipo_oferta_customizado?.includes('Pesquisa');
 
-                            <h4 className="font-black text-xs text-slate-800 uppercase mt-1 leading-snug">
-                              {item.codprod} - {item.descricao}
-                            </h4>
-
-                            <div className="text-[10px] text-slate-500 font-mono mt-1 flex gap-3 flex-wrap">
-                              <span>Preço Atual: <strong className="line-through text-red-600">R$ {item.preco_venda_atual.toFixed(2)}</strong></span>
-                              <span>Concorrente: <strong className="text-slate-800">R$ {item.preco_concorrente.toFixed(2)}</strong></span>
-                              <span>Oferta Sugerida: <strong className="text-emerald-700 font-bold">R$ {item.preco_sugerido_oferta.toFixed(2)}</strong></span>
-                            </div>
+                    return (
+                      <div
+                        key={ofe.id}
+                        className={`p-3.5 bg-gray-50 border rounded-2xl flex justify-between items-center transition-all ${
+                          isOrigemPesquisa ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                              {ofe.codigo_customizado}
+                            </span>
+                            {isOrigemPesquisa && (
+                              <span className="text-[9px] font-bold text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded uppercase">
+                                ⚡ ORIGEM: PESQUISA DE PREÇOS
+                              </span>
+                            )}
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleIncluirItemPesquisaNaOferta(item)}
-                            className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-xs transition-all active:scale-95"
-                          >
-                            + Incluir na Oferta
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Campanhas salvas na Lista Sugerida */}
-                  {ofertasSugeridas.length === 0 && sugestoesPesquisa.length === 0 ? (
-                    <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-                      Nenhuma oferta na Lista Sugerida. Clique em "+ Nova Oferta" para começar.
-                    </div>
-                  ) : (
-                    ofertasSugeridas.map((ofe) => (
-                      <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                        <div>
-                          <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                            {ofe.codigo_customizado}
-                          </span>
                           <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
                             Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
                           </h4>
@@ -517,6 +468,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                             {ofe.data_registro} às {ofe.hora_registro}
                           </p>
                         </div>
+
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -540,9 +492,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           </button>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
+                    );
+                  })
+                )
               )}
 
               {/* ABA 2: REVISAR / APROVAR */}
@@ -799,11 +751,11 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       </div>
 
-      {/* MODAL: NOVA OFERTA / EDIÇÃO DE ITENS (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
+      {/* MODAL: NOVA OFERTA / EDIÇÃO DE ITENS */}
       {modalNovaOferta && (
         <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
           <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-2xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
-
+            
             {/* Header Sticky */}
             <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <h3 className="text-[#09797a] font-black text-base uppercase">
@@ -933,11 +885,11 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* MODAL: REVISAR / APROVAR (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
+      {/* MODAL: REVISAR / APROVAR */}
       {ofertaEmRevisao && (
         <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
           <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-2xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
-
+            
             {/* Header Sticky */}
             <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <div>
@@ -1050,11 +1002,11 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* FLUXO DE PRECIFICAÇÃO EM 2 PASSOS (JANELA CHEIA CORRIGIDA PARA MOBILE) */}
+      {/* FLUXO DE PRECIFICAÇÃO EM 2 PASSOS */}
       {ofertaEmPrecificacao && (
         <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-hidden">
           <div className="w-full h-full sm:h-auto sm:max-h-[94vh] sm:max-w-3xl bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100 h-[100dvh]">
-
+            
             {/* Header Fixo */}
             <div className="bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0 z-10">
               <div>
@@ -1140,7 +1092,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               </div>
             )}
 
-            {/* PASSO 2: TABELA COM ROLAGEM INDEPENDENTE FLUIDA */}
+            {/* PASSO 2: TABELA DE PRECIFICAÇÃO */}
             {passoPrecificacao === 2 && (
               <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 bg-white p-2 sm:p-4">
                 <div className="w-full border border-gray-100 rounded-2xl overflow-hidden shadow-sm pb-24">
@@ -1253,11 +1205,11 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         </div>
       )}
 
-      {/* MODAL: VER DETALHES DE OFERTA (JANELA CHEIA NO MOBILE / MODAL DESKTOP) */}
+      {/* MODAL: VER DETALHES DE OFERTA */}
       {ofertaVerDetalhes && (
         <div className="fixed inset-0 z-50 bg-white sm:bg-black/70 sm:flex sm:justify-center sm:items-center sm:p-4 select-none overflow-y-auto">
           <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-white sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-gray-100">
-
+            
             {/* Header Sticky */}
             <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 sm:px-6 flex justify-between items-center flex-shrink-0">
               <h3 className="text-[#09797a] font-black text-base uppercase">
