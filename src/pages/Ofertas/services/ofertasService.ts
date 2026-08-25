@@ -115,5 +115,59 @@ export const ofertasService = {
 
     if (error) throw error;
     return data || [];
+  },
+
+  // Buscar itens perdedores de Pesquisas de Preço para a Lista Sugerida
+  async buscarSugestoesPesquisaPreco(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('pesquisa_precos_itens')
+      .select(`
+        id,
+        produto_id,
+        preco_custo,
+        preco_venda,
+        preco_concorrente,
+        pesquisa_precos_mestre!inner (
+          id,
+          codigo_customizado,
+          data_registro,
+          enviado_para_ofertas,
+          pesquisa_precos_concorrentes (
+            nome_fantasia
+          )
+        ),
+        produtos (
+          id,
+          codprod,
+          descricao,
+          unidade,
+          custoreal,
+          pvenda
+        )
+      `)
+      .filter('preco_concorrente', 'gt', 0);
+
+    if (error) {
+      console.error('Erro ao buscar sugestões de pesquisa:', error);
+      return [];
+    }
+
+    // Filtra apenas onde nosso preço de venda é maior que o do concorrente (perdedores)
+    return (data || [])
+      .filter((item: any) => Number(item.preco_venda) > Number(item.preco_concorrente))
+      .map((item: any) => ({
+        id: item.id,
+        produto_id: item.produto_id,
+        codprod: item.produtos?.codprod,
+        descricao: item.produtos?.descricao,
+        unidade: item.produtos?.unidade || 'UN',
+        preco_custo: Number(item.preco_custo || item.produtos?.custoreal || 0),
+        preco_venda_atual: Number(item.preco_venda || item.produtos?.pvenda || 0),
+        preco_concorrente: Number(item.preco_concorrente || 0),
+        preco_sugerido_oferta: Number(item.preco_concorrente || 0),
+        origem: 'Pesquisa de Preços',
+        concorrente_nome: item.pesquisa_precos_mestre?.pesquisa_precos_concorrentes?.nome_fantasia || 'Concorrente',
+        codigo_pesquisa: item.pesquisa_precos_mestre?.codigo_customizado
+      }));
   }
 };
