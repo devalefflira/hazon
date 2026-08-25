@@ -14,6 +14,7 @@ interface HomeProps {
   onNavegarParaAvarias?: () => void;
   onNavegarParaConsumoLoja?: () => void;
   onNavegarParaVencimentos?: () => void;
+  onNavegarParaPesquisaPrecos?: () => void;
   [key: string]: any;
 }
 
@@ -45,7 +46,8 @@ export default function Home(props: HomeProps) {
     onNavegarParaNotaFalta,
     onNavegarParaAvarias,
     onNavegarParaConsumoLoja,
-    onNavegarParaVencimentos
+    onNavegarParaVencimentos,
+    onNavegarParaPesquisaPrecos
   } = props;
 
   // Estados de Interface
@@ -82,12 +84,12 @@ export default function Home(props: HomeProps) {
 
   const { nome: nomeUsuario, setor: setorUsuario } = obterNomeESetor();
 
-  // Busca e cálculo exato das métricas reais
+  // Busca e cálculo das métricas reais
   const carregarMetricas = async () => {
     try {
       setCarregandoMetricas(true);
 
-      // (A) Avarias: Itens distintos (Set de produto_id) + Valor Total em R$
+      // 1. Avarias: Itens distintos + Valor Total em R$
       const { data: avariasData } = await supabase
         .from('avarias')
         .select('produto_id, quantidade, preco_custo_na_perda, destinacao');
@@ -102,7 +104,7 @@ export default function Home(props: HomeProps) {
         valorTotalAvarias += qtd * preco;
       });
 
-      // (B) Próximo do Vencimento: Quantidade de itens DISTINTOS a vencer em <= 30 dias
+      // 2. Próximo do Vencimento: Quantidade de itens distintos <= 30 dias
       const hoje = new Date();
       const limite30Dias = new Date();
       limite30Dias.setDate(hoje.getDate() + 30);
@@ -118,13 +120,13 @@ export default function Home(props: HomeProps) {
         if (item.produto_id) produtosVencendoDistintos.add(item.produto_id);
       });
 
-      // (C) Itens para Troca: Total de pendentes
+      // 3. Itens para Troca: Total de pendentes
       const { count: trocasCount } = await supabase
         .from('trocas')
         .select('id', { count: 'exact', head: true })
         .eq('troca_realizada', false);
 
-      // (D) Consumo Loja: Valor Total acumulado
+      // 4. Consumo Loja: Valor Total acumulado
       const { data: consumoMestre } = await supabase
         .from('consumo_loja_mestre')
         .select('valor_total');
@@ -185,46 +187,47 @@ export default function Home(props: HomeProps) {
       titulo: 'Indicadores',
       iconeSvg: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z',
       modulos: [
-        { id: 'dashboard', nome: 'Dashboard', descricao: 'Indicadores e métricas gerenciais', tela: 'dashboard', callbackProp: 'onNavegarParaDashboard' },
-        { id: 'relatorios', nome: 'Relatórios', descricao: 'Emissão e auditoria em PDF', tela: 'relatorios', callbackProp: 'onNavegarParaRelatorios' },
-        { id: 'tarefas', nome: 'Tarefas', descricao: 'Gestão de atividades operacionais', tela: 'tarefas', callbackProp: 'onNavegarParaTarefas' }
+        { id: 'dashboard', nome: 'DASHBOARD', descricao: 'Indicadores e métricas gerenciais', tela: 'dashboard', callbackProp: 'onNavegarParaDashboard' },
+        { id: 'relatorios', nome: 'RELATÓRIOS', descricao: 'Emissão e auditoria em PDF', tela: 'relatorios', callbackProp: 'onNavegarParaRelatorios' },
+        { id: 'tarefas', nome: 'TAREFAS', descricao: 'Gestão de atividades operacionais', tela: 'tarefas', callbackProp: 'onNavegarParaTarefas' }
       ]
     },
     comercial: {
       titulo: 'Comercial',
       iconeSvg: 'M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z',
       modulos: [
-        { id: 'pedidos', nome: 'Pedidos', descricao: 'Formalização e ordens de compra', tela: 'pedidos', callbackProp: 'onNavegarParaPedidos' },
-        { id: 'orcamentos', nome: 'Orçamentos', descricao: 'Propostas comerciais e vendas', tela: 'orcamentos', callbackProp: 'onNavegarParaOrcamentos' },
-        { id: 'cotacoes', nome: 'Cotações', descricao: 'Tomada de preço com fornecedores', tela: 'cotacoes', callbackProp: 'onNavegarParaCotacoes' },
-        { id: 'ofertas', nome: 'Ofertas', descricao: 'Campanhas, encartes e placas', tela: 'ofertas', callbackProp: 'onNavegarParaOfertas' },
-        { id: 'clientes', nome: 'Clientes', descricao: 'Cadastro de compradores', tela: 'clientes', callbackProp: 'onNavegarParaClientes' },
-        { id: 'vendedores', nome: 'Vendedores', descricao: 'Representantes e atendimento', tela: 'vendedores', callbackProp: 'onNavegarParaVendedores' }
+        { id: 'pedidos', nome: 'PEDIDOS', descricao: 'Formalização e ordens de compra', tela: 'pedidos', callbackProp: 'onNavegarParaPedidos' },
+        { id: 'orcamentos', nome: 'ORÇAMENTOS', descricao: 'Propostas comerciais e vendas', tela: 'orcamentos', callbackProp: 'onNavegarParaOrcamentos' },
+        { id: 'cotacoes', nome: 'COTAÇÕES', descricao: 'Tomada de preço com fornecedores', tela: 'cotacoes', callbackProp: 'onNavegarParaCotacoes' },
+        { id: 'pesquisa-precos', nome: 'PESQUISA DE PREÇOS', descricao: 'Inteligência e análise concorrencial', tela: 'pesquisa-precos', callbackProp: 'onNavegarParaPesquisaPrecos' },
+        { id: 'ofertas', nome: 'OFERTAS', descricao: 'Campanhas, encartes e placas', tela: 'ofertas', callbackProp: 'onNavegarParaOfertas' },
+        { id: 'clientes', nome: 'CLIENTES', descricao: 'Cadastro de compradores', tela: 'clientes', callbackProp: 'onNavegarParaClientes' },
+        { id: 'vendedores', nome: 'VENDEDORES', descricao: 'Representantes e atendimento', tela: 'vendedores', callbackProp: 'onNavegarParaVendedores' }
       ]
     },
     estoque: {
       titulo: 'Estoque',
       iconeSvg: 'M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9',
       modulos: [
-        { id: 'produtos', nome: 'Produtos', descricao: 'Catálogo de códigos e custos', tela: 'produtos', callbackProp: 'onNavegarParaProdutos' },
-        { id: 'inventario', nome: 'Inventário', descricao: 'Auditoria e contagem de itens', tela: 'inventario', callbackProp: 'onNavegarParaInventario' },
-        { id: 'conf-cega', nome: 'Conf. Cega', descricao: 'Recebimento via XML de NF-e', tela: 'conf-cega', callbackProp: 'onNavegarParaConfCega' },
-        { id: 'nota-falta', nome: 'Nota de Falta', descricao: 'Controle de ruptura de estoque', tela: 'nota-falta', callbackProp: 'onNavegarParaNotaFalta' },
-        { id: 'avarias', nome: 'Avarias', descricao: 'Registro de quebras e perdas', tela: 'avarias', callbackProp: 'onNavegarParaAvarias' },
-        { id: 'consumo-loja', nome: 'Consumo Loja', descricao: 'Controle de materiais internos', tela: 'consumo-loja', callbackProp: 'onNavegarParaConsumoLoja' },
-        { id: 'trocas', nome: 'Trocas', descricao: 'Devoluções e reposições', tela: 'trocas', callbackProp: 'onNavegarParaTrocas' },
-        { id: 'vencimentos', nome: 'Vencimentos', descricao: 'Controle de validade e lotes', tela: 'vencimentos', callbackProp: 'onNavegarParaVencimentos' },
-        { id: 'temperatura', nome: 'Temperatura', descricao: 'Aferição de câmaras e balcões', tela: 'temperatura', callbackProp: 'onNavegarParaTemperatura' }
+        { id: 'produtos', nome: 'PRODUTOS', descricao: 'Catálogo de códigos e custos', tela: 'produtos', callbackProp: 'onNavegarParaProdutos' },
+        { id: 'inventario', nome: 'INVENTÁRIO', descricao: 'Auditoria e contagem de itens', tela: 'inventario', callbackProp: 'onNavegarParaInventario' },
+        { id: 'conf-cega', nome: 'CONF. CEGA', descricao: 'Recebimento via XML de NF-e', tela: 'conf-cega', callbackProp: 'onNavegarParaConfCega' },
+        { id: 'nota-falta', nome: 'NOTA DE FALTA', descricao: 'Controle de ruptura de estoque', tela: 'nota-falta', callbackProp: 'onNavegarParaNotaFalta' },
+        { id: 'avarias', nome: 'AVARIAS', descricao: 'Registro de quebras e perdas', tela: 'avarias', callbackProp: 'onNavegarParaAvarias' },
+        { id: 'consumo-loja', nome: 'CONSUMO LOJA', descricao: 'Controle de materiais internos', tela: 'consumo-loja', callbackProp: 'onNavegarParaConsumoLoja' },
+        { id: 'trocas', nome: 'TROCAS', descricao: 'Devoluções e reposições', tela: 'trocas', callbackProp: 'onNavegarParaTrocas' },
+        { id: 'vencimentos', nome: 'VENCIMENTOS', descricao: 'Controle de validade e lotes', tela: 'vencimentos', callbackProp: 'onNavegarParaVencimentos' },
+        { id: 'temperatura', nome: 'TEMPERATURA', descricao: 'Aferição de câmaras e balcões', tela: 'temperatura', callbackProp: 'onNavegarParaTemperatura' }
       ]
     },
     administracao: {
       titulo: 'Administração',
       iconeSvg: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z',
       modulos: [
-        { id: 'usuarios', nome: 'Usuários', descricao: 'Colaboradores e credenciais', tela: 'usuarios', callbackProp: 'onNavegarParaUsuarios' },
-        { id: 'permissoes', nome: 'Permissões', descricao: 'Matriz de acessos por módulo', tela: 'permissoes', callbackProp: 'onNavegarParaPermissoes' },
-        { id: 'fornecedores', nome: 'Fornecedores', descricao: 'Cadastro de parceiros e CNPJs', tela: 'fornecedores', callbackProp: 'onNavegarParaFornecedores' },
-        { id: 'categorias', nome: 'Categorias', descricao: 'Setores, locais e unidades', tela: 'categorias', callbackProp: 'onNavegarParaCategorias' }
+        { id: 'usuarios', nome: 'USUÁRIOS', descricao: 'Colaboradores e credenciais', tela: 'usuarios', callbackProp: 'onNavegarParaUsuarios' },
+        { id: 'permissoes', nome: 'PERMISSÕES', descricao: 'Matriz de acessos por módulo', tela: 'permissoes', callbackProp: 'onNavegarParaPermissoes' },
+        { id: 'fornecedores', nome: 'FORNECEDORES', descricao: 'Cadastro de parceiros e CNPJs', tela: 'fornecedores', callbackProp: 'onNavegarParaFornecedores' },
+        { id: 'categorias', nome: 'CATEGORIAS', descricao: 'Setores, locais e unidades', tela: 'categorias', callbackProp: 'onNavegarParaCategorias' }
       ]
     }
   };
@@ -232,6 +235,29 @@ export default function Home(props: HomeProps) {
   const handleExecutarNavegacao = (mod: SubModuloItem) => {
     setMenuAberto(false);
     setSpeedDialAberto(false);
+
+    // Mapeamento direto das funções desestruturadas
+    if (mod.tela === 'pesquisa-precos' && onNavegarParaPesquisaPrecos) {
+      onNavegarParaPesquisaPrecos();
+      return;
+    }
+    if (mod.tela === 'nota-falta' && onNavegarParaNotaFalta) {
+      onNavegarParaNotaFalta();
+      return;
+    }
+    if (mod.tela === 'avarias' && onNavegarParaAvarias) {
+      onNavegarParaAvarias();
+      return;
+    }
+    if (mod.tela === 'consumo-loja' && onNavegarParaConsumoLoja) {
+      onNavegarParaConsumoLoja();
+      return;
+    }
+    if (mod.tela === 'vencimentos' && onNavegarParaVencimentos) {
+      onNavegarParaVencimentos();
+      return;
+    }
+
     if (mod.callbackProp && typeof props[mod.callbackProp] === 'function') {
       props[mod.callbackProp]();
     } else if (onNavegar) {
@@ -599,7 +625,7 @@ export default function Home(props: HomeProps) {
             {/* Footer do Drawer */}
             <div className="p-4 border-t border-slate-100 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase">
-                Hazon ERP • v2.0
+                Hazon ERP • v2.8.24.2026
               </span>
             </div>
 

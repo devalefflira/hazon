@@ -27,6 +27,7 @@ import Ofertas from './pages/Ofertas';
 import Vencimentos from './pages/Vencimentos';
 import Notificacoes from './pages/Notificacoes';
 import Trocas from './pages/Trocas';
+import PesquisaPrecos from './pages/PesquisaPrecos';
 
 interface UsuarioLogado {
   id: string;
@@ -61,7 +62,8 @@ type TelaAtiva =
   | 'ofertas'
   | 'vencimentos'
   | 'notificacoes'
-  | 'trocas';
+  | 'trocas'
+  | 'pesquisa-precos';
 
 export default function App() {
   // 1. Inicializa o usuário direto do localStorage para não perder sessão no F5
@@ -185,6 +187,18 @@ export default function App() {
     return <Trocas onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
   }
 
+  if (telaAtiva === 'pesquisa-precos') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <PesquisaPrecos
+        onVoltarParaHome={() => mudarTela('home')}
+        usuarioLogado={usuario}
+        usuarioLogadoId={usuario.id}
+        onNavegarParaOfertas={() => mudarTela('ofertas')}
+      />
+    );
+  }
+
   if (telaAtiva === 'notificacoes') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return (
@@ -204,6 +218,7 @@ export default function App() {
         usuarioLogadoId={usuario.id}
         permissoesDoUsuario={permissoesUsuario}
         onLogout={handleLogout}
+        onNavegar={(tela: string) => mudarTela(tela as TelaAtiva)}
         onNavegarParaCategorias={() => mudarTela('categorias')}
         onNavegarParaUsuarios={() => mudarTela('usuarios')}
         onNavegarParaPermissoes={() => mudarTela('permissoes')}
@@ -225,6 +240,7 @@ export default function App() {
         onNavegarParaOfertas={() => mudarTela('ofertas')}
         onNavegarParaVencimentos={() => mudarTela('vencimentos')}
         onNavegarParaTrocas={() => mudarTela('trocas')}
+        onNavegarParaPesquisaPrecos={() => mudarTela('pesquisa-precos')}
         onNavegarParaNotificacoes={() => mudarTela('notificacoes')}
       />
     );
