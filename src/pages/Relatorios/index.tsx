@@ -13,9 +13,11 @@ import { gerarRelatorioTarefas } from "./utils/generators/gerarRelatorioTarefas"
 import { gerarRelatorioConfCega } from "./utils/generators/gerarRelatorioConfCega";
 import { gerarRelatorioTemperaturas } from "./utils/generators/gerarRelatorioTemperaturas";
 import { gerarRelatorioOfertas } from "./utils/generators/gerarRelatorioOfertas";
+import { gerarRelatorioConsumoLoja } from "./utils/generators/gerarRelatorioConsumoLoja";
 
 interface RelatoriosProps {
   onVoltarParaHome?: () => void;
+  usuarioLogado?: any;
 }
 
 interface SubmoduloOption {
@@ -25,6 +27,7 @@ interface SubmoduloOption {
 }
 
 const SUBMODULOS: SubmoduloOption[] = [
+  { id: "consumo_loja", nome: "CONSUMO DA LOJA", icone: "🛒" },
   { id: "vencimentos", nome: "CONTROLE DE VALIDADES", icone: "🛡️" },
   { id: "inventario", nome: "INVENTÁRIO", icone: "📦" },
   { id: "notas_falta", nome: "NOTAS DE FALTA", icone: "⚠️" },
@@ -39,9 +42,11 @@ const SUBMODULOS: SubmoduloOption[] = [
   { id: "ofertas", nome: "OFERTAS", icone: "🏷️" },
 ];
 
-const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
+const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome, usuarioLogado }) => {
+  const usuarioNome = usuarioLogado?.nome || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.nome || 'Usuário';
+
   const hoje = new Date().toISOString().split("T")[0];
-  const [submodulo, setSubmodulo] = useState<string>("vencimentos");
+  const [submodulo, setSubmodulo] = useState<string>("consumo_loja");
   const [dataInicio, setDataInicio] = useState<string>(hoje);
   const [dataFim, setDataFim] = useState<string>(hoje);
   const [carregando, setCarregando] = useState<boolean>(false);
@@ -96,6 +101,15 @@ const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome }) => {
       const dtFimFmt = formatarDataFiltro(dataFim);
 
       switch (submodulo) {
+        case "consumo_loja": {
+          const dados = await relatoriosService.buscarDadosConsumoLoja(dataInicio, dataFim);
+          if (!dados || dados.length === 0) {
+            alert("Nenhum registro de consumo encontrado para o período selecionado.");
+            return;
+          }
+          gerarRelatorioConsumoLoja(dados, dataInicio, dataFim, usuarioNome);
+          break;
+        }
         case "vencimentos": {
           const dados = await relatoriosService.buscarVencimentos(dataInicio, dataFim);
           gerarRelatorioVencimentos(dados, dtInicioFmt, dtFimFmt);
