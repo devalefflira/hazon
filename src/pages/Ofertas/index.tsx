@@ -1,5 +1,5 @@
 // src/pages/Ofertas/index.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ofertasService } from './services/ofertasService';
 import { gerarPdfOferta } from './utils/gerarPdfOferta';
 import { gerarPdfPlacas } from './utils/gerarPdfPlacas';
@@ -28,6 +28,13 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
 
   // Sub-abas de Gerar Placas
   const [subAbaPlacas, setSubAbaPlacas] = useState<'LAYOUT' | 'GERAR'>('LAYOUT');
+
+  // Filtros específicos da sub-aba Gerar Relatório de Ofertas (Concluídas)
+  const [filtroDataInicioConcluida, setFiltroDataInicioConcluida] = useState('');
+  const [filtroDataFimConcluida, setFiltroDataFimConcluida] = useState('');
+  const [filtroTipoOfertaConcluida, setFiltroTipoOfertaConcluida] = useState('TODOS');
+  const [paginaConcluidas, setPaginaConcluidas] = useState(1);
+  const [itensPorPaginaConcluidas, setItensPorPaginaConcluidas] = useState(5);
 
   // Gerenciamento de Layout
   const [layoutsDisponiveis, setLayoutsDisponiveis] = useState<any[]>([
@@ -320,7 +327,53 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
   const ofertasSugeridas = ofertas.filter((o) => o.status === 'Lista Sugerida' || o.status === 'Em Andamento');
   const ofertasRevisarAprovar = ofertas.filter((o) => o.status === 'Revisar/Aprovar' || o.status === 'Criada Finalizada');
   const ofertasPrecificar = ofertas.filter((o) => o.status === 'Precificar');
-  const ofertasConcluidas = ofertas.filter((o) => o.status === 'Concluida');
+
+  // Filtragem e Ordenação Decrescente das Ofertas Concluídas
+  const ofertasConcluidasFiltradas = useMemo(() => {
+    return ofertas
+      .filter((o) => o.status === 'Concluida')
+      .filter((o) => {
+        const dtInicio = o.data_inicio ? o.data_inicio.split('T')[0] : '';
+        const dtFim = o.data_fim ? o.data_fim.split('T')[0] : '';
+
+        // Filtro de Data Inicial (se definida, a oferta deve terminar ou começar a partir dela)
+        if (filtroDataInicioConcluida) {
+          if (dtFim && dtFim < filtroDataInicioConcluida) return false;
+        }
+
+        // Filtro de Data Final (se definida, a oferta deve começar até ela)
+        if (filtroDataFimConcluida) {
+          if (dtInicio && dtInicio > filtroDataFimConcluida) return false;
+        }
+
+        // Filtro por Tipo de Oferta
+        if (filtroTipoOfertaConcluida !== 'TODOS') {
+          if (o.tipo_oferta !== filtroTipoOfertaConcluida) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        // Ordenação Decrescente: mais nova para mais antiga observando o período
+        const dataA = a.data_fim || a.data_inicio || a.data_registro || '';
+        const dataB = b.data_fim || b.data_inicio || b.data_registro || '';
+        if (dataB !== dataA) return dataB.localeCompare(dataA);
+        return (b.hora_registro || '').localeCompare(a.hora_registro || '');
+      });
+  }, [ofertas, filtroDataInicioConcluida, filtroDataFimConcluida, filtroTipoOfertaConcluida]);
+
+  // Resetar página quando os filtros mudam
+  useEffect(() => {
+    setPaginaConcluidas(1);
+  }, [filtroDataInicioConcluida, filtroDataFimConcluida, filtroTipoOfertaConcluida, itensPorPaginaConcluidas]);
+
+  // Paginação das ofertas concluídas
+  const totalPaginasConcluidas = Math.ceil(ofertasConcluidasFiltradas.length / itensPorPaginaConcluidas) || 1;
+  const indexInicialConcluidas = (paginaConcluidas - 1) * itensPorPaginaConcluidas;
+  const ofertasConcluidasPaginadas = ofertasConcluidasFiltradas.slice(
+    indexInicialConcluidas,
+    indexInicialConcluidas + itensPorPaginaConcluidas
+  );
 
   const formatarDataBR = (dt: string) => {
     if (!dt) return 'N/I';
@@ -398,7 +451,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
               }`}
           >
             <span>CONCLUÍDAS</span>
-            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasConcluidas.length}</span>
+            <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertas.filter((o) => o.status === 'Concluida').length}</span>
           </button>
         </div>
 
@@ -430,7 +483,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
             <div className="text-center py-10 text-xs font-bold text-gray-400 uppercase">Carregando ofertas...</div>
           ) : (
             <>
-              {/* ABA 1: LISTA SUGERIDA (CARDS AGRUPADOS COM TAG DE ORIGEM) */}
+              {/* ABA 1: LISTA SUGERIDA */}
               {abaPrincipal === 'SUGERIDAS' && (
                 ofertasSugeridas.length === 0 ? (
                   <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
@@ -460,7 +513,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                               </span>
                             )}
                           </div>
-
                           <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
                             Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
                           </h4>
@@ -468,7 +520,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                             {ofe.data_registro} às {ofe.hora_registro}
                           </p>
                         </div>
-
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -561,53 +612,190 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                 )
               )}
 
-              {/* ABA 4: CONCLUÍDAS - GERAR RELATÓRIO */}
+              {/* ABA 4: CONCLUÍDAS - GERAR RELATÓRIO COM FILTROS, PAGINAÇÃO E ORDENAÇÃO DECRESCENTE */}
               {abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_RELATORIO' && (
-                ofertasConcluidas.length === 0 ? (
-                  <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
-                    Nenhuma oferta concluída ainda.
-                  </div>
-                ) : (
-                  ofertasConcluidas.map((ofe) => (
-                    <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
-                            {ofe.codigo_customizado}
-                          </span>
-                          <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded uppercase">
-                            {ofe.tipo_oferta === 'Data Comemorativa' ? ofe.tipo_oferta_customizado : ofe.tipo_oferta}
-                          </span>
-                        </div>
-                        <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
-                          Período da Oferta: de {formatarDataBR(ofe.data_inicio)} até {formatarDataBR(ofe.data_fim)}
-                        </h4>
-                        <p className="text-[10px] text-gray-400 font-mono">
-                          Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
-                        </p>
+                <div className="flex flex-col gap-3">
+                  
+                  {/* Bloco de Filtros da Sub-aba Gerar Relatório de Ofertas */}
+                  <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl flex flex-col gap-2.5 shadow-xs">
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                      Filtros das Ofertas Concluídas
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial (Período)</label>
+                        <input
+                          type="date"
+                          value={filtroDataInicioConcluida}
+                          onChange={(e) => setFiltroDataInicioConcluida(e.target.value)}
+                          className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-2.5 font-bold text-slate-800 focus:border-[#09797a]"
+                        />
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final (Período)</label>
+                        <input
+                          type="date"
+                          value={filtroDataFimConcluida}
+                          onChange={(e) => setFiltroDataFimConcluida(e.target.value)}
+                          className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-2.5 font-bold text-slate-800 focus:border-[#09797a]"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo de Oferta</label>
+                        <select
+                          value={filtroTipoOfertaConcluida}
+                          onChange={(e) => setFiltroTipoOfertaConcluida(e.target.value)}
+                          className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-2.5 font-bold text-slate-800 uppercase focus:border-[#09797a]"
+                        >
+                          <option value="TODOS">TODOS OS TIPOS</option>
+                          {TIPOS_OFERTA_OPCOES.map((tipo) => (
+                            <option key={tipo} value={tipo}>
+                              {tipo.toUpperCase()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {(filtroDataInicioConcluida || filtroDataFimConcluida || filtroTipoOfertaConcluida !== 'TODOS') && (
+                      <div className="flex justify-end pt-1">
                         <button
                           type="button"
-                          onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
-                          className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-xs font-black uppercase transition-all"
-                          title="Relatório com Custo, Tabela e Oferta"
+                          onClick={() => {
+                            setFiltroDataInicioConcluida('');
+                            setFiltroDataFimConcluida('');
+                            setFiltroTipoOfertaConcluida('TODOS');
+                          }}
+                          className="text-[10px] font-black uppercase text-[#09797a] hover:underline"
                         >
-                          📄 Completo
+                          Limpar Filtros
                         </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Barra de Contagem e Configuração de Exibição por Página */}
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs font-bold text-slate-500">
+                      Total: <strong>{ofertasConcluidasFiltradas.length}</strong> oferta(s) encontrada(s)
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
+                      <select
+                        value={itensPorPaginaConcluidas}
+                        onChange={(e) => setItensPorPaginaConcluidas(Number(e.target.value))}
+                        className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-2.5 py-1.5 outline-none focus:border-[#09797a] shadow-xs"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={15}>15</option>
+                        <option value={20}>20</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Lista de Cards das Ofertas Concluídas */}
+                  {ofertasConcluidasFiltradas.length === 0 ? (
+                    <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
+                      Nenhuma oferta concluída encontrada para os filtros selecionados.
+                    </div>
+                  ) : (
+                    ofertasConcluidasPaginadas.map((ofe) => (
+                      <div key={ofe.id} className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex justify-between items-center shadow-xs">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[9px] font-mono font-black text-[#09797a] bg-[#09797a]/10 px-2 py-0.5 rounded uppercase">
+                              {ofe.codigo_customizado}
+                            </span>
+                            <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded uppercase">
+                              {ofe.tipo_oferta === 'Data Comemorativa' ? ofe.tipo_oferta_customizado : ofe.tipo_oferta}
+                            </span>
+                          </div>
+                          <h4 className="font-black text-xs text-gray-800 uppercase mt-1">
+                            Período da Oferta: de {formatarDataBR(ofe.data_inicio)} até {formatarDataBR(ofe.data_fim)}
+                          </h4>
+                          <p className="text-[10px] text-gray-400 font-mono">
+                            Resp: {ofe.usuarios?.nome || 'SISTEMA'} | Qtd Itens: {ofe.oferta_itens?.length || 0}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
+                            className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-xs font-black uppercase transition-all"
+                            title="Relatório com Custo, Tabela e Oferta"
+                          >
+                            📄 Completo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'ENCARTE')}
+                            className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                            title="Relatório simplificado apenas com Descrição e Preço de Oferta"
+                          >
+                            🎨 Encarte
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {/* Paginação */}
+                  {ofertasConcluidasFiltradas.length > itensPorPaginaConcluidas && (
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3 flex-shrink-0">
+                      <span className="text-xs font-bold text-slate-500">
+                        Página {paginaConcluidas} de {totalPaginasConcluidas}
+                      </span>
+
+                      <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'ENCARTE')}
-                          className="px-3 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
-                          title="Relatório simplificado apenas com Descrição e Preço de Oferta"
+                          disabled={paginaConcluidas === 1}
+                          onClick={() => setPaginaConcluidas((prev) => Math.max(1, prev - 1))}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
                         >
-                          🎨 Encarte
+                          ← Anterior
+                        </button>
+
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: totalPaginasConcluidas }, (_, i) => i + 1)
+                            .filter((p) => p === 1 || p === totalPaginasConcluidas || Math.abs(p - paginaConcluidas) <= 1)
+                            .map((p) => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => setPaginaConcluidas(p)}
+                                className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${
+                                  paginaConcluidas === p
+                                    ? 'bg-[#09797a] text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={paginaConcluidas === totalPaginasConcluidas}
+                          onClick={() => setPaginaConcluidas((prev) => Math.min(totalPaginasConcluidas, prev + 1))}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                        >
+                          Próxima →
                         </button>
                       </div>
                     </div>
-                  ))
-                )
+                  )}
+
+                </div>
               )}
 
               {/* ABA 4: CONCLUÍDAS - GERAR PLACAS */}
@@ -699,13 +887,13 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           <select
                             value={ofertaParaPlaca?.id || ''}
                             onChange={(e) => {
-                              const encont = ofertasConcluidas.find((o) => o.id === e.target.value);
+                              const encont = ofertas.filter((o) => o.status === 'Concluida').find((o) => o.id === e.target.value);
                               setOfertaParaPlaca(encont || null);
                             }}
                             className="w-full h-10 text-xs bg-white border border-gray-200 px-3 rounded-xl font-bold text-gray-800 uppercase"
                           >
                             <option value="">Selecione...</option>
-                            {ofertasConcluidas.map((o) => (
+                            {ofertas.filter((o) => o.status === 'Concluida').map((o) => (
                               <option key={o.id} value={o.id}>
                                 {o.codigo_customizado} - {o.tipo_oferta} ({o.oferta_itens?.length || 0} itens)
                               </option>
