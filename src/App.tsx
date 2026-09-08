@@ -28,6 +28,7 @@ import Vencimentos from './pages/Vencimentos';
 import Notificacoes from './pages/Notificacoes';
 import Trocas from './pages/Trocas';
 import PesquisaPrecos from './pages/PesquisaPrecos';
+import Encartes from './pages/Encartes';
 
 interface UsuarioLogado {
   id: string;
@@ -63,7 +64,8 @@ type TelaAtiva =
   | 'vencimentos'
   | 'notificacoes'
   | 'trocas'
-  | 'pesquisa-precos';
+  | 'pesquisa-precos'
+  | 'encartes';
 
 export default function App() {
   // 1. Inicializa o usuário direto do localStorage para não perder sessão no F5
@@ -242,6 +244,7 @@ export default function App() {
         onNavegarParaTrocas={() => mudarTela('trocas')}
         onNavegarParaPesquisaPrecos={() => mudarTela('pesquisa-precos')}
         onNavegarParaNotificacoes={() => mudarTela('notificacoes')}
+        onNavegarParaEncartes={() => mudarTela('encartes')}
       />
     );
   }
@@ -313,6 +316,16 @@ export default function App() {
   if (telaAtiva === 'inventario') {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return <Inventario onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
+  }
+
+  if (telaAtiva === 'encartes') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Encartes
+        onVoltarParaHome={() => mudarTela('home')}
+        usuarioLogado={usuario}
+      />
+    );
   }
 
   if (telaAtiva === 'nota-falta') {

@@ -15,6 +15,7 @@ interface HomeProps {
   onNavegarParaConsumoLoja?: () => void;
   onNavegarParaVencimentos?: () => void;
   onNavegarParaPesquisaPrecos?: () => void;
+  onNavegarParaEncartes?: () => void;
   [key: string]: any;
 }
 
@@ -47,7 +48,8 @@ export default function Home(props: HomeProps) {
     onNavegarParaAvarias,
     onNavegarParaConsumoLoja,
     onNavegarParaVencimentos,
-    onNavegarParaPesquisaPrecos
+    onNavegarParaPesquisaPrecos,
+    onNavegarParaEncartes
   } = props;
 
   // Estados de Interface
@@ -200,6 +202,7 @@ export default function Home(props: HomeProps) {
         { id: 'orcamentos', nome: 'ORÇAMENTOS', descricao: 'Propostas comerciais e vendas', tela: 'orcamentos', callbackProp: 'onNavegarParaOrcamentos' },
         { id: 'cotacoes', nome: 'COTAÇÕES', descricao: 'Tomada de preço com fornecedores', tela: 'cotacoes', callbackProp: 'onNavegarParaCotacoes' },
         { id: 'pesquisa-precos', nome: 'PESQUISA DE PREÇOS', descricao: 'Inteligência e análise concorrencial', tela: 'pesquisa-precos', callbackProp: 'onNavegarParaPesquisaPrecos' },
+        { id: 'encartes', nome: 'ENCARTES', descricao: 'Gerador de cartazes e encartes', tela: 'encartes', callbackProp: 'onNavegarParaEncartes' },
         { id: 'ofertas', nome: 'OFERTAS', descricao: 'Campanhas, encartes e placas', tela: 'ofertas', callbackProp: 'onNavegarParaOfertas' },
         { id: 'clientes', nome: 'CLIENTES', descricao: 'Cadastro de compradores', tela: 'clientes', callbackProp: 'onNavegarParaClientes' },
         { id: 'vendedores', nome: 'VENDEDORES', descricao: 'Representantes e atendimento', tela: 'vendedores', callbackProp: 'onNavegarParaVendedores' }
@@ -236,7 +239,10 @@ export default function Home(props: HomeProps) {
     setMenuAberto(false);
     setSpeedDialAberto(false);
 
-    // Mapeamento direto das funções desestruturadas
+    if (mod.tela === 'encartes' && onNavegarParaEncartes) {
+      onNavegarParaEncartes();
+      return;
+    }
     if (mod.tela === 'pesquisa-precos' && onNavegarParaPesquisaPrecos) {
       onNavegarParaPesquisaPrecos();
       return;
@@ -625,7 +631,7 @@ export default function Home(props: HomeProps) {
             {/* Footer do Drawer */}
             <div className="p-4 border-t border-slate-100 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase">
-                Hazon ERP • v2.8.24.2026
+                Hazon ERP • v2.0
               </span>
             </div>
 
