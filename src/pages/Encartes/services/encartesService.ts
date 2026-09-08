@@ -8,11 +8,20 @@ export interface ProdutoAgrupadoEncarte {
   preco_tabela: number;
   unidade: string;
   imagem_url?: string | null;
-  variacoes: string[]; // Sabores ou fragrâncias unificadas
+  variacoes: string[];
+}
+
+export interface FiltrosRepositorio {
+  tipo: 'COM_IMAGEM' | 'SEM_IMAGEM';
+  termo?: string;
+  departamento?: string;
+  secao?: string;
+  pagina: number;
+  itensPorPagina: number;
 }
 
 export const encartesService = {
-  // 1. Buscar Ofertas Concluídas para iniciar o fluxo
+  // 1. Buscar Ofertas Concluídas
   async listarOfertasConcluidas(): Promise<any[]> {
     const { data, error } = await supabase
       .from('ofertas_mestre')
@@ -43,18 +52,23 @@ export const encartesService = {
     return data || [];
   },
 
-  // 2. Normalizador Inteligente para Agrupar Sabores/Fragrâncias
+  // 2. Normalizador para Sabores/Fragrâncias
   extrairNomeBase(descricao: string): string {
-    return descricao
-      .replace(/\b(morango|uva|abacaxi|limão|limao|laranja|chocolate|baunilha|maracujá|maracuja|coco|manga|banana)\b/gi, '')
-      .replace(/\b(lavanda|floral|eucalipto|original|tradicional|active|fresh|sensitive|suave)\b/gi, '')
+    if (!descricao) return 'PRODUTO';
+
+    // Remove siglas operacionais de atacado e hortifrúti
+    let limpo = descricao
+      .replace(/\b(kg|flv|agranel|granel|pct|pcte|pacote|cx|caixa|und|unid|unidade|bd|bandeja|acg)\b/gi, '')
+      .replace(/[\/\\#,+()$~%.'":*?<>{}]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+
+    // Se após limpar sobrar vazio, mantém a descrição original
+    return limpo || descricao.trim();
   },
 
-  // 3. Processa e Agrupa os Produtos da Oferta
+  // 3. Processar Itens para Encarte
   async prepararItensOfertaParaEncarte(ofertaItens: any[]): Promise<ProdutoAgrupadoEncarte[]> {
-    // Busca as imagens cadastradas para todos os produtos da oferta
     const produtosIds = ofertaItens.map((it) => it.produto_id);
     const { data: imagensData } = await supabase
       .from('encartes_produtos_imagens')
@@ -72,8 +86,6 @@ export const encartesService = {
       const descCompleta = it.produtos?.descricao || 'Produto';
       const descBase = this.extrairNomeBase(descCompleta);
       const preco = Number(it.preco_oferta || it.produtos?.pvenda || 0);
-
-      // Chave de agrupamento: descrição base + preço idêntico
       const chave = `${descBase.toLowerCase()}_${preco.toFixed(2)}`;
 
       if (!mapaAgrupado.has(chave)) {
@@ -146,7 +158,6 @@ export const encartesService = {
 
     if (error) throw error;
     if (!data) {
-      // Registro padrão inicial caso não exista
       const { data: novo } = await supabase
         .from('encartes_config_empresa')
         .insert([{}])
@@ -164,7 +175,7 @@ export const encartesService = {
     if (error) throw error;
   },
 
-  // 6. Repositório de Imagens dos Produtos
+  // 6. Repositório de Imagens: Salvar e Excluir
   async associarImagemProduto(produto_id: string, imagem_url: string): Promise<void> {
     const { error } = await supabase
       .from('encartes_produtos_imagens')
@@ -175,35 +186,105 @@ export const encartesService = {
     if (error) throw error;
   },
 
-  // Busca inteligente de produtos para o Repositório (código, código de barras, descrição completa, parcial ou %)
-  async buscarProdutosParaRepositorio(termo: string): Promise<any[]> {
-    if (!termo.trim()) return [];
+  async removerImagemProduto(produto_id: string): Promise<void> {
+    const { error } = await supabase
+      .from('encartes_produtos_imagens')
+      .delete()
+      .eq('produto_id', produto_id);
+    if (error) throw error;
+  },
 
-    const termoLimpo = termo.trim();
-    const palavras = termoLimpo.split(/\s+/).filter(Boolean);
+  // 7. Buscar Departamentos e Seções únicos
+  async buscarFiltrosDepartamentosSecoes(): Promise<{ departamentos: string[]; secoes: string[] }> {
+    const { data } = await supabase
+      .from('produtos')
+      .select('departamento, secao');
+
+    const deps = new Set<string>();
+    const secs = new Set<string>();
+
+    (data || []).forEach((p: any) => {
+      if (p.departamento) deps.add(p.departamento);
+      if (p.secao) secs.add(p.secao);
+    });
+
+    return {
+      departamentos: Array.from(deps).sort(),
+      secoes: Array.from(secs).sort()
+    };
+  },
+
+  // 8. Listar Repositório com Paginação e Filtros
+  async listarRepositorioPaginado(filtros: FiltrosRepositorio): Promise<{ itens: any[]; total: number }> {
+    // Busca todas as imagens associadas
+    const { data: todasImagens, error: errImg } = await supabase
+      .from('encartes_produtos_imagens')
+      .select('produto_id, imagem_url');
+
+    if (errImg) throw errImg;
+
+    const mapaImagens = new Map<string, string>();
+    (todasImagens || []).forEach((img: any) => mapaImagens.set(img.produto_id, img.imagem_url));
+    const idsComImagem = Array.from(mapaImagens.keys());
 
     let query = supabase
       .from('produtos')
-      .select('id, codprod, codbarra, descricao, unidade, pvenda, custoreal');
+      .select('id, codprod, codbarra, descricao, unidade, departamento, secao', { count: 'exact' });
 
-    if (palavras.length === 1) {
-      const p = palavras[0].replace(/%/g, '');
-      query = query.or(`codprod.ilike.%${p}%,codbarra.ilike.%${p}%,descricao.ilike.%${p}%`);
+    // Filtra IDs conforme sub-aba
+    if (filtros.tipo === 'COM_IMAGEM') {
+      if (idsComImagem.length === 0) return { itens: [], total: 0 };
+      query = query.in('id', idsComImagem);
     } else {
-      const pattern = `%${palavras.map(p => p.replace(/%/g, '')).join('%')}%`;
-      query = query.ilike('descricao', pattern);
+      if (idsComImagem.length > 0) {
+        // IDs que não possuem imagem
+        query = query.not('id', 'in', `(${idsComImagem.join(',')})`);
+      }
     }
 
-    const { data, error } = await query.limit(25);
-    if (error) {
-      console.error('Erro ao buscar produtos para o repositório:', error);
-      return [];
+    // Filtros de Departamento e Seção
+    if (filtros.departamento && filtros.departamento !== 'TODOS') {
+      query = query.eq('departamento', filtros.departamento);
+    }
+    if (filtros.secao && filtros.secao !== 'TODOS') {
+      query = query.eq('secao', filtros.secao);
     }
 
-    return data || [];
+    // Busca por termo (cód sistema, cód barras, descrição ou %)
+    if (filtros.termo && filtros.termo.trim()) {
+      const termoLimpo = filtros.termo.trim();
+      const palavras = termoLimpo.split(/\s+/).filter(Boolean);
+
+      if (palavras.length === 1) {
+        const p = palavras[0].replace(/%/g, '');
+        query = query.or(`codprod.ilike.%${p}%,codbarra.ilike.%${p}%,descricao.ilike.%${p}%`);
+      } else {
+        const pattern = `%${palavras.map((p) => p.replace(/%/g, '')).join('%')}%`;
+        query = query.ilike('descricao', pattern);
+      }
+    }
+
+    // Paginação
+    const inicio = (filtros.pagina - 1) * filtros.itensPorPagina;
+    const fim = inicio + filtros.itensPorPagina - 1;
+
+    query = query.order('descricao', { ascending: true }).range(inicio, fim);
+
+    const { data, count, error } = await query;
+    if (error) throw error;
+
+    const itensCompletos = (data || []).map((prod: any) => ({
+      ...prod,
+      imagem_url: mapaImagens.get(prod.id) || null
+    }));
+
+    return {
+      itens: itensCompletos,
+      total: count || 0
+    };
   },
 
-  // 7. Encartes Salvos (Em Andamento / Concluídos)
+  // 9. Encartes Salvos
   async listarEncartes(): Promise<any[]> {
     const { data, error } = await supabase
       .from('encartes_mestre')

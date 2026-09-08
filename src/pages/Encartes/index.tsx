@@ -31,22 +31,29 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
 
   const nomeUsuario = usuarioLogado?.nome || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.nome || 'Operador';
 
-  // Dados carregados
+  // Dados gerais
   const [encartes, setEncartes] = useState<any[]>([]);
   const [ofertasConcluidas, setOfertasConcluidas] = useState<any[]>([]);
   const [temas, setTemas] = useState<any[]>([]);
   const [configEmpresa, setConfigEmpresa] = useState<any>({});
 
+  // Sub-abas do Repositório
+  const [subAbaRepo, setSubAbaRepo] = useState<'COM_IMAGEM' | 'SEM_IMAGEM'>('COM_IMAGEM');
+  const [termoBuscaRepo, setTermoBuscaRepo] = useState('');
+  const [filtroDeptoRepo, setFiltroDeptoRepo] = useState('TODOS');
+  const [filtroSecaoRepo, setFiltroSecaoRepo] = useState('TODOS');
+  const [opcoesDepartamentos, setOpcoesDepartamentos] = useState<string[]>([]);
+  const [opcoesSecoes, setOpcoesSecoes] = useState<string[]>([]);
+  const [produtosPaginadosRepo, setProdutosPaginadosRepo] = useState<any[]>([]);
+  const [totalItensRepo, setTotalItensRepo] = useState(0);
+  const [paginaRepo, setPaginaRepo] = useState(1);
+  const ITENS_POR_PAGINA_REPO = 10;
+  const [carregandoRepo, setCarregandoRepo] = useState(false);
+
   // Visualizador e Exportador de Imagem do Encarte
   const [imagemEncarteGerada, setImagemEncarteGerada] = useState<string | null>(null);
   const [encarteVisualizacao, setEncarteVisualizacao] = useState<any | null>(null);
   const [gerandoImagem, setGerandoImagem] = useState(false);
-
-  // Repositório de Produtos
-  const [termoBuscaProd, setTermoBuscaProd] = useState('');
-  const [produtosRepo, setProdutosRepo] = useState<any[]>([]);
-  const [produtoRepoSel, setProdutoRepoSel] = useState<any | null>(null);
-  const [urlImagemRepo, setUrlImagemRepo] = useState('');
 
   // Fluxo de Montagem do Encarte (Passo a Passo)
   const [modalNovoEncarte, setModalNovoEncarte] = useState(false);
@@ -55,6 +62,17 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
   const [templateSelecionado, setTemplateSelecionado] = useState<any | null>(null);
   const [itensProcessadosGrade, setItensProcessadosGrade] = useState<ProdutoAgrupadoEncarte[]>([]);
   const [tituloEncarte, setTituloEncarte] = useState('');
+
+  // Personalização Visual do Encarte
+  const [corFundoQuadroBranco, setCorFundoQuadroBranco] = useState('#ffffff');
+  const [corFundoInfo, setCorFundoInfo] = useState('#fff000');
+  const [corTextoDescricao, setCorTextoDescricao] = useState('#1e293b');
+  const [corTextoPreco, setCorTextoPreco] = useState('#000000');
+  const [corTextoUnidade, setCorTextoUnidade] = useState('#334155');
+  const [pesoDescricao, setPesoDescricao] = useState('bold');
+  const [pesoPreco, setPesoPreco] = useState('900');
+  const [pesoUnidade, setPesoUnidade] = useState('bold');
+  const [fonteFamilia, setFonteFamilia] = useState('Montserrat');
 
   // Formulário de Tema / Template
   const [modalCriarTema, setModalCriarTema] = useState(false);
@@ -67,16 +85,19 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
   const carregarDadosGerais = async () => {
     try {
       setLoading(true);
-      const [listaEncartes, listaOfertas, listaTemas, conf] = await Promise.all([
+      const [listaEncartes, listaOfertas, listaTemas, conf, opcoesFiltros] = await Promise.all([
         encartesService.listarEncartes(),
         encartesService.listarOfertasConcluidas(),
         encartesService.listarTemasComTemplates(),
-        encartesService.obterConfigEmpresa()
+        encartesService.obterConfigEmpresa(),
+        encartesService.buscarFiltrosDepartamentosSecoes()
       ]);
       setEncartes(listaEncartes);
       setOfertasConcluidas(listaOfertas);
       setTemas(listaTemas);
       setConfigEmpresa(conf || {});
+      setOpcoesDepartamentos(opcoesFiltros.departamentos);
+      setOpcoesSecoes(opcoesFiltros.secoes);
     } catch (err) {
       console.error(err);
     } finally {
@@ -88,23 +109,68 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
     carregarDadosGerais();
   }, []);
 
-  // Busca Inteligente: código, código de barras ou descrição
-  useEffect(() => {
-    if (!termoBuscaProd.trim() || produtoRepoSel) {
-      setProdutosRepo([]);
-      return;
+  const carregarProdutosRepositorio = async () => {
+    try {
+      setCarregandoRepo(true);
+      const res = await encartesService.listarRepositorioPaginado({
+        tipo: subAbaRepo,
+        termo: termoBuscaRepo,
+        departamento: filtroDeptoRepo,
+        secao: filtroSecaoRepo,
+        pagina: paginaRepo,
+        itensPorPagina: ITENS_POR_PAGINA_REPO
+      });
+      setProdutosPaginadosRepo(res.itens);
+      setTotalItensRepo(res.total);
+    } catch (err) {
+      console.error('Erro ao carregar repositório:', err);
+    } finally {
+      setCarregandoRepo(false);
     }
-    const timer = setTimeout(async () => {
-      try {
-        const resultado = await encartesService.buscarProdutosParaRepositorio(termoBuscaProd);
-        setProdutosRepo(resultado);
-      } catch (err) {
-        console.error(err);
-      }
-    }, 200);
+  };
 
-    return () => clearTimeout(timer);
-  }, [termoBuscaProd, produtoRepoSel]);
+  useEffect(() => {
+    if (abaAtiva === 'REPOSITORIO') {
+      const timer = setTimeout(() => {
+        carregarProdutosRepositorio();
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [abaAtiva, subAbaRepo, termoBuscaRepo, filtroDeptoRepo, filtroSecaoRepo, paginaRepo]);
+
+  const handleMudarSubAbaRepo = (tipo: 'COM_IMAGEM' | 'SEM_IMAGEM') => {
+    setSubAbaRepo(tipo);
+    setPaginaRepo(1);
+    setFiltroDeptoRepo('TODOS');
+    setFiltroSecaoRepo('TODOS');
+    setTermoBuscaRepo('');
+  };
+
+  const handleUploadFotoProduto = (produtoId: string, file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const urlBase64 = ev.target?.result as string;
+      try {
+        await encartesService.associarImagemProduto(produtoId, urlBase64);
+        await carregarProdutosRepositorio();
+      } catch (err: any) {
+        alert('Erro ao salvar imagem: ' + err.message);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleExcluirFotoProduto = async (produtoId: string, descricao: string) => {
+    if (!confirm(`Deseja remover a foto do produto "${descricao}"? Ele será movido para a aba "Sem Imagem".`)) return;
+    try {
+      await encartesService.removerImagemProduto(produtoId);
+      await carregarProdutosRepositorio();
+    } catch (err: any) {
+      alert('Erro ao excluir foto: ' + err.message);
+    }
+  };
+
+  const totalPaginasRepo = Math.ceil(totalItensRepo / ITENS_POR_PAGINA_REPO) || 1;
 
   const handleSelecionarOfertaParaEncarte = async (ofe: any) => {
     setOfertaSelecionada(ofe);
@@ -136,7 +202,20 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
         titulo: tituloEncarte,
         status,
         dados_produtos_json: itensProcessadosGrade,
-        config_aplicada_json: configEmpresa
+        config_aplicada_json: {
+          ...configEmpresa,
+          estilosPersonalizados: {
+            corFundoQuadroBranco,
+            corFundoInfo,
+            corTextoDescricao,
+            corTextoPreco,
+            corTextoUnidade,
+            pesoDescricao,
+            pesoPreco,
+            pesoUnidade,
+            fonteFamilia
+          }
+        }
       });
       alert(status === 'Concluído' ? 'Encarte concluído com sucesso!' : 'Encarte salvo em andamento!');
       setModalNovoEncarte(false);
@@ -148,16 +227,97 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
     }
   };
 
-  // Visualizar / Exportar Imagem Real do Encarte
+  const formatarDataBR = (dt?: string) => {
+    if (!dt) return '';
+    const partes = dt.split('T')[0].split('-');
+    return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : dt;
+  };
+
+  const handleGerarEAbrirNovaAba = async () => {
+    setLoading(true);
+    try {
+      const textoValidade = (ofertaSelecionada?.data_inicio && ofertaSelecionada?.data_fim)
+        ? `Ofertas Válidas de ${formatarDataBR(ofertaSelecionada.data_inicio)} até ${formatarDataBR(ofertaSelecionada.data_fim)}`
+        : '';
+
+      const dataUrl = await gerarImagemEncarteCanvas({
+        titulo: tituloEncarte,
+        periodoOferta: textoValidade,
+        produtos: itensProcessadosGrade,
+        templateUrl: templateSelecionado?.imagem_fundo_url || null,
+        configEmpresa,
+        estilosPersonalizados: {
+          corFundoQuadroBranco,
+          corFundoInfo,
+          corTextoDescricao,
+          corTextoPreco,
+          corTextoUnidade,
+          pesoDescricao,
+          pesoPreco,
+          pesoUnidade,
+          fonteFamilia
+        }
+      });
+
+      const novaAba = window.open();
+      if (novaAba) {
+        novaAba.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>${tituloEncarte || 'Encarte'} - Hazon ERP</title>
+              <style>
+                body {
+                  margin: 0;
+                  background: #0f172a;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  min-height: 100vh;
+                }
+                img {
+                  max-height: 96vh;
+                  max-width: 96vw;
+                  object-fit: contain;
+                  border-radius: 12px;
+                  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+                }
+              </style>
+            </head>
+            <body>
+              <img src="${dataUrl}" alt="Encarte Gerado" />
+            </body>
+          </html>
+        `);
+        novaAba.document.close();
+      } else {
+        alert('Permita pop-ups no navegador para abrir o encarte em uma nova aba.');
+      }
+    } catch (err: any) {
+      alert('Erro ao gerar encarte: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleVisualizarEncarte = async (enc: any) => {
     try {
       setGerandoImagem(true);
       setEncarteVisualizacao(enc);
+      const estilos = enc.config_aplicada_json?.estilosPersonalizados;
+      
+      const ofe = enc.ofertas_mestre;
+      const textoValidade = (ofe?.data_inicio && ofe?.data_fim)
+        ? `Ofertas Válidas de ${formatarDataBR(ofe.data_inicio)} até ${formatarDataBR(ofe.data_fim)}`
+        : '';
+
       const dataUrl = await gerarImagemEncarteCanvas({
         titulo: enc.titulo || 'OFERTAS',
+        periodoOferta: textoValidade,
         produtos: enc.dados_produtos_json || [],
         templateUrl: enc.encartes_templates?.imagem_fundo_url || null,
-        configEmpresa: enc.config_aplicada_json || configEmpresa
+        configEmpresa: enc.config_aplicada_json || configEmpresa,
+        estilosPersonalizados: estilos
       });
       setImagemEncarteGerada(dataUrl);
     } catch (err: any) {
@@ -501,103 +661,216 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
             </div>
           )}
 
-          {/* 7. ABA REPOSITÓRIO DE PRODUTOS */}
+          {/* 7. ABA REPOSITÓRIO DE PRODUTOS COM SUB-ABAS, FILTROS E PAGINAÇÃO */}
           {abaAtiva === 'REPOSITORIO' && (
-            <div className="bg-slate-50 border border-slate-200 p-5 rounded-3xl flex flex-col gap-3">
-              <span className="text-xs font-black uppercase text-slate-500">
-                Vincular Imagem Oficial ao Produto
-              </span>
+            <div className="flex flex-col gap-3">
+              
+              {/* Seletor de Sub-Abas: Com Imagem vs Sem Imagem */}
+              <div className="bg-slate-50 border border-slate-200 p-1.5 rounded-2xl grid grid-cols-2 gap-1 text-xs font-black">
+                <button
+                  type="button"
+                  onClick={() => handleMudarSubAbaRepo('COM_IMAGEM')}
+                  className={`py-2 rounded-xl uppercase transition-all flex items-center justify-center gap-2 ${
+                    subAbaRepo === 'COM_IMAGEM'
+                      ? 'bg-[#09797a] text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>📷 Com Imagem</span>
+                  {subAbaRepo === 'COM_IMAGEM' && (
+                    <span className="text-[10px] bg-black/15 px-2 py-0.2 rounded-full font-mono">
+                      {totalItensRepo}
+                    </span>
+                  )}
+                </button>
 
-              <div className="relative flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleMudarSubAbaRepo('SEM_IMAGEM')}
+                  className={`py-2 rounded-xl uppercase transition-all flex items-center justify-center gap-2 ${
+                    subAbaRepo === 'SEM_IMAGEM'
+                      ? 'bg-[#09797a] text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>🚫 Sem Imagem</span>
+                  {subAbaRepo === 'SEM_IMAGEM' && (
+                    <span className="text-[10px] bg-black/15 px-2 py-0.2 rounded-full font-mono">
+                      {totalItensRepo}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Barra de Busca Universal */}
+              <div className="relative">
                 <input
                   type="text"
                   placeholder="Cód. Sistema, Código de Barras (EAN) ou Nome (% para curinga)..."
-                  value={termoBuscaProd}
+                  value={termoBuscaRepo}
                   onChange={(e) => {
-                    setTermoBuscaProd(e.target.value);
-                    setProdutoRepoSel(null);
+                    setTermoBuscaRepo(e.target.value);
+                    setPaginaRepo(1);
                   }}
-                  className="w-full h-11 text-xs bg-white border border-slate-300 rounded-2xl px-3 font-bold text-slate-800 focus:border-[#09797a] outline-none"
+                  className="w-full h-11 text-xs bg-white border border-slate-300 rounded-2xl px-3 font-bold text-slate-800 focus:border-[#09797a] outline-none shadow-xs"
                 />
-
-                {produtosRepo.length > 0 && !produtoRepoSel && (
-                  <div className="absolute top-12 left-0 right-0 z-30 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100">
-                    {produtosRepo.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setProdutoRepoSel(p);
-                          setTermoBuscaProd(`${p.codprod} - ${p.descricao}`);
-                          setProdutosRepo([]);
-                        }}
-                        className="w-full text-left p-3 hover:bg-teal-50 flex justify-between items-center text-xs font-bold text-slate-800 uppercase"
-                      >
-                        <div className="min-w-0 pr-2">
-                          <div className="truncate">{p.codprod} - {p.descricao}</div>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            EAN: {p.codbarra || 'Sem EAN'} • UN: {p.unidade || 'UN'}
-                          </span>
-                        </div>
-                        <span className="text-[#09797a] font-black whitespace-nowrap">+ Selecionar</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
-              {produtoRepoSel && (
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center gap-4 mt-2">
-                  <div className="w-28 h-28 bg-slate-100 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200 flex-shrink-0">
-                    {urlImagemRepo ? (
-                      <img src={urlImagemRepo} alt="Preview" className="h-full object-contain" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400 font-bold uppercase text-center px-1">Sem imagem</span>
-                    )}
+              {/* Filtros de Departamento e Seção (Exibidos em Com Imagem) */}
+              {subAbaRepo === 'COM_IMAGEM' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 border border-slate-200 p-3 rounded-2xl">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Departamento</label>
+                    <select
+                      value={filtroDeptoRepo}
+                      onChange={(e) => {
+                        setFiltroDeptoRepo(e.target.value);
+                        setPaginaRepo(1);
+                      }}
+                      className="h-9 bg-white border border-slate-300 rounded-xl px-2.5 text-xs font-bold text-slate-800 uppercase"
+                    >
+                      <option value="TODOS">TODOS OS DEPARTAMENTOS</option>
+                      {opcoesDepartamentos.map((d) => (
+                        <option key={d} value={d}>{d.toUpperCase()}</option>
+                      ))}
+                    </select>
                   </div>
 
-                  <div className="flex-1 flex flex-col gap-2 w-full">
-                    <div>
-                      <span className="text-[9px] font-mono font-bold text-slate-400">
-                        CÓD: {produtoRepoSel.codprod} • EAN: {produtoRepoSel.codbarra || '-'}
-                      </span>
-                      <h4 className="font-black text-xs uppercase text-slate-800">{produtoRepoSel.descricao}</h4>
-                    </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Seção</label>
+                    <select
+                      value={filtroSecaoRepo}
+                      onChange={(e) => {
+                        setFiltroSecaoRepo(e.target.value);
+                        setPaginaRepo(1);
+                      }}
+                      className="h-9 bg-white border border-slate-300 rounded-xl px-2.5 text-xs font-bold text-slate-800 uppercase"
+                    >
+                      <option value="TODOS">TODAS AS SEÇÕES</option>
+                      {opcoesSecoes.map((s) => (
+                        <option key={s} value={s}>{s.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
-                    <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold uppercase cursor-pointer text-center">
-                      Escolher Foto do Produto
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (ev) => setUrlImagemRepo(ev.target?.result as string);
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                        className="hidden"
-                      />
-                    </label>
+              {/* Totalizador */}
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[11px] font-bold text-slate-500">
+                  Total: <strong>{totalItensRepo}</strong> produto(s) {subAbaRepo === 'COM_IMAGEM' ? 'com imagem vinculada' : 'sem imagem'}
+                </span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">
+                  10 por página (2 colunas)
+                </span>
+              </div>
+
+              {/* Grade de 2 Colunas (10 itens por página) */}
+              {carregandoRepo ? (
+                <div className="text-center py-16 text-slate-400 font-bold text-xs uppercase animate-pulse">
+                  Carregando produtos do repositório...
+                </div>
+              ) : produtosPaginadosRepo.length === 0 ? (
+                <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
+                  Nenhum produto encontrado nesta categoria de repositório.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {produtosPaginadosRepo.map((prod) => (
+                    <div
+                      key={prod.id}
+                      className="p-3.5 bg-white border border-slate-200 rounded-2xl flex gap-3 shadow-xs hover:border-slate-300 transition-all"
+                    >
+                      {/* Foto ou Espaço Vazio */}
+                      <div className="w-24 h-24 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 flex-shrink-0 relative">
+                        {prod.imagem_url ? (
+                          <img src={prod.imagem_url} alt={prod.descricao} className="h-full w-full object-contain p-1" />
+                        ) : (
+                          <span className="text-[9px] font-black text-slate-400 uppercase text-center px-1">
+                            Sem Imagem
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Dados e Botões de Ação */}
+                      <div className="flex-1 flex flex-col justify-between min-w-0">
+                        <div>
+                          <span className="text-[9px] font-mono font-black text-[#09797a] bg-teal-50 px-1.5 py-0.5 rounded">
+                            {prod.codprod}
+                          </span>
+                          <h4 className="font-black text-xs uppercase text-slate-800 mt-1 leading-snug truncate" title={prod.descricao}>
+                            {prod.descricao}
+                          </h4>
+                          <span className="text-[10px] text-slate-400 font-mono block mt-0.5 truncate">
+                            EAN: {prod.codbarra || 'Sem EAN'} • UN: {prod.unidade || 'UN'}
+                          </span>
+                        </div>
+
+                        {/* Botões do Card */}
+                        <div className="flex items-center gap-1.5 pt-2">
+                          <label className="flex-1 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black uppercase rounded-lg cursor-pointer text-center transition-all">
+                            {prod.imagem_url ? 'Trocar Foto' : '+ Adicionar Foto'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadFotoProduto(prod.id, file);
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+
+                          {prod.imagem_url && (
+                            <button
+                              type="button"
+                              onClick={() => handleExcluirFotoProduto(prod.id, prod.descricao)}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-black transition-all"
+                              title="Excluir imagem do produto"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Paginação do Repositório */}
+              {totalPaginasRepo > 1 && (
+                <div className="flex items-center justify-between border-t border-slate-100 pt-3 flex-shrink-0">
+                  <span className="text-xs font-bold text-slate-500">
+                    Página {paginaRepo} de {totalPaginasRepo}
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={paginaRepo === 1}
+                      onClick={() => setPaginaRepo((prev) => Math.max(1, prev - 1))}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                    >
+                      ← Anterior
+                    </button>
+
+                    <span className="text-xs font-black px-2 text-[#09797a]">
+                      {paginaRepo}
+                    </span>
 
                     <button
                       type="button"
-                      disabled={!urlImagemRepo}
-                      onClick={async () => {
-                        await encartesService.associarImagemProduto(produtoRepoSel.id, urlImagemRepo);
-                        alert('Imagem associada com sucesso ao produto!');
-                        setProdutoRepoSel(null);
-                        setTermoBuscaProd('');
-                        setUrlImagemRepo('');
-                      }}
-                      className="bg-[#09797a] hover:bg-[#075f60] text-white py-2 rounded-xl text-xs font-black uppercase shadow-xs disabled:opacity-40 active:scale-95 transition-all"
+                      disabled={paginaRepo === totalPaginasRepo}
+                      onClick={() => setPaginaRepo((prev) => Math.min(totalPaginasRepo, prev + 1))}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
                     >
-                      Salvar no Repositório
+                      Próxima →
                     </button>
                   </div>
                 </div>
               )}
+
             </div>
           )}
 
@@ -679,7 +952,7 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
               </button>
             </div>
 
-            {/* PASSO 1: SELEÇÃO DA OFERTA CONCLUÍDA */}
+            {/* PASSO 1 */}
             {passoFluxo === 1 && (
               <div className="overflow-y-auto flex-1 space-y-2.5 pr-1">
                 {ofertasConcluidas.length === 0 ? (
@@ -711,7 +984,7 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
               </div>
             )}
 
-            {/* PASSO 2: SELEÇÃO DO TEMA E TEMPLATE */}
+            {/* PASSO 2 */}
             {passoFluxo === 2 && (
               <div className="overflow-y-auto flex-1 space-y-3 pr-1">
                 {temas.map((t) => (
@@ -736,66 +1009,214 @@ export default function Encartes({ onVoltarParaHome, usuarioLogado }: EncartesPr
               </div>
             )}
 
-            {/* PASSO 3: GRADE AUTOMÁTICA UNIFICADA POR FAMÍLIA/SABORES */}
+            {/* PASSO 3 */}
             {passoFluxo === 3 && (
-              <div className="overflow-y-auto flex-1 flex flex-col gap-3 pr-1">
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex justify-between items-center text-xs font-bold text-emerald-900">
-                  <span>Grade inteligente montada: <strong>{itensProcessadosGrade.length} produtos consolidados</strong></span>
-                  <span className="text-[10px] text-emerald-700 font-mono">Sabores/Fragrâncias Unificadas</span>
+              <div className="overflow-y-auto flex-1 flex flex-col gap-4 pr-1">
+                
+                {/* Customização de Cores e Fontes */}
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-3xl flex flex-col gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Personalização Visual dos Quadros e Textos
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Fundo Foto (Superior)</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={corFundoQuadroBranco}
+                          onChange={(e) => setCorFundoQuadroBranco(e.target.value)}
+                          className="w-10 h-9 rounded-xl cursor-pointer bg-white border border-slate-300 p-1"
+                        />
+                        <span className="font-mono text-xs font-bold text-slate-600">{corFundoQuadroBranco}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Fundo Texto (Inferior)</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={corFundoInfo}
+                          onChange={(e) => setCorFundoInfo(e.target.value)}
+                          className="w-10 h-9 rounded-xl cursor-pointer bg-white border border-slate-300 p-1"
+                        />
+                        <span className="font-mono text-xs font-bold text-slate-600">{corFundoInfo}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Família da Fonte</label>
+                      <select
+                        value={fonteFamilia}
+                        onChange={(e) => setFonteFamilia(e.target.value)}
+                        className="h-9 bg-white border border-slate-300 rounded-xl px-2 font-bold uppercase text-xs"
+                      >
+                        {FONTES_DISPONIVEIS.map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Cor da Descrição</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={corTextoDescricao}
+                          onChange={(e) => setCorTextoDescricao(e.target.value)}
+                          className="w-10 h-9 rounded-xl cursor-pointer bg-white border border-slate-300 p-1"
+                        />
+                        <span className="font-mono text-xs font-bold text-slate-600">{corTextoDescricao}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Peso (Descrição)</label>
+                      <select
+                        value={pesoDescricao}
+                        onChange={(e) => setPesoDescricao(e.target.value)}
+                        className="h-9 bg-white border border-slate-300 rounded-xl px-2 font-bold uppercase text-xs"
+                      >
+                        <option value="normal">Regular</option>
+                        <option value="bold">Bold</option>
+                        <option value="800">ExtraBold</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Cor do Preço</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={corTextoPreco}
+                          onChange={(e) => setCorTextoPreco(e.target.value)}
+                          className="w-10 h-9 rounded-xl cursor-pointer bg-white border border-slate-300 p-1"
+                        />
+                        <span className="font-mono text-xs font-bold text-slate-600">{corTextoPreco}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Peso (Preço)</label>
+                      <select
+                        value={pesoPreco}
+                        onChange={(e) => setPesoPreco(e.target.value)}
+                        className="h-9 bg-white border border-slate-300 rounded-xl px-2 font-bold uppercase text-xs"
+                      >
+                        <option value="bold">Bold</option>
+                        <option value="800">ExtraBold</option>
+                        <option value="900">Black (900)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Cor da Unidade</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={corTextoUnidade}
+                          onChange={(e) => setCorTextoUnidade(e.target.value)}
+                          className="w-10 h-9 rounded-xl cursor-pointer bg-white border border-slate-300 p-1"
+                        />
+                        <span className="font-mono text-xs font-bold text-slate-600">{corTextoUnidade}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="font-bold text-slate-500 uppercase text-[10px]">Peso (Unidade)</label>
+                      <select
+                        value={pesoUnidade}
+                        onChange={(e) => setPesoUnidade(e.target.value)}
+                        className="h-9 bg-white border border-slate-300 rounded-xl px-2 font-bold uppercase text-xs"
+                      >
+                        <option value="normal">Regular</option>
+                        <option value="bold">Bold</option>
+                        <option value="800">ExtraBold</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Grade */}
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex justify-between items-center text-xs font-bold text-emerald-900">
+                  <span>Grade montada: <strong>{itensProcessadosGrade.length} produtos consolidados</strong></span>
+                  <span className="text-[10px] text-emerald-700 font-mono">Layout Feirinha BV (4x4)</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {itensProcessadosGrade.map((prod, idx) => (
-                    <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col justify-between gap-2 shadow-xs">
-                      <div className="h-28 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100">
+                    <div key={idx} className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col">
+                      <div
+                        style={{ backgroundColor: corFundoQuadroBranco }}
+                        className="h-24 flex items-center justify-center p-2 border-b border-slate-100"
+                      >
                         {prod.imagem_url ? (
                           <img src={prod.imagem_url} alt={prod.descricao_base} className="h-full object-contain" />
                         ) : (
-                          <span className="text-[9px] font-bold text-slate-400 uppercase text-center px-2">
-                            Sem Foto (Cadastrar no Repositório)
-                          </span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase text-center">Sem Foto</span>
                         )}
                       </div>
 
-                      <div>
-                        <h4 className="font-black text-xs uppercase text-slate-800 leading-snug">
+                      <div
+                        style={{ backgroundColor: corFundoInfo }}
+                        className="p-2 flex flex-col justify-between flex-1 gap-1"
+                      >
+                        <span
+                          style={{ color: corTextoDescricao, fontWeight: pesoDescricao as any, fontFamily: fonteFamilia }}
+                          className="text-[11px] uppercase truncate block leading-tight"
+                        >
                           {prod.descricao_base}
-                        </h4>
-                        {prod.variacoes.length > 1 && (
-                          <span className="text-[9px] font-black text-[#09797a] block uppercase mt-0.5">
-                            Sabores / Tipos ({prod.variacoes.length})
-                          </span>
-                        )}
-                      </div>
+                        </span>
 
-                      <div className="text-right font-mono">
-                        <span className="text-xs text-slate-400 line-through block">
-                          R$ {prod.preco_tabela.toFixed(2)}
-                        </span>
-                        <span className="text-base font-black text-emerald-700">
-                          R$ {prod.preco_oferta.toFixed(2)}
-                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span
+                            style={{ color: corTextoPreco, fontWeight: pesoPreco as any, fontFamily: fonteFamilia }}
+                            className="text-sm font-black"
+                          >
+                            R$ {prod.preco_oferta.toFixed(2).replace('.', ',')}
+                          </span>
+                          <span
+                            style={{ color: corTextoUnidade, fontWeight: pesoUnidade as any, fontFamily: fonteFamilia }}
+                            className="text-[10px]"
+                          >
+                            /{(prod.unidade || 'UN').toUpperCase()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex gap-2">
+                {/* Ações */}
+                <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
                     onClick={() => handleSalvarEncarteAtual('Em Andamento')}
-                    className="flex-1 py-3 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-2xl text-xs font-black uppercase transition-all"
+                    className="flex-1 py-3.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-2xl text-xs font-black uppercase transition-all"
                   >
                     Salvar em Andamento
                   </button>
+
                   <button
                     type="button"
                     onClick={() => handleSalvarEncarteAtual('Concluído')}
-                    className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+                    className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase transition-all"
                   >
-                    Finalizar e Concluir Encarte
+                    Salvar Concluído
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleGerarEAbrirNovaAba}
+                    className="flex-2 py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span>🚀</span>
+                    <span>Gerar Encarte (Nova Aba)</span>
                   </button>
                 </div>
+
               </div>
             )}
 

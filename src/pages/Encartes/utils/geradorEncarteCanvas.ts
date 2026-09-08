@@ -3,148 +3,161 @@ import type { ProdutoAgrupadoEncarte } from '../services/encartesService';
 
 interface GerarCanvasProps {
   titulo: string;
+  periodoOferta?: string; // Ex: "Ofertas Válidas de 09/09/2026 até 12/09/2026"
   produtos: ProdutoAgrupadoEncarte[];
   templateUrl?: string | null;
   configEmpresa: any;
+  estilosPersonalizados?: {
+    corFundoQuadroBranco?: string;
+    corFundoInfo?: string;
+    corTextoDescricao?: string;
+    corTextoPreco?: string;
+    corTextoUnidade?: string;
+    pesoDescricao?: string;
+    pesoPreco?: string;
+    pesoUnidade?: string;
+    fonteFamilia?: string;
+  };
 }
 
 export async function gerarImagemEncarteCanvas({
-  titulo,
+  periodoOferta,
   produtos,
   templateUrl,
-  configEmpresa
+  configEmpresa,
+  estilosPersonalizados
 }: GerarCanvasProps): Promise<string> {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas context indisponível');
 
-  // Dimensão padrão Story / Feed Vertical HD (1080 x 1920)
+  // Dimensão padrão (1080 x 1440)
   canvas.width = 1080;
-  canvas.height = 1920;
+  canvas.height = 1440;
 
-  // 1. Fundo Base
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // 2. Imagem de Fundo / Template
+  // 1. Template de Fundo
   if (templateUrl) {
     try {
       const imgTemplate = await carregarImagem(templateUrl);
       ctx.drawImage(imgTemplate, 0, 0, canvas.width, canvas.height);
     } catch {
-      desenharCabecalhoPadrao(ctx, titulo, configEmpresa);
+      ctx.fillStyle = '#658d51';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
   } else {
-    desenharCabecalhoPadrao(ctx, titulo, configEmpresa);
+    ctx.fillStyle = '#658d51';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  // 3. Logo da Empresa no Topo
-  if (configEmpresa?.logo_url) {
-    try {
-      const imgLogo = await carregarImagem(configEmpresa.logo_url);
-      const logoW = 180;
-      const logoH = (imgLogo.height / imgLogo.width) * logoW;
-      ctx.drawImage(imgLogo, 40, 40, logoW, Math.min(logoH, 120));
-    } catch (e) {
-      console.warn('Erro ao carregar logo no encarte:', e);
-    }
+  // 2. Faixa Verde Escura: Período de Validade da Oferta
+  if (periodoOferta) {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 20px Montserrat, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Centralizado perfeitamente dentro da faixa horizontal verde escura
+    ctx.fillText(periodoOferta.toUpperCase(), canvas.width / 2, 298);
   }
 
-  // 4. Grade de Produtos Dinâmica (3 colunas)
-  const totalProdutos = produtos.length;
-  const colunas = totalProdutos > 6 ? 3 : 2;
-  const areaYInicio = 340;
-  const areaYFim = 1750;
-  const alturaDisponivel = areaYFim - areaYInicio;
+  // Estilos configurados
+  const corQuadroBranco = estilosPersonalizados?.corFundoQuadroBranco || '#ffffff';
+  const corQuadroInfo = estilosPersonalizados?.corFundoInfo || '#fff000';
+  const corDesc = estilosPersonalizados?.corTextoDescricao || '#1e293b';
+  const corPreco = estilosPersonalizados?.corTextoPreco || '#000000';
+  const corUnidade = estilosPersonalizados?.corTextoUnidade || '#1e293b';
 
-  const linhas = Math.ceil(totalProdutos / colunas) || 1;
-  const cardLargura = (canvas.width - 60 - (colunas - 1) * 20) / colunas;
-  const cardAltura = Math.min(320, (alturaDisponivel - (linhas - 1) * 20) / linhas);
+  const pesoDesc = estilosPersonalizados?.pesoDescricao || 'bold';
+  const pesoPreco = estilosPersonalizados?.pesoPreco || '900';
+  const pesoUnidade = estilosPersonalizados?.pesoUnidade || 'bold';
+  const familiaFonte = estilosPersonalizados?.fonteFamilia || configEmpresa.fonte_titulo || 'Montserrat';
 
-  for (let i = 0; i < totalProdutos; i++) {
+  // 3. Grade Reduzida e Alinhada Dentro da Área Útil (4 x 4 = 16 itens)
+  const colunas = 4;
+  const linhas = 4;
+  const startX = 85;
+  const startY = 340;
+  const cardW = 205;
+  const cardH = 222;
+  const gapX = 30;
+  const gapY = 30;
+
+  const totalExibir = Math.min(produtos.length, colunas * linhas);
+
+  for (let i = 0; i < totalExibir; i++) {
     const prod = produtos[i];
     const col = i % colunas;
     const lin = Math.floor(i / colunas);
 
-    const x = 30 + col * (cardLargura + 20);
-    const y = areaYInicio + lin * (cardAltura + 20);
+    const x = startX + col * (cardW + gapX);
+    const y = startY + lin * (cardH + gapY);
 
-    if (y + cardAltura > areaYFim) break; // Limite de altura
+    // --- BLOCO SUPERIOR: QUADRO BRANCO (FOTO) ---
+    const alturaBranca = cardH * 0.64;
+    ctx.fillStyle = corQuadroBranco;
+    roundRect(ctx, x, y, cardW, alturaBranca, { tl: 18, tr: 18, bl: 0, br: 0 }, true, false);
 
-    // Fundo do Card do Produto
-    ctx.fillStyle = '#ffffff';
-    roundRect(ctx, x, y, cardLargura, cardAltura, 18, true, false);
-
-    // Sombra sutil
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 2;
-    roundRect(ctx, x, y, cardLargura, cardAltura, 18, false, true);
-
-    // Foto do Produto
-    const fotoH = cardAltura * 0.45;
     if (prod.imagem_url) {
       try {
         const imgProd = await carregarImagem(prod.imagem_url);
-        ctx.drawImage(imgProd, x + 15, y + 15, cardLargura - 30, fotoH - 10);
+        const maxW = cardW - 24;
+        const maxH = alturaBranca - 16;
+        const ratio = Math.min(maxW / imgProd.width, maxH / imgProd.height);
+        const wImg = imgProd.width * ratio;
+        const hImg = imgProd.height * ratio;
+        const imgX = x + (cardW - wImg) / 2;
+        const imgY = y + 8 + (maxH - hImg) / 2;
+        ctx.drawImage(imgProd, imgX, imgY, wImg, hImg);
       } catch {
-        desenharPlaceholderFoto(ctx, x + 15, y + 15, cardLargura - 30, fotoH - 10);
+        desenharPlaceholder(ctx, x + 8, y + 8, cardW - 16, alturaBranca - 16);
       }
     } else {
-      desenharPlaceholderFoto(ctx, x + 15, y + 15, cardLargura - 30, fotoH - 10);
+      desenharPlaceholder(ctx, x + 8, y + 8, cardW - 16, alturaBranca - 16);
     }
 
-    // Título do Produto
-    ctx.fillStyle = '#1e293b';
-    ctx.font = `bold ${colunas === 3 ? 18 : 22}px ${configEmpresa.fonte_titulo || 'Montserrat'}, sans-serif`;
+    // --- BLOCO INFERIOR: QUADRO AMARELO (DESCRIÇÃO + PREÇO + (UNIDADE)) ---
+    const alturaAmarela = cardH - alturaBranca;
+    const yAmarelo = y + alturaBranca;
+
+    ctx.fillStyle = corQuadroInfo;
+    roundRect(ctx, x, yAmarelo, cardW, alturaAmarela, { tl: 0, tr: 0, bl: 18, br: 18 }, true, false);
+
+    // Descrição limpa do produto
+    ctx.fillStyle = corDesc;
+    ctx.font = `${pesoDesc} 13px ${familiaFonte}, sans-serif`;
     ctx.textAlign = 'left';
-    const descTrun = truncarTexto(ctx, prod.descricao_base || 'PRODUTO', cardLargura - 30);
-    ctx.fillText(descTrun.toUpperCase(), x + 15, y + fotoH + 30);
+    const nomeLimpo = limparDescricaoProduto(prod.descricao_base);
+    const descTrun = truncarTexto(ctx, nomeLimpo, cardW - 16);
+    ctx.fillText(descTrun.toUpperCase(), x + 9, yAmarelo + 21);
 
-    // Sabores/Variantes (se houver)
-    if (prod.variacoes && prod.variacoes.length > 1) {
-      ctx.fillStyle = '#09797a';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText(`${prod.variacoes.length} TIPOS / SABORES`, x + 15, y + fotoH + 48);
-    }
+    // Preço e Unidade entre parênteses: R$ 1,99 (KG)
+    ctx.fillStyle = corPreco;
+    ctx.font = `${pesoPreco} 22px ${familiaFonte}, sans-serif`;
+    const textoPreco = `R$ ${prod.preco_oferta.toFixed(2).replace('.', ',')}`;
+    ctx.fillText(textoPreco, x + 9, yAmarelo + 54);
 
-    // Preço Tabela (Riscado)
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '14px sans-serif';
-    const precoTabTexto = `R$ ${prod.preco_tabela.toFixed(2)}`;
-    ctx.fillText(precoTabTexto, x + 15, y + cardAltura - 38);
-    ctx.fillRect(x + 15, y + cardAltura - 43, ctx.measureText(precoTabTexto).width, 1.5);
-
-    // Preço de Oferta em Destaque
-    ctx.fillStyle = '#047857';
-    ctx.font = `900 ${colunas === 3 ? 32 : 38}px ${configEmpresa.fonte_preco || 'Montserrat'}, sans-serif`;
-    ctx.fillText(`R$ ${prod.preco_oferta.toFixed(2)}`, x + 15, y + cardAltura - 12);
-  }
-
-  // 5. Rodapé Informativo da Empresa
-  ctx.fillStyle = '#09797a';
-  ctx.fillRect(0, 1820, canvas.width, 100);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 16px sans-serif';
-
-  const dadosRodape: string[] = [];
-  if (configEmpresa.mostrar_nome_empresa && configEmpresa.nome_empresa) dadosRodape.push(configEmpresa.nome_empresa);
-  if (configEmpresa.mostrar_whatsapp && configEmpresa.whatsapp) dadosRodape.push(`WhatsApp: ${configEmpresa.whatsapp}`);
-  if (configEmpresa.mostrar_instagram && configEmpresa.instagram) dadosRodape.push(`@${configEmpresa.instagram}`);
-
-  ctx.fillText(dadosRodape.join(' • '), canvas.width / 2, 1860);
-
-  if (configEmpresa.mostrar_formas_pagamento && configEmpresa.formas_pagamento) {
-    ctx.font = 'normal 13px sans-serif';
-    ctx.fillStyle = '#99f6e4';
-    ctx.fillText(configEmpresa.formas_pagamento, canvas.width / 2, 1885);
+    const larguraPreco = ctx.measureText(textoPreco).width;
+    ctx.fillStyle = corUnidade;
+    ctx.font = `${pesoUnidade} 11.5px ${familiaFonte}, sans-serif`;
+    const siglaUnidade = `(${ (prod.unidade || 'UN').toUpperCase() })`;
+    ctx.fillText(siglaUnidade, x + 15 + larguraPreco, yAmarelo + 53);
   }
 
   return canvas.toDataURL('image/png', 1.0);
 }
 
-// Helpers do Canvas
+function limparDescricaoProduto(texto: string): string {
+  if (!texto) return 'PRODUTO';
+
+  const limpo = texto
+    .replace(/\b(kg|flv|agranel|granel|pct|pcte|pacote|cx|caixa|und|unid|unidade|bd|bandeja|acg)\b/gi, '')
+    .replace(/[\/\\#,+()$~%.'":*?<>{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return limpo || texto;
+}
+
 function carregarImagem(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -155,42 +168,35 @@ function carregarImagem(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function desenharCabecalhoPadrao(ctx: CanvasRenderingContext2D, titulo: string, config: any) {
-  ctx.fillStyle = '#09797a';
-  ctx.fillRect(0, 0, 1080, 280);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.font = '900 48px sans-serif';
-  ctx.fillText(titulo.toUpperCase(), 540, 160);
-
-  if (config.slogan && config.mostrar_slogan) {
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillStyle = '#99f6e4';
-    ctx.fillText(config.slogan.toUpperCase(), 540, 205);
-  }
-}
-
-function desenharPlaceholderFoto(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  ctx.fillStyle = '#f1f5f9';
+function desenharPlaceholder(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  ctx.fillStyle = '#f8fafc';
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = '#94a3b8';
   ctx.textAlign = 'center';
-  ctx.font = 'bold 12px sans-serif';
+  ctx.font = 'bold 10px sans-serif';
   ctx.fillText('SEM FOTO', x + w / 2, y + h / 2 + 4);
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: boolean, stroke: boolean) {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: { tl: number; tr: number; bl: number; br: number },
+  fill: boolean,
+  stroke: boolean
+) {
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.moveTo(x + r.tl, y);
+  ctx.lineTo(x + w - r.tr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r.tr);
+  ctx.lineTo(x + w, y + h - r.br);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
+  ctx.lineTo(x + r.bl, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r.bl);
+  ctx.lineTo(x, y + r.tl);
+  ctx.quadraticCurveTo(x, y, x + r.tl, y);
   ctx.closePath();
   if (fill) ctx.fill();
   if (stroke) ctx.stroke();
