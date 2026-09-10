@@ -262,5 +262,109 @@ export const avariasService = {
 
   async cadastrarAvaria(payload: NovaAvariaPayload): Promise<void> {
     return this.registrarAvaria(payload);
-  }
-};
+  },
+
+
+  // 6. Registrar Múltiplas Avarias em Lote (Cada item gera um card/registro único)
+  async registrarAvariasEmLote(payload: {
+    motivo_avaria_id: string;
+    destinacao: string;
+    observacao?: string;
+    usuario_id?: string;
+    itens: Array<{
+      produto_id: string;
+      quantidade: number;
+      preco_custo_na_perda: number;
+      unidade?: string;
+      departamento?: string;
+    }>;
+  }): Promise<void> {
+    if (!payload.itens || payload.itens.length === 0) {
+      throw new Error('Nenhum item adicionado ao lote.');
+    }
+
+    const agora = new Date();
+    const dataAtual = agora.toLocaleDateString('sv-SE');
+    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    let motivoIdFinal = payload.motivo_avaria_id;
+    if (motivoIdFinal.startsWith('m')) {
+      const { data: motivoBanco } = await supabase
+        .from('motivos_avaria')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (motivoBanco) {
+        motivoIdFinal = motivoBanco.id;
+      }
+    }
+
+    const registrosAvaria = payload.itens.map((it) => ({
+      codigo_customizado: `AV${Math.floor(1000 + Math.random() * 9000)}`,
+      produto_id: it.produto_id,
+      motivo_avaria_id: motivoIdFinal,
+      quantidade: it.quantidade,
+      preco_custo_na_perda: it.preco_custo_na_perda,
+      destinacao: payload.destinacao,
+      observacao: payload.observacao ? `[Lote] ${payload.observacao}` : '[Lançamento em Lote]',
+      usuario_id: payload.usuario_id || null,
+      data_registro: dataAtual,
+      hora_registro: horaAtual
+    }));
+
+    const { error: errorAvarias } = await supabase
+      .from('avarias')
+      .insert(registrosAvaria);
+
+    if (errorAvarias) {
+      console.error('Erro ao gravar lote de avarias:', errorAvarias);
+      throw errorAvarias;
+    }
+
+    // Se a destinação for "Consumo Interno", sincroniza os itens no Consumo Loja
+    const destFormatada = (payload.destinacao || '').toLowerCase();
+    if (destFormatada.includes('consumo')) {
+      try {
+        const valorTotalLote = payload.itens.reduce(
+          (acc, it) => acc + Number(it.quantidade || 0) * Number(it.preco_custo_na_perda || 0),
+          0
+        );
+
+        const codigoConsumo = `CSM-LOT-${Math.floor(100000 + Math.random() * 900000)}`;
+
+        const { data: mestreConsumo, error: errMestre } = await supabase
+          .from('consumo_loja_mestre')
+          .insert([
+            {
+              codigo_customizado: codigoConsumo,
+              usuario_id: payload.usuario_id,
+              data_registro: dataAtual,
+              hora_registro: horaAtual,
+              valor_total: valorTotalLote,
+              observacao: `Origem Avaria em Lote (${registrosAvaria.length} itens) - ${payload.observacao || ''}`
+            }
+          ])
+          .select('id')
+          .single();
+
+        if (!errMestre && mestreConsumo) {
+          const itensConsumo = payload.itens.map((it) => ({
+            consumo_mestre_id: mestreConsumo.id,
+            produto_id: it.produto_id,
+            quantidade: it.quantidade,
+            unidade_medida: it.unidade || 'UN',
+            local: 'Consumo Interno (Avaria em Lote)',
+            departamento: it.departamento || 'Geral',
+            custo_unitario: it.preco_custo_na_perda,
+            valor_total_item: Number(it.quantidade || 0) * Number(it.preco_custo_na_perda || 0),
+            observacao: 'Trackeado via Avaria em Lote'
+          }));
+
+          await supabase.from('consumo_loja_itens').insert(itensConsumo);
+        }
+      } catch (errSync) {
+        console.error('Erro ao sincronizar consumo em lote:', errSync);
+      }
+    };
+}}

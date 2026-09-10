@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { avariasService } from './services/avariasService';
 import RegistrarAvariaModal from './components/RegistrarAvariaModal';
+import RegistrarAvariaLote from './components/RegistrarAvariaLote';
 
 interface AvariasProps {
   onVoltarParaHome?: () => void;
@@ -16,8 +17,8 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
   const [avarias, setAvarias] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // Controle de Tela: 'LISTAGEM' ou 'REGISTRAR' (Tela Cheia)
-  const [telaAtiva, setTelaAtiva] = useState<'LISTAGEM' | 'REGISTRAR'>('LISTAGEM');
+  // Controle de Visualização: 'LISTAGEM' | 'REGISTRAR' | 'LOTE' (Todas em Tela Cheia)
+  const [telaAtiva, setTelaAtiva] = useState<'LISTAGEM' | 'REGISTRAR' | 'LOTE'>('LISTAGEM');
 
   // Filtros Avançados: retraído por padrão
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
@@ -49,7 +50,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
       ]);
       setAvarias(lista);
 
-      // Garante que todo departamento presente nas avarias registradas conste no dropdown
       const deptosDasAvarias = new Set<string>(opcoesFiltro.departamentos || []);
       lista.forEach((av) => {
         const d = av.produtos?.departamento?.trim();
@@ -72,7 +72,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     carregarDados();
   }, []);
 
-  // Lista dinâmica de seções baseada no Departamento selecionado
   const secoesDisponiveis = useMemo(() => {
     if (departamentoSel === 'TODOS') {
       const todas = new Set<string>();
@@ -86,7 +85,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     return secoesMap[departamentoSel] || [];
   }, [departamentoSel, secoesMap, avarias]);
 
-  // Lista dinâmica de categorias baseada na Seção selecionada
   const categoriasDisponiveis = useMemo(() => {
     if (secaoSel === 'TODOS') {
       const todas = new Set<string>();
@@ -136,7 +134,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     );
   }, [motivoSel, destinacaoSel, dataInicio, dataFim, departamentoSel, secaoSel, categoriaSel]);
 
-  // Filtragem dos registros da listagem
   const avariasFiltradas = useMemo(() => {
     return avarias.filter((av) => {
       const prod = av.produtos || {};
@@ -171,15 +168,10 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     });
   }, [avarias, motivoSel, destinacaoSel, dataInicio, dataFim, departamentoSel, secaoSel, categoriaSel]);
 
-  // TOTAL AVARIAS REATIVO:
-  // - Sem filtro ativo: soma do Mês Atual (Descarte + Doação)
-  // - Com qualquer filtro ativo: soma calculada a partir da lista filtrada (avariasFiltradas)
   const totalAvariasCalculado = useMemo(() => {
     if (temFiltroAtivo) {
       return avariasFiltradas.reduce((acc, av) => {
         const dest = (av.destinacao || '').toLowerCase();
-
-        // Se o usuário filtrou uma destinação específica, soma ela; se deixou 'TODAS', soma Descarte + Doação
         const considerar = destinacaoSel !== 'TODAS'
           ? true
           : dest.includes('descarte') || dest.includes('doação') || dest.includes('doacao');
@@ -192,7 +184,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
       }, 0);
     }
 
-    // Padrão sem filtros: Mês Atual vigente (Descarte + Doação)
     const hoje = new Date();
     const anoAtual = hoje.getFullYear();
     const mesAtual = hoje.getMonth() + 1;
@@ -238,7 +229,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     return hr.slice(0, 5);
   };
 
-  // Paginação
   const totalPaginas = Math.ceil(avariasFiltradas.length / itensPorPagina) || 1;
   const indexInicio = (paginaAtual - 1) * itensPorPagina;
   const avariasPaginadas = avariasFiltradas.slice(indexInicio, indexInicio + itensPorPagina);
@@ -255,7 +245,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
 
   const idUsuarioAtivo = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
 
-  // VISÃO DE REGISTRO EM TELA CHEIA (NÃO MODAL)
+  // VISÃO 1: REGISTRO UNITÁRIO EM TELA CHEIA
   if (telaAtiva === 'REGISTRAR') {
     return (
       <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
@@ -275,13 +265,31 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     );
   }
 
+  // VISÃO 2: REGISTRO EM LOTE EM TELA CHEIA
+  if (telaAtiva === 'LOTE') {
+    return (
+      <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+        <div className="w-full max-w-lg bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
+          <RegistrarAvariaLote
+            onVoltar={() => setTelaAtiva('LISTAGEM')}
+            onSucesso={() => {
+              setTelaAtiva('LISTAGEM');
+              carregarDados();
+            }}
+            usuarioLogadoId={idUsuarioAtivo}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // VISÃO PRINCIPAL DA LISTAGEM
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
       <div className="w-full max-w-lg bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
         
-        {/* HEADER */}
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+        {/* HEADER COM BOTÕES REGISTRAR E EM LOTE */}
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 gap-2">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -298,13 +306,23 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setTelaAtiva('REGISTRAR')}
-            className="bg-[#09797a] hover:bg-[#075f60] text-white px-3.5 py-2 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all cursor-pointer"
-          >
-            + REGISTRAR
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setTelaAtiva('LOTE')}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-2xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+            >
+              + EM LOTE
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTelaAtiva('REGISTRAR')}
+              className="bg-[#09797a] hover:bg-[#075f60] text-white px-3.5 py-2 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+            >
+              + REGISTRAR
+            </button>
+          </div>
         </div>
 
         {/* CONTAINER FILTROS AVANÇADOS (RETRAÍDO POR PADRÃO) */}
@@ -470,7 +488,7 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
           )}
         </div>
 
-        {/* CARD TOTAL AVARIAS: MÊS ATUAL OU FILTRADO */}
+        {/* CARD TOTAL AVARIAS REATIVO */}
         <div className="p-4 bg-red-50/40 border border-red-200/80 rounded-2xl flex items-center justify-between shadow-xs">
           <div>
             <span className="text-xs font-black text-slate-800 uppercase block tracking-wider">
