@@ -1,58 +1,67 @@
 // src/pages/Avarias/index.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { avariasService } from './services/avariasService';
-import type { AvariaRecord } from './types/avarias.types';
 import RegistrarAvariaModal from './components/RegistrarAvariaModal';
 
 interface AvariasProps {
   onVoltarParaHome?: () => void;
   usuarioLogado?: any;
   usuarioLogadoId?: string;
+  [key: string]: any;
 }
 
+const DESTINACOES_OPCOES = ['TODAS', 'Descarte', 'Doação', 'Troca', 'Consumo Interno'];
+
 export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: AvariasProps) {
-  const idUsuarioFinal = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
-
-  const [avarias, setAvarias] = useState<AvariaRecord[]>([]);
-  const [motivos, setMotivos] = useState<any[]>([]);
+  const [avarias, setAvarias] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modalRegistroAberto, setModalRegistroAberto] = useState(false);
+  
+  // Controle de Tela: 'LISTAGEM' ou 'REGISTRAR' (Tela Cheia)
+  const [telaAtiva, setTelaAtiva] = useState<'LISTAGEM' | 'REGISTRAR'>('LISTAGEM');
 
-  // Controle de acordeão de filtros (Padrão: retraído)
-  const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
+  // Filtros Avançados: retraído por padrão
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [motivoSel, setMotivoSel] = useState('TODOS');
+  const [destinacaoSel, setDestinacaoSel] = useState('TODAS');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
 
-  // Filtros
-  const [dataInicio, setDataInicio] = useState<string>('');
-  const [dataFim, setDataFim] = useState<string>('');
-  const [motivoSel, setMotivoSel] = useState<string>('TODOS');
-  const [destinacaoSel, setDestinacaoSel] = useState<string>('TODAS');
-  const [departamentoSel, setDepartamentoSel] = useState<string>('TODOS');
-  const [secaoSel, setSecaoSel] = useState<string>('TODOS');
-  const [categoriaSel, setCategoriaSel] = useState<string>('TODOS');
+  // Hierarquia Mercadológica: Departamento > Seção > Categoria
+  const [departamentoSel, setDepartamentoSel] = useState('TODOS');
+  const [secaoSel, setSecaoSel] = useState('TODOS');
+  const [categoriaSel, setCategoriaSel] = useState('TODOS');
 
-  // Opções para os Selects
-  const [opcoesDepartamentos, setOpcoesDepartamentos] = useState<string[]>([]);
-  const [opcoesSecoes, setOpcoesSecoes] = useState<string[]>([]);
-  const [opcoesCategorias, setOpcoesCategorias] = useState<string[]>([]);
+  // Listas de opções dinâmicas
+  const [listaDepartamentos, setListaDepartamentos] = useState<string[]>([]);
+  const [secoesMap, setSecoesMap] = useState<Record<string, string[]>>({});
+  const [categoriasMap, setCategoriasMap] = useState<Record<string, string[]>>({});
 
   // Paginação
-  const [paginaAtual, setPaginaAtual] = useState<number>(1);
-  const [itensPorPagina, setItensPorPagina] = useState<number>(10);
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [itensPorPagina, setItensPorPagina] = useState(10);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [listaAvarias, listaMotivos, opcoesFiltros] = await Promise.all([
+      const [lista, opcoesFiltro] = await Promise.all([
         avariasService.listarAvarias(),
-        avariasService.listarMotivosAvaria(),
         avariasService.buscarOpcoesFiltrosProdutos()
       ]);
-      setAvarias(listaAvarias);
-      setMotivos(listaMotivos);
-      setOpcoesDepartamentos(opcoesFiltros.departamentos as string[]);
-      setOpcoesSecoes(opcoesFiltros.secoes as string[]);
-      setOpcoesCategorias(opcoesFiltros.categorias as string[]);
-    } catch (err: any) {
+      setAvarias(lista);
+
+      // Garante que todo departamento presente nas avarias registradas conste no dropdown
+      const deptosDasAvarias = new Set<string>(opcoesFiltro.departamentos || []);
+      lista.forEach((av) => {
+        const d = av.produtos?.departamento?.trim();
+        if (d && isNaN(Number(d)) && !d.includes('.') && d.length >= 2) {
+          deptosDasAvarias.add(d);
+        }
+      });
+
+      setListaDepartamentos(Array.from(deptosDasAvarias).sort());
+      setSecoesMap(opcoesFiltro.secoesPorDepartamento || {});
+      setCategoriasMap(opcoesFiltro.categoriasPorSecao || {});
+    } catch (err) {
       console.error('Erro ao carregar avarias:', err);
     } finally {
       setLoading(false);
@@ -63,124 +72,213 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
     carregarDados();
   }, []);
 
-  const formatarDataSegura = (dataStr?: string) => {
-    if (!dataStr) return '-';
-    const partes = dataStr.split('T')[0].split('-');
-    if (partes.length === 3) {
-      const [ano, mes, dia] = partes;
-      return `${dia}/${mes}/${ano}`;
+  // Lista dinâmica de seções baseada no Departamento selecionado
+  const secoesDisponiveis = useMemo(() => {
+    if (departamentoSel === 'TODOS') {
+      const todas = new Set<string>();
+      Object.values(secoesMap).forEach((arr) => arr.forEach((s) => todas.add(s)));
+      avarias.forEach((av) => {
+        const s = av.produtos?.secao?.trim();
+        if (s && isNaN(Number(s)) && !s.includes('.')) todas.add(s);
+      });
+      return Array.from(todas).sort();
     }
-    return dataStr;
+    return secoesMap[departamentoSel] || [];
+  }, [departamentoSel, secoesMap, avarias]);
+
+  // Lista dinâmica de categorias baseada na Seção selecionada
+  const categoriasDisponiveis = useMemo(() => {
+    if (secaoSel === 'TODOS') {
+      const todas = new Set<string>();
+      Object.values(categoriasMap).forEach((arr) => arr.forEach((c) => todas.add(c)));
+      avarias.forEach((av) => {
+        const c = av.produtos?.categoria?.trim();
+        if (c && isNaN(Number(c)) && !c.includes('.')) todas.add(c);
+      });
+      return Array.from(todas).sort();
+    }
+    return categoriasMap[secaoSel] || [];
+  }, [secaoSel, categoriasMap, avarias]);
+
+  const handleMudarDepartamento = (novoDepto: string) => {
+    setDepartamentoSel(novoDepto);
+    setSecaoSel('TODOS');
+    setCategoriaSel('TODOS');
+    setPaginaAtual(1);
   };
 
-  // Mês Atual Padrão
-  const [primeiroDiaMesAtual, hojeFormatado] = useMemo(() => {
-    const agora = new Date();
-    const ano = agora.getFullYear();
-    const mes = String(agora.getMonth() + 1).padStart(2, '0');
-    const dia = String(agora.getDate()).padStart(2, '0');
-    return [`${ano}-${mes}-01`, `${ano}-${mes}-${dia}`];
-  }, []);
-
-  // Filtragem da Lista de Cards
-  const avariasFiltradas = useMemo(() => {
-    return avarias.filter((item: AvariaRecord) => {
-      const dataItem = item.data_registro ? item.data_registro.split('T')[0] : '';
-
-      if (dataInicio && dataItem < dataInicio) return false;
-      if (dataFim && dataItem > dataFim) return false;
-
-      if (motivoSel !== 'TODOS' && item.motivos_avaria?.descricao !== motivoSel) return false;
-      if (destinacaoSel !== 'TODAS' && item.destinacao !== destinacaoSel) return false;
-      if (departamentoSel !== 'TODOS' && item.produtos?.departamento !== departamentoSel) return false;
-      if (secaoSel !== 'TODOS' && item.produtos?.secao !== secaoSel) return false;
-      if (categoriaSel !== 'TODOS' && item.produtos?.categoria !== categoriaSel) return false;
-
-      return true;
-    });
-  }, [avarias, dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel]);
-
-  // TOTAL PREJUÍZO: DESCARTE + DOAÇÃO (Exclui TROCA e CONSUMO INTERNO)
-  const totalPrejuizo = useMemo(() => {
-    return avarias.reduce((acc, a) => {
-      const dest = (a.destinacao || '').toLowerCase();
-      
-      // Permite apenas DESCARTE e DOAÇÃO
-      const isDescarteOuDoacao = dest.includes('descarte') || dest.includes('doação') || dest.includes('doacao');
-      if (!isDescarteOuDoacao) return acc;
-
-      const dataItem = a.data_registro ? a.data_registro.split('T')[0] : '';
-
-      // Filtro manual ou padrão mês atual
-      if (dataInicio || dataFim) {
-        if (dataInicio && dataItem < dataInicio) return acc;
-        if (dataFim && dataItem > dataFim) return acc;
-      } else {
-        if (dataItem < primeiroDiaMesAtual || dataItem > hojeFormatado) return acc;
-      }
-
-      if (motivoSel !== 'TODOS' && a.motivos_avaria?.descricao !== motivoSel) return acc;
-      if (destinacaoSel !== 'TODAS' && a.destinacao !== destinacaoSel) return acc;
-      if (departamentoSel !== 'TODOS' && a.produtos?.departamento !== departamentoSel) return acc;
-      if (secaoSel !== 'TODOS' && a.produtos?.secao !== secaoSel) return acc;
-      if (categoriaSel !== 'TODOS' && a.produtos?.categoria !== categoriaSel) return acc;
-
-      const qtd = Number(a.quantidade || 0);
-      const custo = Number(a.preco_custo_na_perda || 0);
-      return acc + qtd * custo;
-    }, 0);
-  }, [
-    avarias,
-    dataInicio,
-    dataFim,
-    primeiroDiaMesAtual,
-    hojeFormatado,
-    motivoSel,
-    destinacaoSel,
-    departamentoSel,
-    secaoSel,
-    categoriaSel
-  ]);
-
-  useEffect(() => {
+  const handleMudarSecao = (novaSecao: string) => {
+    setSecaoSel(novaSecao);
+    setCategoriaSel('TODOS');
     setPaginaAtual(1);
-  }, [dataInicio, dataFim, motivoSel, destinacaoSel, departamentoSel, secaoSel, categoriaSel, itensPorPagina]);
+  };
 
-  const totalPaginas = Math.ceil(avariasFiltradas.length / itensPorPagina) || 1;
-  const indexInicial = (paginaAtual - 1) * itensPorPagina;
-  const avariasPaginadas = avariasFiltradas.slice(indexInicial, indexInicial + itensPorPagina);
-
-  const limparFiltros = () => {
-    setDataInicio('');
-    setDataFim('');
+  const handleLimparFiltros = () => {
     setMotivoSel('TODOS');
     setDestinacaoSel('TODAS');
+    setDataInicio('');
+    setDataFim('');
     setDepartamentoSel('TODOS');
     setSecaoSel('TODOS');
     setCategoriaSel('TODOS');
+    setPaginaAtual(1);
   };
 
-  const temFiltroAtivo =
-    Boolean(dataInicio) ||
-    Boolean(dataFim) ||
-    motivoSel !== 'TODOS' ||
-    destinacaoSel !== 'TODAS' ||
-    departamentoSel !== 'TODOS' ||
-    secaoSel !== 'TODOS' ||
-    categoriaSel !== 'TODOS';
+  const temFiltroAtivo = useMemo(() => {
+    return (
+      motivoSel !== 'TODOS' ||
+      destinacaoSel !== 'TODAS' ||
+      dataInicio !== '' ||
+      dataFim !== '' ||
+      departamentoSel !== 'TODOS' ||
+      secaoSel !== 'TODOS' ||
+      categoriaSel !== 'TODOS'
+    );
+  }, [motivoSel, destinacaoSel, dataInicio, dataFim, departamentoSel, secaoSel, categoriaSel]);
 
-  const handleSalvarNovaAvaria = async (dados: any) => {
-    await avariasService.registrarAvaria({
-      ...dados,
-      usuario_id: idUsuarioFinal
+  // Filtragem dos registros da listagem
+  const avariasFiltradas = useMemo(() => {
+    return avarias.filter((av) => {
+      const prod = av.produtos || {};
+
+      if (motivoSel !== 'TODOS' && av.motivo_avaria_id !== motivoSel) return false;
+
+      if (destinacaoSel !== 'TODAS') {
+        const dest = (av.destinacao || '').toLowerCase();
+        if (dest !== destinacaoSel.toLowerCase()) return false;
+      }
+
+      const dt = av.data_registro ? av.data_registro.split('T')[0] : '';
+      if (dataInicio && dt < dataInicio) return false;
+      if (dataFim && dt > dataFim) return false;
+
+      if (departamentoSel !== 'TODOS') {
+        const dProd = (prod.departamento || '').trim().toUpperCase();
+        if (dProd !== departamentoSel.toUpperCase()) return false;
+      }
+
+      if (secaoSel !== 'TODOS') {
+        const sProd = (prod.secao || '').trim().toUpperCase();
+        if (sProd !== secaoSel.toUpperCase()) return false;
+      }
+
+      if (categoriaSel !== 'TODOS') {
+        const cProd = (prod.categoria || '').trim().toUpperCase();
+        if (cProd !== categoriaSel.toUpperCase()) return false;
+      }
+
+      return true;
     });
-    setModalRegistroAberto(false);
-    await carregarDados();
+  }, [avarias, motivoSel, destinacaoSel, dataInicio, dataFim, departamentoSel, secaoSel, categoriaSel]);
+
+  // TOTAL AVARIAS REATIVO:
+  // - Sem filtro ativo: soma do Mês Atual (Descarte + Doação)
+  // - Com qualquer filtro ativo: soma calculada a partir da lista filtrada (avariasFiltradas)
+  const totalAvariasCalculado = useMemo(() => {
+    if (temFiltroAtivo) {
+      return avariasFiltradas.reduce((acc, av) => {
+        const dest = (av.destinacao || '').toLowerCase();
+
+        // Se o usuário filtrou uma destinação específica, soma ela; se deixou 'TODAS', soma Descarte + Doação
+        const considerar = destinacaoSel !== 'TODAS'
+          ? true
+          : dest.includes('descarte') || dest.includes('doação') || dest.includes('doacao');
+
+        if (!considerar) return acc;
+
+        const qtd = Number(av.quantidade || 0);
+        const custoUnit = Number(av.preco_custo_na_perda || av.produtos?.custoreal || 0);
+        return acc + qtd * custoUnit;
+      }, 0);
+    }
+
+    // Padrão sem filtros: Mês Atual vigente (Descarte + Doação)
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
+    const mesAtual = hoje.getMonth() + 1;
+
+    return avarias.reduce((acc, av) => {
+      const dest = (av.destinacao || '').toLowerCase();
+      const ehDescarteOuDoacao = dest.includes('descarte') || dest.includes('doação') || dest.includes('doacao');
+
+      if (!ehDescarteOuDoacao) return acc;
+      if (!av.data_registro) return acc;
+
+      const partesData = av.data_registro.split('T')[0].split('-');
+      if (partesData.length < 2) return acc;
+
+      const anoReg = Number(partesData[0]);
+      const mesReg = Number(partesData[1]);
+
+      if (anoReg === anoAtual && mesReg === mesAtual) {
+        const qtd = Number(av.quantidade || 0);
+        const custoUnit = Number(av.preco_custo_na_perda || av.produtos?.custoreal || 0);
+        return acc + qtd * custoUnit;
+      }
+
+      return acc;
+    }, 0);
+  }, [avarias, avariasFiltradas, temFiltroAtivo, destinacaoSel]);
+
+  const formatarMoedaBR = (valor: number) => {
+    return valor.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
   };
 
+  const formatarDataBR = (dt?: string) => {
+    if (!dt) return '-';
+    const partes = dt.split('T')[0].split('-');
+    return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : dt;
+  };
+
+  const formatarHora = (hr?: string) => {
+    if (!hr) return '';
+    return hr.slice(0, 5);
+  };
+
+  // Paginação
+  const totalPaginas = Math.ceil(avariasFiltradas.length / itensPorPagina) || 1;
+  const indexInicio = (paginaAtual - 1) * itensPorPagina;
+  const avariasPaginadas = avariasFiltradas.slice(indexInicio, indexInicio + itensPorPagina);
+
+  const listaMotivosDisponiveis = useMemo(() => {
+    const mapa = new Map<string, string>();
+    avarias.forEach((a) => {
+      if (a.motivos_avaria?.id && a.motivos_avaria?.descricao) {
+        mapa.set(a.motivos_avaria.id, a.motivos_avaria.descricao);
+      }
+    });
+    return Array.from(mapa.entries()).map(([id, desc]) => ({ id, desc }));
+  }, [avarias]);
+
+  const idUsuarioAtivo = usuarioLogadoId || usuarioLogado?.id || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id;
+
+  // VISÃO DE REGISTRO EM TELA CHEIA (NÃO MODAL)
+  if (telaAtiva === 'REGISTRAR') {
+    return (
+      <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+        <div className="w-full max-w-lg bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
+          <RegistrarAvariaModal
+            onFechar={() => setTelaAtiva('LISTAGEM')}
+            onCancelar={() => setTelaAtiva('LISTAGEM')}
+            onVoltar={() => setTelaAtiva('LISTAGEM')}
+            onSucesso={() => {
+              setTelaAtiva('LISTAGEM');
+              carregarDados();
+            }}
+            usuarioLogadoId={idUsuarioAtivo}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // VISÃO PRINCIPAL DA LISTAGEM
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
-      <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
+      <div className="w-full max-w-lg bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
         
         {/* HEADER */}
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -188,250 +286,306 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
             <button
               type="button"
               onClick={onVoltarParaHome || (() => window.history.back())}
-              className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+              className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none cursor-pointer"
             >
               ←
             </button>
             <div>
               <h1 className="text-[#09797a] font-black text-xl leading-none uppercase">AVARIAS</h1>
-              <p className="text-[11px] text-slate-400 font-bold mt-1 tracking-wide">Controle de Quebras e Perdas</p>
+              <p className="text-[11px] text-slate-400 font-bold mt-1 tracking-wide">
+                Controle de Quebras e Perdas
+              </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={() => setModalRegistroAberto(true)}
-            className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+            onClick={() => setTelaAtiva('REGISTRAR')}
+            className="bg-[#09797a] hover:bg-[#075f60] text-white px-3.5 py-2 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all cursor-pointer"
           >
             + REGISTRAR
           </button>
         </div>
 
-        {/* PAINEL DE FILTROS AVANÇADOS (RETRÁTIL) */}
-        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3 transition-all">
+        {/* CONTAINER FILTROS AVANÇADOS (RETRAÍDO POR PADRÃO) */}
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-3xl flex flex-col gap-3 shadow-xs">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">
-                Filtros Avançados
+              <span className="text-xs font-black uppercase text-slate-700 tracking-wider">
+                FILTROS AVANÇADOS
               </span>
-              {temFiltroAtivo && (
-                <span className="w-2 h-2 rounded-full bg-[#09797a]" title="Filtros aplicados" />
-              )}
+              {temFiltroAtivo && <span className="w-2 h-2 rounded-full bg-[#09797a]" />}
             </div>
 
             <div className="flex items-center gap-2">
               {temFiltroAtivo && (
                 <button
                   type="button"
-                  onClick={limparFiltros}
-                  className="text-[10px] font-bold text-red-600 hover:underline uppercase mr-1"
+                  onClick={handleLimparFiltros}
+                  className="text-[11px] font-black uppercase text-red-600 hover:underline px-1 cursor-pointer"
                 >
-                  Limpar
+                  LIMPAR
                 </button>
               )}
               <button
                 type="button"
-                onClick={() => setFiltrosExpandidos((prev) => !prev)}
-                className="w-7 h-7 rounded-xl bg-white border border-slate-300 text-[#09797a] font-black text-sm flex items-center justify-center shadow-sm hover:bg-slate-100 transition-all"
-                title={filtrosExpandidos ? 'Recolher Filtros' : 'Expandir Filtros'}
+                onClick={() => setFiltrosAbertos(!filtrosAbertos)}
+                className="w-7 h-7 rounded-xl bg-white border border-slate-300 text-slate-600 font-black text-xs flex items-center justify-center shadow-xs cursor-pointer hover:bg-slate-100"
               >
-                {filtrosExpandidos ? '−' : '+'}
+                {filtrosAbertos ? '−' : '+'}
               </button>
             </div>
           </div>
 
-          {/* CAMPOS EXPANSÍVEIS */}
-          {filtrosExpandidos && (
-            <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/80 animate-fadeIn">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Motivo</label>
-                  <select
-                    value={motivoSel}
-                    onChange={(e) => setMotivoSel(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-                  >
-                    <option value="TODOS">⚠️ MOTIVO: TODOS</option>
-                    {motivos.map((m) => (
-                      <option key={m.id} value={m.descricao}>{m.descricao.toUpperCase()}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Destinação</label>
-                  <select
-                    value={destinacaoSel}
-                    onChange={(e) => setDestinacaoSel(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-                  >
-                    <option value="TODAS">📦 DESTINAÇÃO: TODAS</option>
-                    <option value="Descarte">DESCARTE</option>
-                    <option value="Troca">TROCA FORNECEDOR</option>
-                    <option value="Consumo Interno">CONSUMO INTERNO</option>
-                    <option value="Doação">DOAÇÃO</option>
-                  </select>
-                </div>
+          {filtrosAbertos && (
+            <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200">
+              {/* Motivo */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">MOTIVO</label>
+                <select
+                  value={motivoSel}
+                  onChange={(e) => {
+                    setMotivoSel(e.target.value);
+                    setPaginaAtual(1);
+                  }}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  <option value="TODOS">⚠️ MOTIVO: TODOS</option>
+                  {listaMotivosDisponiveis.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.desc.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Destinação */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">DESTINAÇÃO</label>
+                <select
+                  value={destinacaoSel}
+                  onChange={(e) => {
+                    setDestinacaoSel(e.target.value);
+                    setPaginaAtual(1);
+                  }}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  {DESTINACOES_OPCOES.map((d) => (
+                    <option key={d} value={d}>
+                      📦 DESTINAÇÃO: {d.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Período */}
+              <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Inicial</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">DATA INICIAL</label>
                   <input
                     type="date"
                     value={dataInicio}
-                    onChange={(e) => setDataInicio(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+                    onChange={(e) => {
+                      setDataInicio(e.target.value);
+                      setPaginaAtual(1);
+                    }}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-2.5 font-bold text-slate-800 outline-none focus:border-[#09797a]"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data Final</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">DATA FINAL</label>
                   <input
                     type="date"
                     value={dataFim}
-                    onChange={(e) => setDataFim(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 outline-none focus:border-[#09797a]"
+                    onChange={(e) => {
+                      setDataFim(e.target.value);
+                      setPaginaAtual(1);
+                    }}
+                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-2.5 font-bold text-slate-800 outline-none focus:border-[#09797a]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Departamento</label>
-                  <select
-                    value={departamentoSel}
-                    onChange={(e) => setDepartamentoSel(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-                  >
-                    <option value="TODOS">DEPTO: TODOS</option>
-                    {opcoesDepartamentos.map((dep) => (
-                      <option key={dep} value={dep}>{dep.toUpperCase()}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* HIERARQUIA 1: DEPARTAMENTO */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-[#09797a] uppercase tracking-wider">
+                  1. DEPARTAMENTO (PRINCIPAL)
+                </label>
+                <select
+                  value={departamentoSel}
+                  onChange={(e) => handleMudarDepartamento(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border-2 border-[#09797a]/30 rounded-xl px-3 font-black text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  <option value="TODOS">DEPTO: TODOS</option>
+                  {listaDepartamentos.map((d) => (
+                    <option key={d} value={d}>
+                      {d.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Seção</label>
-                  <select
-                    value={secaoSel}
-                    onChange={(e) => setSecaoSel(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-                  >
-                    <option value="TODOS">SEÇÃO: TODAS</option>
-                    {opcoesSecoes.map((sec) => (
-                      <option key={sec} value={sec}>{sec.toUpperCase()}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* HIERARQUIA 2: SEÇÃO */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  2. SEÇÃO {departamentoSel !== 'TODOS' && `(DE ${departamentoSel})`}
+                </label>
+                <select
+                  value={secaoSel}
+                  onChange={(e) => handleMudarSecao(e.target.value)}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  <option value="TODOS">SEÇÃO: TODAS</option>
+                  {secoesDisponiveis.map((s) => (
+                    <option key={s} value={s}>
+                      {s.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Categoria</label>
-                  <select
-                    value={categoriaSel}
-                    onChange={(e) => setCategoriaSel(e.target.value)}
-                    className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
-                  >
-                    <option value="TODOS">CAT: TODAS</option>
-                    {opcoesCategorias.map((cat) => (
-                      <option key={cat} value={cat}>{cat.toUpperCase()}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* HIERARQUIA 3: CATEGORIA */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  3. CATEGORIA {secaoSel !== 'TODOS' && `(DE ${secaoSel})`}
+                </label>
+                <select
+                  value={categoriaSel}
+                  onChange={(e) => {
+                    setCategoriaSel(e.target.value);
+                    setPaginaAtual(1);
+                  }}
+                  className="w-full h-10 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 uppercase outline-none focus:border-[#09797a]"
+                >
+                  <option value="TODOS">CAT: TODAS</option>
+                  {categoriasDisponiveis.map((c) => (
+                    <option key={c} value={c}>
+                      {c.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
         </div>
 
-        {/* CARD TOTALIZADOR DO PREJUÍZO (DESCARTE + DOAÇÃO) */}
-        <div className="bg-red-50/70 border border-red-200 px-4 py-3 rounded-2xl flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-red-900 uppercase">Total Prejuízo:</span>
-            <span className="font-mono text-base sm:text-lg font-black text-red-600">
-              - {totalPrejuizo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+        {/* CARD TOTAL AVARIAS: MÊS ATUAL OU FILTRADO */}
+        <div className="p-4 bg-red-50/40 border border-red-200/80 rounded-2xl flex items-center justify-between shadow-xs">
+          <div>
+            <span className="text-xs font-black text-slate-800 uppercase block tracking-wider">
+              TOTAL AVARIAS:
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-red-700 font-mono tracking-tight">
+              R$ {formatarMoedaBR(totalAvariasCalculado)}
             </span>
           </div>
-          <span className="text-[10px] font-bold text-slate-400 uppercase">
-            {!dataInicio && !dataFim ? '(MÊS ATUAL: DESCARTE + DOAÇÃO)' : `(${avariasFiltradas.length} ITENS)`}
+          <span className="text-[10px] text-slate-400 font-medium text-right uppercase leading-tight">
+            {temFiltroAtivo
+              ? `${destinacaoSel !== 'TODAS' ? destinacaoSel : 'DESCARTE + DOAÇÃO'} (FILTRADO)`
+              : 'MÊS ATUAL: DESCARTE + DOAÇÃO'}
           </span>
         </div>
 
-        {/* EXIBIR POR PÁG */}
-        <div className="flex items-center justify-end gap-2 px-1">
-          <span className="text-[10px] font-bold text-slate-500 uppercase">Exibir por pág:</span>
-          <select
-            value={itensPorPagina}
-            onChange={(e) => setItensPorPagina(Number(e.target.value))}
-            className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-3 py-1.5 outline-none focus:border-[#09797a] shadow-sm cursor-pointer"
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+        {/* CONTROLE DE EXIBIÇÃO POR PÁGINA */}
+        <div className="flex justify-between items-center px-1">
+          <span className="text-xs font-bold text-slate-500">
+            Total: <strong>{avariasFiltradas.length}</strong> registro(s)
+          </span>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">EXIBIR POR PÁG:</span>
+            <select
+              value={itensPorPagina}
+              onChange={(e) => {
+                setItensPorPagina(Number(e.target.value));
+                setPaginaAtual(1);
+              }}
+              className="bg-white border border-slate-300 text-xs font-black text-slate-700 rounded-xl px-2.5 py-1 outline-none"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
         </div>
 
-        {/* LISTAGEM DOS CARDS COM OBSERVAÇÃO ANTES DO VALOR */}
-        <div className="flex-1 overflow-y-auto space-y-3">
+        {/* LISTAGEM DOS CARDS */}
+        <div className="flex-1 overflow-y-auto space-y-2.5">
           {loading ? (
-            <div className="text-center py-20 text-slate-400 font-bold text-xs uppercase">Carregando avarias...</div>
+            <div className="text-center py-16 text-slate-400 font-bold text-xs uppercase animate-pulse">
+              Carregando avarias...
+            </div>
           ) : avariasFiltradas.length === 0 ? (
             <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs font-bold italic">
-              Nenhuma avaria encontrada para os filtros selecionados.
+              Nenhuma avaria encontrada com os filtros selecionados.
             </div>
           ) : (
-            avariasPaginadas.map((av: AvariaRecord) => {
-              const valorPerda = Number(av.quantidade || 0) * Number(av.preco_custo_na_perda || 0);
+            avariasPaginadas.map((av) => {
+              const prod = av.produtos || {};
+              const qtd = Number(av.quantidade || 0);
+              const custoUnit = Number(av.preco_custo_na_perda || prod.custoreal || 0);
+              const custoTotalPerda = qtd * custoUnit;
 
               return (
                 <div
                   key={av.id}
-                  className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 hover:border-slate-300 transition-all"
+                  className="p-3.5 bg-white border border-slate-200 rounded-2xl flex flex-col gap-2 shadow-xs hover:border-slate-300 transition-all"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[9px] font-mono font-black text-red-700 bg-red-100 px-2 py-0.5 rounded">
-                        {av.codigo_customizado || 'AV'}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[9px] font-mono font-black text-red-700 bg-red-100 px-2 py-0.5 rounded uppercase">
+                      {av.codigo_customizado || 'AV-S/C'}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                      Cód: {prod.codprod || '-'}
+                    </span>
+                    {prod.departamento && (
+                      <span className="text-[9px] font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded uppercase">
+                        {prod.departamento}
                       </span>
-                      <span className="text-[10px] font-mono font-bold text-slate-400">
-                        Cód: {av.produtos?.codprod || '-'}
-                      </span>
-                    </div>
-
-                    <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase mt-1 leading-snug">
-                      {av.produtos?.descricao || 'PRODUTO NÃO IDENTIFICADO'}
-                    </h3>
-
-                    <div className="text-[11px] text-slate-500 font-semibold mt-1">
-                      QTD: <strong className="text-slate-800">{av.quantidade} {av.produtos?.unidade || 'UN'}</strong> &nbsp;|&nbsp;
-                      MOTIVO: <strong className="text-slate-800 uppercase">{av.motivos_avaria?.descricao || 'AVARIA'}</strong>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="text-[9px] font-bold uppercase bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                        DESTINO: {av.destinacao || 'DESCARTE'}
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        Resp: <strong className="text-slate-600">{av.usuarios?.nome || 'Sistema'}</strong>
-                      </span>
-                    </div>
-
-                    {/* OBSERVAÇÃO ANTES DO VALOR */}
-                    {av.observacao && (
-                      <div className="text-[10px] text-slate-500 italic mt-2 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
-                        Obs: {av.observacao}
-                      </div>
                     )}
                   </div>
 
-                  {/* BLOCO DE VALOR, DATA E HORA */}
-                  <div className="text-right flex-shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto flex sm:flex-col justify-between items-end">
-                    <span className="text-sm font-black text-red-600 font-mono">
-                      - R$ {valorPerda.toFixed(2).replace('.', ',')}
+                  <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase leading-snug">
+                    {prod.descricao || 'PRODUTO NÃO IDENTIFICADO'}
+                  </h3>
+
+                  <div className="text-xs font-bold text-slate-600 flex items-center gap-2 flex-wrap">
+                    <span>
+                      QTD: <strong className="text-slate-800">{av.quantidade} {prod.unidade || 'UN'}</strong>
                     </span>
-                    <span className="text-[10px] font-bold text-slate-400 font-mono mt-0.5">
-                      {formatarDataSegura(av.data_registro)} às {av.hora_registro?.slice(0, 5) || '00:00'}
+                    <span>|</span>
+                    <span>
+                      MOTIVO: <strong className="text-slate-800">{av.motivos_avaria?.descricao?.toUpperCase() || '-'}</strong>
                     </span>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 flex justify-between items-center text-xs font-mono">
+                    <span className="text-slate-500 font-medium text-[11px]">
+                      Custo Unit: <strong>R$ {formatarMoedaBR(custoUnit)}</strong>
+                    </span>
+                    <span className="text-red-700 font-black text-xs">
+                      Perda: R$ {formatarMoedaBR(custoTotalPerda)}
+                    </span>
+                  </div>
+
+                  {av.observacao && (
+                    <div className="text-[11px] text-slate-500 italic bg-amber-50/60 border border-amber-200/50 rounded-lg px-2.5 py-1">
+                      "{av.observacao}"
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-400 pt-1 border-t border-slate-100 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>DESTINO: <strong className="text-slate-700 uppercase">{av.destinacao || 'Descarte'}</strong></span>
+                      <span>•</span>
+                      <span>Resp: <strong className="text-slate-700">{av.usuarios?.nome || 'Operador'}</strong></span>
+                    </div>
+
+                    <div className="font-mono text-slate-500 font-bold flex items-center gap-1">
+                      <span>📅 {formatarDataBR(av.data_registro)}</span>
+                      {av.hora_registro && <span> às {formatarHora(av.hora_registro)}</span>}
+                    </div>
                   </div>
                 </div>
               );
@@ -439,8 +593,8 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
           )}
         </div>
 
-        {/* CONTROLES DE PAGINAÇÃO */}
-        {avariasFiltradas.length > itensPorPagina && (
+        {/* PAGINAÇÃO */}
+        {totalPaginas > 1 && (
           <div className="flex items-center justify-between border-t border-slate-100 pt-3 flex-shrink-0">
             <span className="text-xs font-bold text-slate-500">
               Página {paginaAtual} de {totalPaginas}
@@ -451,39 +605,16 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
                 type="button"
                 disabled={paginaAtual === 1}
                 onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
               >
                 ← Anterior
               </button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
-                  .filter((p) => p === 1 || p === totalPaginas || Math.abs(p - paginaAtual) <= 1)
-                  .map((p, idx, arr) => (
-                    <React.Fragment key={p}>
-                      {idx > 0 && arr[idx - 1] !== p - 1 && (
-                        <span className="text-xs text-slate-400 px-1">...</span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setPaginaAtual(p)}
-                        className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${
-                          paginaAtual === p
-                            ? 'bg-[#09797a] text-white shadow-sm'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    </React.Fragment>
-                  ))}
-              </div>
 
               <button
                 type="button"
                 disabled={paginaAtual === totalPaginas}
                 onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
               >
                 Próxima →
               </button>
@@ -492,15 +623,6 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
         )}
 
       </div>
-
-      {/* MODAL REGISTRAR AVARIA */}
-      {modalRegistroAberto && (
-        <RegistrarAvariaModal
-          motivos={motivos}
-          onCancelar={() => setModalRegistroAberto(false)}
-          onSalvar={handleSalvarNovaAvaria}
-        />
-      )}
     </div>
   );
 }

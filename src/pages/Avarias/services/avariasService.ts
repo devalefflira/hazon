@@ -3,15 +3,32 @@ import { supabase } from '../../../lib/supabaseClient';
 import type { AvariaRecord, FiltrosAvariaPayload, NovaAvariaPayload } from '../types/avarias.types';
 
 export const avariasService = {
-  // 1. Listar registros de Avarias
+  // 1. Listar registros de Avarias com dados de produto e usuário
   async listarAvarias(filtros?: FiltrosAvariaPayload): Promise<AvariaRecord[]> {
     let query = supabase
       .from('avarias')
       .select(`
         *,
-        produtos ( id, codprod, descricao, codbarra, unidade, custoreal, departamento, secao, categoria ),
-        motivos_avaria ( id, descricao ),
-        usuarios ( id, nome )
+        produtos (
+          id,
+          codprod,
+          descricao,
+          codbarra,
+          unidade,
+          custoreal,
+          pvenda,
+          departamento,
+          secao,
+          categoria
+        ),
+        motivos_avaria (
+          id,
+          descricao
+        ),
+        usuarios (
+          id,
+          nome
+        )
       `)
       .order('data_registro', { ascending: false })
       .order('hora_registro', { ascending: false });
@@ -45,25 +62,79 @@ export const avariasService = {
     return data || [];
   },
 
-  // 3. Buscar opções únicas de Departamentos, Seções e Categorias
-  async buscarOpcoesFiltrosProdutos() {
+  // 3. Buscar opções únicas e mapeamentos em cascata de Departamentos, Seções e Categorias
+  async buscarOpcoesFiltrosProdutos(): Promise<{
+    departamentos: string[];
+    secoes: string[];
+    categorias: string[];
+    secoesPorDepartamento: Record<string, string[]>;
+    categoriasPorSecao: Record<string, string[]>;
+  }> {
     const { data, error } = await supabase
       .from('produtos')
       .select('departamento, secao, categoria');
 
-    if (error) throw error;
+    if (error) {
+      console.error('Erro ao buscar opções de filtros:', error);
+      throw error;
+    }
 
-    const departamentos = Array.from(
-      new Set((data || []).map((p: any) => p.departamento).filter(Boolean))
-    );
-    const secoes = Array.from(
-      new Set((data || []).map((p: any) => p.secao).filter(Boolean))
-    );
-    const categorias = Array.from(
-      new Set((data || []).map((p: any) => p.categoria).filter(Boolean))
-    );
+    const ehValido = (txt: any): boolean => {
+      if (!txt || typeof txt !== 'string') return false;
+      const t = txt.trim();
+      return t.length >= 2 && isNaN(Number(t)) && !t.includes('.');
+    };
 
-    return { departamentos, secoes, categorias };
+    const deptosSet = new Set<string>();
+    const secoesSet = new Set<string>();
+    const catsSet = new Set<string>();
+
+    const secoesPorDep: Record<string, Set<string>> = {};
+    const catsPorSec: Record<string, Set<string>> = {};
+
+    (data || []).forEach((p: any) => {
+      const dep = p.departamento?.trim();
+      const sec = p.secao?.trim();
+      const cat = p.categoria?.trim();
+
+      if (ehValido(dep)) {
+        deptosSet.add(dep);
+        if (!secoesPorDep[dep]) secoesPorDep[dep] = new Set();
+        if (ehValido(sec)) {
+          secoesPorDep[dep].add(sec);
+        }
+      }
+
+      if (ehValido(sec)) {
+        secoesSet.add(sec);
+        if (!catsPorSec[sec]) catsPorSec[sec] = new Set();
+        if (ehValido(cat)) {
+          catsPorSec[sec].add(cat);
+        }
+      }
+
+      if (ehValido(cat)) {
+        catsSet.add(cat);
+      }
+    });
+
+    const secoesPorDepartamento: Record<string, string[]> = {};
+    Object.keys(secoesPorDep).forEach((k) => {
+      secoesPorDepartamento[k] = Array.from(secoesPorDep[k]).sort();
+    });
+
+    const categoriasPorSecao: Record<string, string[]> = {};
+    Object.keys(catsPorSec).forEach((k) => {
+      categoriasPorSecao[k] = Array.from(catsPorSec[k]).sort();
+    });
+
+    return {
+      departamentos: Array.from(deptosSet).sort(),
+      secoes: Array.from(secoesSet).sort(),
+      categorias: Array.from(catsSet).sort(),
+      secoesPorDepartamento,
+      categoriasPorSecao
+    };
   },
 
   // 4. Buscar produtos por autocomplete (código, barras ou descrição com %)
@@ -73,7 +144,7 @@ export const avariasService = {
     const palavras = termo.trim().split(/\s+/).filter(Boolean);
     let query = supabase
       .from('produtos')
-      .select('id, codprod, descricao, codbarra, unidade, custoreal, departamento, secao, categoria');
+      .select('id, codprod, descricao, codbarra, unidade, custoreal, pvenda, departamento, secao, categoria');
 
     if (palavras.length === 1) {
       const p = palavras[0];
