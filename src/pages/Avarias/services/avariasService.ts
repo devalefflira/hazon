@@ -1,6 +1,7 @@
 // src/pages/Avarias/services/avariasService.ts
 import { supabase } from '../../../lib/supabaseClient';
 import type { AvariaRecord, FiltrosAvariaPayload, NovaAvariaPayload } from '../types/avarias.types';
+import { dispararNotificacaoTelegram } from '../../../services/telegramNotificationService';
 
 export const avariasService = {
   // 1. Listar registros de Avarias com dados de produto e usuário
@@ -164,7 +165,7 @@ export const avariasService = {
     return data || [];
   },
 
-  // 5. Registrar Nova Avaria (+ Integração automática com Consumo Loja se Destino = Consumo Interno)
+  // 5. Registrar Nova Avaria (+ Notificação Telegram + Integração Consumo Loja)
   async registrarAvaria(payload: NovaAvariaPayload): Promise<void> {
     const codigoCustom = `AV${Math.floor(1000 + Math.random() * 9000)}`;
     
@@ -173,17 +174,36 @@ export const avariasService = {
     const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     let motivoIdFinal = payload.motivo_avaria_id;
-    if (motivoIdFinal.startsWith('m')) {
-      const { data: motivoBanco } = await supabase
+    let motivoDescricao = 'AVARIA (GERAL)';
+
+    const { data: motivoBanco } = await supabase
+      .from('motivos_avaria')
+      .select('id, descricao')
+      .eq('id', payload.motivo_avaria_id)
+      .maybeSingle();
+
+    if (motivoBanco) {
+      motivoIdFinal = motivoBanco.id;
+      motivoDescricao = motivoBanco.descricao;
+    } else if (motivoIdFinal.startsWith('m')) {
+      const { data: motivoPrimeiro } = await supabase
         .from('motivos_avaria')
-        .select('id')
+        .select('id, descricao')
         .limit(1)
         .single();
-
-      if (motivoBanco) {
-        motivoIdFinal = motivoBanco.id;
+      if (motivoPrimeiro) {
+        motivoIdFinal = motivoPrimeiro.id;
+        motivoDescricao = motivoPrimeiro.descricao;
       }
     }
+
+    const [prodRes, userRes] = await Promise.all([
+      supabase.from('produtos').select('codprod, descricao, unidade, departamento').eq('id', payload.produto_id).single(),
+      payload.usuario_id ? supabase.from('usuarios').select('nome').eq('id', payload.usuario_id).single() : Promise.resolve({ data: null })
+    ]);
+
+    const prodInfo = prodRes.data;
+    const nomeUsuario = userRes.data?.nome || 'Operador';
 
     const objetoInsert: Record<string, any> = {
       codigo_customizado: codigoCustom,
@@ -193,15 +213,11 @@ export const avariasService = {
       preco_custo_na_perda: payload.preco_custo_na_perda,
       destinacao: payload.destinacao,
       observacao: payload.observacao || null,
+      usuario_id: payload.usuario_id || null,
       data_registro: dataAtual,
       hora_registro: horaAtual
     };
 
-    if (payload.usuario_id) {
-      objetoInsert.usuario_id = payload.usuario_id;
-    }
-
-    // Insere na tabela de Avarias
     const { error: errorAvaria } = await supabase
       .from('avarias')
       .insert([objetoInsert]);
@@ -211,17 +227,30 @@ export const avariasService = {
       throw errorAvaria;
     }
 
+    // Disparo Telegram Unitário
+    const valorPerdaTotal = Number(payload.quantidade || 0) * Number(payload.preco_custo_na_perda || 0);
+    const mensagemTelegram = `🚨 <b>AVARIA REGISTRADA</b>\n\n` +
+      `<b>Código:</b> <code>#${codigoCustom}</code>\n` +
+      `<b>Produto:</b> ${prodInfo?.descricao || 'NÃO IDENTIFICADO'}\n` +
+      `<b>Cód. Sistema:</b> ${prodInfo?.codprod || '-'} | <b>Depto:</b> ${prodInfo?.departamento || 'GERAL'}\n` +
+      `<b>Quantidade:</b> ${payload.quantidade} ${prodInfo?.unidade || 'UN'}\n` +
+      `<b>Custo Unitário:</b> R$ ${Number(payload.preco_custo_na_perda || 0).toFixed(2).replace('.', ',')}\n` +
+      `<b>Perda Total:</b> <code>R$ ${valorPerdaTotal.toFixed(2).replace('.', ',')}</code>\n` +
+      `<b>Motivo:</b> ${motivoDescricao.toUpperCase()}\n` +
+      `<b>Destino:</b> ${payload.destinacao.toUpperCase()}\n` +
+      `<b>Responsável:</b> ${nomeUsuario}\n` +
+      (payload.observacao ? `📝 <i>"${payload.observacao}"</i>\n` : '');
+
+    dispararNotificacaoTelegram({
+      mensagemHtml: mensagemTelegram,
+      textoBotao: '🔗 Abrir Módulo de Avarias',
+      urlBotao: '/?tela=avarias'
+    }).catch((e) => console.error('Erro silencioso telegram:', e));
+
     // Se o destino for "Consumo Interno", gera a cópia trackeada no Consumo Loja
     const destFormatada = (payload.destinacao || '').toLowerCase();
     if (destFormatada.includes('consumo')) {
       try {
-        const { data: prodData } = await supabase
-          .from('produtos')
-          .select('departamento, unidade')
-          .eq('id', payload.produto_id)
-          .single();
-
-        const valorTotalItem = Number(payload.quantidade || 0) * Number(payload.preco_custo_na_perda || 0);
         const codigoConsumo = `CSM-AV-${Math.floor(100000 + Math.random() * 900000)}`;
 
         const { data: mestreConsumo, error: errMestre } = await supabase
@@ -232,7 +261,7 @@ export const avariasService = {
               usuario_id: payload.usuario_id,
               data_registro: dataAtual,
               hora_registro: horaAtual,
-              valor_total: valorTotalItem,
+              valor_total: valorPerdaTotal,
               observacao: `Origem Avaria (${codigoCustom}) - ${payload.observacao || 'Destino Consumo Interno'}`
             }
           ])
@@ -245,11 +274,11 @@ export const avariasService = {
               consumo_mestre_id: mestreConsumo.id,
               produto_id: payload.produto_id,
               quantidade: payload.quantidade,
-              unidade_medida: prodData?.unidade || 'UN',
+              unidade_medida: prodInfo?.unidade || 'UN',
               local: 'Consumo Interno (Avaria)',
-              departamento: prodData?.departamento || 'Geral',
+              departamento: prodInfo?.departamento || 'Geral',
               custo_unitario: payload.preco_custo_na_perda,
-              valor_total_item: valorTotalItem,
+              valor_total_item: valorPerdaTotal,
               observacao: `Trackeado via Avaria ${codigoCustom}`
             }
           ]);
@@ -264,8 +293,7 @@ export const avariasService = {
     return this.registrarAvaria(payload);
   },
 
-
-  // 6. Registrar Múltiplas Avarias em Lote (Cada item gera um card/registro único)
+  // 6. Registrar Múltiplas Avarias em Lote (+ Notificação Telegram Consolidada)
   async registrarAvariasEmLote(payload: {
     motivo_avaria_id: string;
     destinacao: string;
@@ -273,6 +301,8 @@ export const avariasService = {
     usuario_id?: string;
     itens: Array<{
       produto_id: string;
+      codprod?: string;
+      descricao?: string;
       quantidade: number;
       preco_custo_na_perda: number;
       unidade?: string;
@@ -288,17 +318,23 @@ export const avariasService = {
     const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     let motivoIdFinal = payload.motivo_avaria_id;
-    if (motivoIdFinal.startsWith('m')) {
-      const { data: motivoBanco } = await supabase
-        .from('motivos_avaria')
-        .select('id')
-        .limit(1)
-        .single();
+    let motivoDescricao = 'AVARIA (GERAL)';
 
-      if (motivoBanco) {
-        motivoIdFinal = motivoBanco.id;
-      }
+    const { data: motivoBanco } = await supabase
+      .from('motivos_avaria')
+      .select('id, descricao')
+      .eq('id', payload.motivo_avaria_id)
+      .maybeSingle();
+
+    if (motivoBanco) {
+      motivoIdFinal = motivoBanco.id;
+      motivoDescricao = motivoBanco.descricao;
     }
+
+    const { data: userData } = payload.usuario_id
+      ? await supabase.from('usuarios').select('nome').eq('id', payload.usuario_id).single()
+      : { data: null };
+    const nomeUsuario = userData?.nome || 'Operador';
 
     const registrosAvaria = payload.itens.map((it) => ({
       codigo_customizado: `AV${Math.floor(1000 + Math.random() * 9000)}`,
@@ -322,15 +358,40 @@ export const avariasService = {
       throw errorAvarias;
     }
 
+    // Disparo Telegram Lote
+    const valorTotalLote = payload.itens.reduce(
+      (acc, it) => acc + Number(it.quantidade || 0) * Number(it.preco_custo_na_perda || 0),
+      0
+    );
+    const totalItensQtd = payload.itens.reduce((acc, it) => acc + Number(it.quantidade || 0), 0);
+
+    const linhasItens = payload.itens.slice(0, 8).map((it) => {
+      const subtotal = Number(it.quantidade || 0) * Number(it.preco_custo_na_perda || 0);
+      return `• <b>${it.descricao || 'Item'}</b>: ${it.quantidade} ${it.unidade || 'UN'} (R$ ${subtotal.toFixed(2).replace('.', ',')})`;
+    }).join('\n');
+
+    const excesso = payload.itens.length > 8 ? `\n<i>... e mais ${payload.itens.length - 8} produto(s)</i>` : '';
+
+    const mensagemTelegramLote = `📦 <b>LANÇAMENTO DE AVARIAS EM LOTE</b>\n\n` +
+      `<b>Total de Produtos:</b> ${payload.itens.length} itens\n` +
+      `<b>Volume Físico:</b> ${totalItensQtd.toFixed(1)} unidades/kg\n` +
+      `<b>Perda Total Acumulada:</b> <code>R$ ${valorTotalLote.toFixed(2).replace('.', ',')}</code>\n` +
+      `<b>Motivo Unificado:</b> ${motivoDescricao.toUpperCase()}\n` +
+      `<b>Destinação:</b> ${payload.destinacao.toUpperCase()}\n` +
+      `<b>Responsável:</b> ${nomeUsuario}\n\n` +
+      `<b>Resumo dos Itens:</b>\n${linhasItens}${excesso}\n` +
+      (payload.observacao ? `\n📝 <i>"${payload.observacao}"</i>` : '');
+
+    dispararNotificacaoTelegram({
+      mensagemHtml: mensagemTelegramLote,
+      textoBotao: '🔗 Conferir Avarias no ERP',
+      urlBotao: '/?tela=avarias'
+    }).catch((e) => console.error('Erro silencioso telegram lote:', e));
+
     // Se a destinação for "Consumo Interno", sincroniza os itens no Consumo Loja
     const destFormatada = (payload.destinacao || '').toLowerCase();
     if (destFormatada.includes('consumo')) {
       try {
-        const valorTotalLote = payload.itens.reduce(
-          (acc, it) => acc + Number(it.quantidade || 0) * Number(it.preco_custo_na_perda || 0),
-          0
-        );
-
         const codigoConsumo = `CSM-LOT-${Math.floor(100000 + Math.random() * 900000)}`;
 
         const { data: mestreConsumo, error: errMestre } = await supabase
@@ -366,5 +427,6 @@ export const avariasService = {
       } catch (errSync) {
         console.error('Erro ao sincronizar consumo em lote:', errSync);
       }
-    };
-}}
+    }
+  }
+};

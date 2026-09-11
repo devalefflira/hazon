@@ -9,7 +9,6 @@ interface HomeProps {
   usuarioLogadoId?: string;
   permissoesDoUsuario?: string[];
   onLogout?: () => void;
-  onNavegarParaNotificacoes?: () => void;
   onNavegarParaNotaFalta?: () => void;
   onNavegarParaAvarias?: () => void;
   onNavegarParaConsumoLoja?: () => void;
@@ -43,7 +42,6 @@ export default function Home(props: HomeProps) {
     nomeUsuario: nomeProp, 
     perfilUsuario: setorProp, 
     onLogout, 
-    onNavegarParaNotificacoes,
     onNavegarParaNotaFalta,
     onNavegarParaAvarias,
     onNavegarParaConsumoLoja,
@@ -214,7 +212,6 @@ export default function Home(props: HomeProps) {
       modulos: [
         { id: 'produtos', nome: 'PRODUTOS', descricao: 'Catálogo de códigos e custos', tela: 'produtos', callbackProp: 'onNavegarParaProdutos' },
         { id: 'inventario', nome: 'INVENTÁRIO', descricao: 'Auditoria e contagem de itens', tela: 'inventario', callbackProp: 'onNavegarParaInventario' },
-        { id: 'conf-cega', nome: 'CONF. CEGA', descricao: 'Recebimento via XML de NF-e', tela: 'conf-cega', callbackProp: 'onNavegarParaConfCega' },
         { id: 'nota-falta', nome: 'NOTA DE FALTA', descricao: 'Controle de ruptura de estoque', tela: 'nota-falta', callbackProp: 'onNavegarParaNotaFalta' },
         { id: 'avarias', nome: 'AVARIAS', descricao: 'Registro de quebras e perdas', tela: 'avarias', callbackProp: 'onNavegarParaAvarias' },
         { id: 'consumo-loja', nome: 'CONSUMO LOJA', descricao: 'Controle de materiais internos', tela: 'consumo-loja', callbackProp: 'onNavegarParaConsumoLoja' },
@@ -297,24 +294,11 @@ export default function Home(props: HomeProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* NOTIFICAÇÕES */}
-            <button
-              type="button"
-              onClick={onNavegarParaNotificacoes || (() => onNavegar?.('notificacoes'))}
-              className="relative p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 hover:text-teal-800 transition-all active:scale-95 shadow-sm"
-              title="Notificações"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-              </svg>
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
-            </button>
-
             {/* SAIR */}
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
@@ -458,7 +442,7 @@ export default function Home(props: HomeProps) {
             <button 
               type="button"
               onClick={() => handleAcaoRapida('nota-falta')}
-              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left"
+              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
             >
               <span className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-xs flex-shrink-0">📄</span>
               Nova Nota de Falta
@@ -468,7 +452,7 @@ export default function Home(props: HomeProps) {
             <button 
               type="button"
               onClick={() => handleAcaoRapida('avarias')}
-              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left"
+              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
             >
               <span className="w-7 h-7 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-xs flex-shrink-0">⊘</span>
               Nova Avaria
@@ -478,7 +462,7 @@ export default function Home(props: HomeProps) {
             <button 
               type="button"
               onClick={() => handleAcaoRapida('consumo-loja')}
-              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left"
+              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
             >
               <span className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs flex-shrink-0">🛒</span>
               Novo Consumo Loja
@@ -488,7 +472,7 @@ export default function Home(props: HomeProps) {
             <button 
               type="button"
               onClick={() => handleAcaoRapida('vencimentos')}
-              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left"
+              className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
             >
               <span className="w-7 h-7 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xs flex-shrink-0">🕒</span>
               Novo Vencimento
@@ -508,7 +492,7 @@ export default function Home(props: HomeProps) {
               setSpeedDialAberto(false);
               setMenuAberto(true);
             }}
-            className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 active:scale-95 transition-all"
+            className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 active:scale-95 transition-all cursor-pointer"
             title="Abrir Menu de Módulos"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
@@ -520,7 +504,7 @@ export default function Home(props: HomeProps) {
           <button
             type="button"
             onClick={() => setSpeedDialAberto(!speedDialAberto)}
-            className={`absolute left-1/2 -top-5 -translate-x-1/2 w-13 h-13 rounded-full bg-[#09797a] hover:bg-[#075f60] text-white flex items-center justify-center shadow-lg shadow-teal-900/30 transition-transform active:scale-95 ${
+            className={`absolute left-1/2 -top-5 -translate-x-1/2 w-13 h-13 rounded-full bg-[#09797a] hover:bg-[#075f60] text-white flex items-center justify-center shadow-lg shadow-teal-900/30 transition-transform active:scale-95 cursor-pointer ${
               speedDialAberto ? 'rotate-45' : ''
             }`}
             title="Ação Rápida"
@@ -532,7 +516,7 @@ export default function Home(props: HomeProps) {
           <button
             type="button"
             onClick={carregarMetricas}
-            className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 active:scale-95 transition-all"
+            className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 active:scale-95 transition-all cursor-pointer"
             title="Atualizar Indicadores"
           >
             <svg className={`w-4 h-4 ${carregandoMetricas ? 'animate-spin text-teal-700' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
@@ -554,7 +538,7 @@ export default function Home(props: HomeProps) {
                 <button
                   type="button"
                   onClick={() => setCategoriaAtivaNoMenu(null)}
-                  className="flex items-center gap-1.5 text-xs font-black text-[#09797a] uppercase"
+                  className="flex items-center gap-1.5 text-xs font-black text-[#09797a] uppercase cursor-pointer"
                 >
                   <span>←</span>
                   <span>Voltar</span>
@@ -570,7 +554,7 @@ export default function Home(props: HomeProps) {
                   setMenuAberto(false);
                   setCategoriaAtivaNoMenu(null);
                 }}
-                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center text-xs"
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 font-bold flex items-center justify-center text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -586,7 +570,7 @@ export default function Home(props: HomeProps) {
                       key={catKey}
                       type="button"
                       onClick={() => setCategoriaAtivaNoMenu(catKey)}
-                      className="flex items-center justify-between p-3.5 rounded-2xl hover:bg-teal-50/60 border border-slate-100 text-left transition-all group"
+                      className="flex items-center justify-between p-3.5 rounded-2xl hover:bg-teal-50/60 border border-slate-100 text-left transition-all group cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
@@ -614,7 +598,7 @@ export default function Home(props: HomeProps) {
                       key={mod.id}
                       type="button"
                       onClick={() => handleExecutarNavegacao(mod)}
-                      className="w-full text-left p-3 rounded-2xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50/40 transition-all flex flex-col gap-0.5"
+                      className="w-full text-left p-3 rounded-2xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50/40 transition-all flex flex-col gap-0.5 cursor-pointer"
                     >
                       <span className="font-black text-xs text-slate-800 uppercase tracking-tight">
                         {mod.nome}
