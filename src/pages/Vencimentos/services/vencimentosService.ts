@@ -1,5 +1,6 @@
-// Arquivo: src/pages/Vencimentos/services/vencimentosService.ts
+// src/pages/Vencimentos/services/vencimentosService.ts
 import { supabase } from '../../../lib/supabaseClient';
+import { dispararNotificacaoTelegram } from '../../../services/telegramNotificationService';
 
 export interface VencimentoItem {
   id: string;
@@ -57,8 +58,8 @@ export const vencimentosService = {
     return data || [];
   },
 
-  // 2. Salvar Novo Registro Manual de Vencimento
-  async salvarControle(payload: {
+  // 2. Salvar Novo Registro Manual de Vencimento + Notificação Telegram
+ async salvarControle(payload: {
     produto_id: string;
     lote?: string;
     data_validade: string;
@@ -79,7 +80,67 @@ export const vencimentosService = {
         usuario_id: payload.usuario_id || null
       }]);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Erro ao salvar vencimento no banco:', error);
+      throw error;
+    }
+
+    // Disparo Telegram
+    try {
+      const [prodRes, userRes] = await Promise.all([
+        supabase
+          .from('produtos')
+          .select('codprod, descricao, unidade, departamento')
+          .eq('id', payload.produto_id)
+          .single(),
+        payload.usuario_id
+          ? supabase.from('usuarios').select('nome').eq('id', payload.usuario_id).single()
+          : Promise.resolve({ data: null })
+      ]);
+
+      const prod = prodRes.data;
+      const operador = userRes.data?.nome || 'Operador';
+
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const dataVal = new Date(payload.data_validade + 'T00:00:00');
+      const diffDias = Math.ceil((dataVal.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+      const formatarData = (dt: string) => {
+        const p = dt.split('-');
+        return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : dt;
+      };
+
+      let nivelRisco = '🟡 <b>Atenção (Monitoramento)</b>';
+      if (diffDias <= 0) {
+        nivelRisco = '🚨 <b>PRODUTO VENCIDO (Recolher Imediatamente)</b>';
+      } else if (diffDias <= 3) {
+        nivelRisco = `🔴 <b>CRÍTICO (${diffDias} dia(s) restante(s))</b>`;
+      } else {
+        nivelRisco = `🟡 <b>Atenção (${diffDias} dias restantes)</b>`;
+      }
+
+      const mensagem =
+        `⏰ <b>ALERTA DE VALIDADE REGISTRADA</b>\n\n` +
+        `<b>Status:</b> ${nivelRisco}\n` +
+        `<b>Código:</b> <code>#${codigoCustom}</code>\n` +
+        `<b>Produto:</b> ${(prod?.descricao || 'PRODUTO').toUpperCase()}\n` +
+        `<b>Cód. Sistema:</b> ${prod?.codprod || '-'} | <b>Depto:</b> ${prod?.departamento || 'GERAL'}\n` +
+        `<b>Lote:</b> ${payload.lote || 'NÃO INFORMADO'}\n` +
+        `<b>Quantidade Auditada:</b> ${payload.quantidade || 1} ${prod?.unidade || 'UN'}\n` +
+        `<b>Data de Vencimento:</b> <code>${formatarData(payload.data_validade)}</code>\n` +
+        `<b>Auditado por:</b> ${operador}\n`;
+
+      const enviado = await dispararNotificacaoTelegram({
+        mensagemHtml: mensagem,
+        textoBotao: '🛡️ Abrir Controle de Vencimentos',
+        urlBotao: '/?tela=vencimentos'
+      });
+
+      console.log('Disparo Telegram Vencimentos concluído:', enviado);
+    } catch (errNotif) {
+      console.error('Erro ao preparar ou enviar notificação de vencimento:', errNotif);
+    }
   },
 
   // 3. Marcar notificação como VISTO pelo usuário
@@ -242,7 +303,7 @@ export const vencimentosService = {
     return listaUnificada.sort((a, b) => a.diasParaVencer - b.diasParaVencer);
   },
 
-  // 5. Enviar Itens Selecionados para a fase "Revisar/Aprovar" do Módulo Ofertas
+  // 5. Enviar Itens Selecionados para a fase "Revisar/Aprovar" do Módulo Ofertas + Notificação Telegram
   async enviarItensParaOferta(itensVencimento: any[], usuarioId?: string) {
     const codCustom = `OFT-${Date.now().toString().slice(-6)}`;
 
@@ -276,6 +337,38 @@ export const vencimentosService = {
     if (inserts.length > 0) {
       const { error: errItens } = await supabase.from('oferta_itens').insert(inserts);
       if (errItens) throw errItens;
+    }
+
+    // Disparo Telegram: Itens enviados para Revisão de Oferta
+    try {
+      const { data: userData } = usuarioId
+        ? await supabase.from('usuarios').select('nome').eq('id', usuarioId).single()
+        : { data: null };
+      const nomeOperador = userData?.nome || 'Operador';
+
+      const linhas = itensVencimento.slice(0, 6).map((it) => {
+        const prod = it.produtos || {};
+        return `• <b>${prod.descricao || 'Produto'}</b>: ${it.quantidade} UN (Vence em ${it.diasParaVencer}d)`;
+      }).join('\n');
+
+      const excesso = itensVencimento.length > 6 ? `\n<i>... e mais ${itensVencimento.length - 6} item(ns)</i>` : '';
+
+      const msg =
+        `🔥 <b>QUEIMA DE ESTOQUE ENVIADA PARA OFERTAS</b>\n\n` +
+        `<b>Campanha:</b> <code>#${codCustom}</code>\n` +
+        `<b>Origem:</b> Controle de Validades (≤ 30 Dias)\n` +
+        `<b>Total de Itens:</b> ${itensVencimento.length} produtos\n` +
+        `<b>Fase Atual:</b> REVISAR / APROVAR\n` +
+        `<b>Enviado por:</b> ${nomeOperador}\n\n` +
+        `<b>Produtos:</b>\n${linhas}${excesso}\n`;
+
+      dispararNotificacaoTelegram({
+        mensagemHtml: msg,
+        textoBotao: '🏷️ Abrir Módulo de Ofertas',
+        urlBotao: '/?tela=ofertas'
+      }).catch((e) => console.error('Erro silencioso telegram oferta vencimento:', e));
+    } catch (errNotif) {
+      console.error('Erro ao notificar oferta de vencimento:', errNotif);
     }
 
     return ofertaCriada;
