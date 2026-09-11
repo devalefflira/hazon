@@ -336,17 +336,14 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         const dtInicio = o.data_inicio ? o.data_inicio.split('T')[0] : '';
         const dtFim = o.data_fim ? o.data_fim.split('T')[0] : '';
 
-        // Filtro de Data Inicial (se definida, a oferta deve terminar ou começar a partir dela)
         if (filtroDataInicioConcluida) {
           if (dtFim && dtFim < filtroDataInicioConcluida) return false;
         }
 
-        // Filtro de Data Final (se definida, a oferta deve começar até ela)
         if (filtroDataFimConcluida) {
           if (dtInicio && dtInicio > filtroDataFimConcluida) return false;
         }
 
-        // Filtro por Tipo de Oferta
         if (filtroTipoOfertaConcluida !== 'TODOS') {
           if (o.tipo_oferta !== filtroTipoOfertaConcluida) return false;
         }
@@ -354,7 +351,6 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
         return true;
       })
       .sort((a, b) => {
-        // Ordenação Decrescente: mais nova para mais antiga observando o período
         const dataA = a.data_fim || a.data_inicio || a.data_registro || '';
         const dataB = b.data_fim || b.data_inicio || b.data_registro || '';
         if (dataB !== dataA) return dataB.localeCompare(dataA);
@@ -362,12 +358,10 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
       });
   }, [ofertas, filtroDataInicioConcluida, filtroDataFimConcluida, filtroTipoOfertaConcluida]);
 
-  // Resetar página quando os filtros mudam
   useEffect(() => {
     setPaginaConcluidas(1);
   }, [filtroDataInicioConcluida, filtroDataFimConcluida, filtroTipoOfertaConcluida, itensPorPaginaConcluidas]);
 
-  // Paginação das ofertas concluídas
   const totalPaginasConcluidas = Math.ceil(ofertasConcluidasFiltradas.length / itensPorPaginaConcluidas) || 1;
   const indexInicialConcluidas = (paginaConcluidas - 1) * itensPorPaginaConcluidas;
   const ofertasConcluidasPaginadas = ofertasConcluidasFiltradas.slice(
@@ -420,8 +414,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('SUGERIDAS')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'SUGERIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-              }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'SUGERIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
             <span>LISTA SUGERIDA</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasSugeridas.length}</span>
@@ -429,8 +424,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('REVISAR_APROVAR')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'REVISAR_APROVAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-              }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'REVISAR_APROVAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
             <span>REVISAR / APROVAR</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasRevisarAprovar.length}</span>
@@ -438,8 +434,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('PRECIFICAR')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'PRECIFICAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-              }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'PRECIFICAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
             <span>PRECIFICAR</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertasPrecificar.length}</span>
@@ -447,8 +444,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
           <button
             type="button"
             onClick={() => setAbaAtiva('CONCLUIDAS')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${abaPrincipal === 'CONCLUIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
-              }`}
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+              abaPrincipal === 'CONCLUIDAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
             <span>CONCLUÍDAS</span>
             <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full">{ofertas.filter((o) => o.status === 'Concluida').length}</span>
@@ -461,16 +459,18 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
             <button
               type="button"
               onClick={() => setSubAbaConcluidas('GERAR_RELATORIO')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${subAbaConcluidas === 'GERAR_RELATORIO' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-gray-50 text-gray-400'
-                }`}
+              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
+                subAbaConcluidas === 'GERAR_RELATORIO' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-gray-50 text-gray-400'
+              }`}
             >
               Gerar Relatório de Ofertas
             </button>
             <button
               type="button"
               onClick={() => setSubAbaConcluidas('GERAR_PLACAS')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${subAbaConcluidas === 'GERAR_PLACAS' ? 'bg-[#09797a] text-white shadow-md' : 'bg-gray-50 text-gray-400'
-                }`}
+              className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
+                subAbaConcluidas === 'GERAR_PLACAS' ? 'bg-[#09797a] text-white shadow-md' : 'bg-gray-50 text-gray-400'
+              }`}
             >
               Gerar Placas
             </button>
@@ -520,7 +520,17 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                             {ofe.data_registro} às {ofe.hora_registro}
                           </p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
+                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1 shadow-xs"
+                            title="Imprimir lista sugerida"
+                          >
+                            <span>🖨️</span>
+                            <span>PDF</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -537,7 +547,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                               );
                               setModalNovaOferta(true);
                             }}
-                            className="px-3.5 py-1.5 bg-teal-100 hover:bg-teal-200 text-teal-900 rounded-xl text-xs font-black uppercase transition-all"
+                            className="px-3.5 py-2 bg-teal-100 hover:bg-teal-200 text-teal-900 rounded-xl text-xs font-black uppercase transition-all"
                           >
                             Editar / Adicionar Itens
                           </button>
@@ -568,13 +578,26 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           Resp: {ofe.usuarios?.nome || 'SISTEMA'}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleAbrirRevisao(ofe)}
-                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
-                      >
-                        Revisar / Aprovar
-                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1 shadow-xs"
+                          title="Imprimir para conferência manual"
+                        >
+                          <span>🖨️</span>
+                          <span>PDF</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAbrirRevisao(ofe)}
+                          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                        >
+                          Revisar / Aprovar
+                        </button>
+                      </div>
                     </div>
                   ))
                 )
@@ -600,23 +623,35 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           Resp: {ofe.usuarios?.nome || 'SISTEMA'}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleAbrirPrecificacao(ofe)}
-                        className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
-                      >
-                        Precificar
-                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => gerarPdfOferta(ofe, ofe.oferta_itens || [], 'COMPLETO')}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1 shadow-xs"
+                          title="Imprimir para conferência de preços"
+                        >
+                          <span>🖨️</span>
+                          <span>PDF</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAbrirPrecificacao(ofe)}
+                          className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm active:scale-95 transition-all"
+                        >
+                          Precificar
+                        </button>
+                      </div>
                     </div>
                   ))
                 )
               )}
 
-              {/* ABA 4: CONCLUÍDAS - GERAR RELATÓRIO COM FILTROS, PAGINAÇÃO E ORDENAÇÃO DECRESCENTE */}
+              {/* ABA 4: CONCLUÍDAS - GERAR RELATÓRIO */}
               {abaPrincipal === 'CONCLUIDAS' && subAbaConcluidas === 'GERAR_RELATORIO' && (
                 <div className="flex flex-col gap-3">
-                  
-                  {/* Bloco de Filtros da Sub-aba Gerar Relatório de Ofertas */}
+                  {/* Bloco de Filtros */}
                   <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl flex flex-col gap-2.5 shadow-xs">
                     <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
                       Filtros das Ofertas Concluídas
@@ -677,7 +712,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                     )}
                   </div>
 
-                  {/* Barra de Contagem e Configuração de Exibição por Página */}
+                  {/* Barra de Contagem e Paginação */}
                   <div className="flex items-center justify-between px-1">
                     <span className="text-xs font-bold text-slate-500">
                       Total: <strong>{ofertasConcluidasFiltradas.length}</strong> oferta(s) encontrada(s)
@@ -700,7 +735,7 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                     </div>
                   </div>
 
-                  {/* Lista de Cards das Ofertas Concluídas */}
+                  {/* Lista de Cards */}
                   {ofertasConcluidasFiltradas.length === 0 ? (
                     <div className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center text-xs font-bold text-gray-400 italic">
                       Nenhuma oferta concluída encontrada para os filtros selecionados.
@@ -805,16 +840,18 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                     <button
                       type="button"
                       onClick={() => setSubAbaPlacas('LAYOUT')}
-                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${subAbaPlacas === 'LAYOUT' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
-                        }`}
+                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${
+                        subAbaPlacas === 'LAYOUT' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                      }`}
                     >
                       1. Layout da Placa
                     </button>
                     <button
                       type="button"
                       onClick={() => setSubAbaPlacas('GERAR')}
-                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${subAbaPlacas === 'GERAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
-                        }`}
+                      className={`flex-1 py-2 rounded-xl uppercase transition-all ${
+                        subAbaPlacas === 'GERAR' ? 'bg-[#09797a] text-white shadow-md' : 'text-emerald-800'
+                      }`}
                     >
                       2. Gerar Impressão
                     </button>
@@ -835,8 +872,9 @@ export default function Ofertas({ onVoltarParaHome, usuarioLogado }: OfertasProp
                           <div
                             key={lay.id}
                             onClick={() => setLayoutSelecionado(lay)}
-                            className={`p-3 rounded-2xl border-2 cursor-pointer flex flex-col gap-2 transition-all ${layoutSelecionado?.id === lay.id ? 'border-[#09797a] bg-emerald-50/50' : 'border-gray-200 bg-white'
-                              }`}
+                            className={`p-3 rounded-2xl border-2 cursor-pointer flex flex-col gap-2 transition-all ${
+                              layoutSelecionado?.id === lay.id ? 'border-[#09797a] bg-emerald-50/50' : 'border-gray-200 bg-white'
+                            }`}
                           >
                             <div className="h-24 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200">
                               {lay.imagemUrl ? (
