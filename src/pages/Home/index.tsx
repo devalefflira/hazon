@@ -15,6 +15,7 @@ interface HomeProps {
   onNavegarParaVencimentos?: () => void;
   onNavegarParaPesquisaPrecos?: () => void;
   onNavegarParaEncartes?: () => void;
+  onNavegarParaSolicitacoes?: () => void;
   [key: string]: any;
 }
 
@@ -47,7 +48,8 @@ export default function Home(props: HomeProps) {
     onNavegarParaConsumoLoja,
     onNavegarParaVencimentos,
     onNavegarParaPesquisaPrecos,
-    onNavegarParaEncartes
+    onNavegarParaEncartes,
+    onNavegarParaSolicitacoes
   } = props;
 
   // Estados de Interface
@@ -215,6 +217,7 @@ export default function Home(props: HomeProps) {
         { id: 'nota-falta', nome: 'NOTA DE FALTA', descricao: 'Controle de ruptura de estoque', tela: 'nota-falta', callbackProp: 'onNavegarParaNotaFalta' },
         { id: 'avarias', nome: 'AVARIAS', descricao: 'Registro de quebras e perdas', tela: 'avarias', callbackProp: 'onNavegarParaAvarias' },
         { id: 'consumo-loja', nome: 'CONSUMO LOJA', descricao: 'Controle de materiais internos', tela: 'consumo-loja', callbackProp: 'onNavegarParaConsumoLoja' },
+        { id: 'solicitacoes', nome: 'SOLICITAÇÕES', descricao: 'Pedidos e requisições entre setores', tela: 'solicitacoes', callbackProp: 'onNavegarParaSolicitacoes' },
         { id: 'trocas', nome: 'TROCAS', descricao: 'Devoluções e reposições', tela: 'trocas', callbackProp: 'onNavegarParaTrocas' },
         { id: 'vencimentos', nome: 'VENCIMENTOS', descricao: 'Controle de validade e lotes', tela: 'vencimentos', callbackProp: 'onNavegarParaVencimentos' },
         { id: 'temperatura', nome: 'TEMPERATURA', descricao: 'Aferição de câmaras e balcões', tela: 'temperatura', callbackProp: 'onNavegarParaTemperatura' }
@@ -236,6 +239,10 @@ export default function Home(props: HomeProps) {
     setMenuAberto(false);
     setSpeedDialAberto(false);
 
+    if (mod.tela === 'solicitacoes' && onNavegarParaSolicitacoes) {
+      onNavegarParaSolicitacoes();
+      return;
+    }
     if (mod.tela === 'encartes' && onNavegarParaEncartes) {
       onNavegarParaEncartes();
       return;

@@ -29,6 +29,7 @@ import Notificacoes from './pages/Notificacoes';
 import Trocas from './pages/Trocas';
 import PesquisaPrecos from './pages/PesquisaPrecos';
 import Encartes from './pages/Encartes';
+import Solicitacoes from './pages/Solicitacoes';
 
 interface UsuarioLogado {
   id: string;
@@ -65,7 +66,8 @@ type TelaAtiva =
   | 'notificacoes'
   | 'trocas'
   | 'pesquisa-precos'
-  | 'encartes';
+  | 'encartes'
+  | 'solicitacoes';
 
 export default function App() {
   // 1. Inicializa o usuário direto do localStorage para não perder sessão no F5
@@ -327,6 +329,17 @@ export default function App() {
       />
     );
   }
+
+  if (telaAtiva === 'solicitacoes') {
+  if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+  return (
+    <Solicitacoes
+      onVoltarParaHome={() => mudarTela('home')}
+      usuarioLogado={usuario}
+      usuarioLogadoId={usuario.id}
+    />
+  );
+}
 
   if (telaAtiva === 'nota-falta') {
     return <NotaFalta onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
