@@ -68,7 +68,7 @@ export const vencimentosService = {
   }): Promise<void> {
     const codigoCustom = `VEN-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const { error } = await supabase
+    const { data: itemInserido, error } = await supabase
       .from('vencimentos_controle')
       .insert([{
         codigo_customizado: codigoCustom,
@@ -78,7 +78,9 @@ export const vencimentosService = {
         quantidade: payload.quantidade || 1,
         origem: 'Vencimentos',
         usuario_id: payload.usuario_id || null
-      }]);
+      }])
+      .select('*, produtos(*), usuarios(*)')
+      .single();
 
     if (error) {
       console.error('Erro ao salvar vencimento no banco:', error);
@@ -87,19 +89,8 @@ export const vencimentosService = {
 
     // Disparo Telegram
     try {
-      const [prodRes, userRes] = await Promise.all([
-        supabase
-          .from('produtos')
-          .select('codprod, descricao, unidade, departamento')
-          .eq('id', payload.produto_id)
-          .single(),
-        payload.usuario_id
-          ? supabase.from('usuarios').select('nome').eq('id', payload.usuario_id).single()
-          : Promise.resolve({ data: null })
-      ]);
-
-      const prod = prodRes.data;
-      const operador = userRes.data?.nome || 'Operador';
+      const prod = itemInserido?.produtos || {};
+      const operador = itemInserido?.usuarios?.nome || 'Operador';
 
       const hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
@@ -111,25 +102,33 @@ export const vencimentosService = {
         return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : dt;
       };
 
-      let nivelRisco = '🟡 <b>Atenção (Monitoramento)</b>';
+      let nivelRisco = '🟡 Atenção (Monitoramento)';
       if (diffDias <= 0) {
-        nivelRisco = '🚨 <b>PRODUTO VENCIDO (Recolher Imediatamente)</b>';
+        nivelRisco = '🚨 PRODUTO VENCIDO (Recolher Imediatamente)';
       } else if (diffDias <= 3) {
-        nivelRisco = `🔴 <b>CRÍTICO (${diffDias} dia(s) restante(s))</b>`;
+        nivelRisco = `🔴 CRÍTICO (${diffDias} dia(s) restante(s))`;
       } else {
-        nivelRisco = `🟡 <b>Atenção (${diffDias} dias restantes)</b>`;
+        nivelRisco = `🟡 Atenção (${diffDias} dias restantes)`;
       }
+
+      const descProd = (prod?.descricao || 'PRODUTO')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .toUpperCase();
 
       const mensagem =
         `⏰ <b>ALERTA DE VALIDADE REGISTRADA</b>\n\n` +
         `<b>Status:</b> ${nivelRisco}\n` +
         `<b>Código:</b> <code>#${codigoCustom}</code>\n` +
-        `<b>Produto:</b> ${(prod?.descricao || 'PRODUTO').toUpperCase()}\n` +
+        `<b>Produto:</b> ${descProd}\n` +
         `<b>Cód. Sistema:</b> ${prod?.codprod || '-'} | <b>Depto:</b> ${prod?.departamento || 'GERAL'}\n` +
         `<b>Lote:</b> ${payload.lote || 'NÃO INFORMADO'}\n` +
         `<b>Quantidade Auditada:</b> ${payload.quantidade || 1} ${prod?.unidade || 'UN'}\n` +
         `<b>Data de Vencimento:</b> <code>${formatarData(payload.data_validade)}</code>\n` +
         `<b>Auditado por:</b> ${operador}\n`;
+
+      console.log('Enviando mensagem ao Telegram:', mensagem);
 
       const enviado = await dispararNotificacaoTelegram({
         mensagemHtml: mensagem,
@@ -137,12 +136,11 @@ export const vencimentosService = {
         urlBotao: '/?tela=vencimentos'
       });
 
-      console.log('Disparo Telegram Vencimentos concluído:', enviado);
+      console.log('Resposta do disparo Telegram:', enviado);
     } catch (errNotif) {
-      console.error('Erro ao preparar ou enviar notificação de vencimento:', errNotif);
+      console.error('Erro ao processar notificação de vencimento:', errNotif);
     }
   },
-
   // 3. Marcar notificação como VISTO pelo usuário
   async marcarComoVisto(itemId: string, usuarioId: string): Promise<void> {
     if (!itemId || !usuarioId) return;

@@ -1,5 +1,6 @@
 // src/pages/Ofertas/services/ofertasService.ts
 import { supabase } from '../../../lib/supabaseClient';
+import { dispararNotificacaoTelegram } from '../../../services/telegramNotificationService';
 
 export interface SalvarOfertaPayload {
   codigo_customizado?: string | null;
@@ -34,6 +35,7 @@ export const ofertasService = {
 
   async salvarOferta(payload: SalvarOfertaPayload) {
     let ofertaId: string;
+    let codCustomizadoFinal = payload.codigo_customizado;
 
     if (payload.codigo_customizado) {
       const { data: existente, error: errBusca } = await supabase
@@ -64,11 +66,11 @@ export const ofertasService = {
 
       await supabase.from('oferta_itens').delete().eq('oferta_mestre_id', ofertaId);
     } else {
-      const codCustom = `OFT-${Date.now().toString().slice(-6)}`;
+      codCustomizadoFinal = `OFT-${Date.now().toString().slice(-6)}`;
       const { data: novaOferta, error: errInsert } = await supabase
         .from('ofertas_mestre')
         .insert({
-          codigo_customizado: codCustom,
+          codigo_customizado: codCustomizadoFinal,
           usuario_id: payload.usuario_id,
           status: payload.status,
           tipo_oferta: payload.tipo_oferta || 'Oferta da Semana',
@@ -96,6 +98,124 @@ export const ofertasService = {
       if (errItens) throw errItens;
     }
 
+    // DISPARO DAS NOTIFICAÇÕES TELEGRAM NOS 3 MOMENTOS
+    try {
+      const statusAtual = payload.status;
+      const codExibicao = codCustomizadoFinal || 'OFT-S/C';
+
+      const formatarData = (dt?: string) => {
+        if (!dt) return 'N/I';
+        const p = dt.split('-');
+        return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : dt;
+      };
+
+      const { data: userResp } = payload.usuario_id
+        ? await supabase.from('usuarios').select('nome').eq('id', payload.usuario_id).single()
+        : { data: null };
+      const nomeOperador = userResp?.nome || 'Operador';
+
+      // MOMENTO 1: Oferta criada e enviada para Revisão
+      if (statusAtual === 'Revisar/Aprovar') {
+        const prodIds = (payload.itens || []).map((it) => it.produto_id);
+        const { data: prodsData } = await supabase
+          .from('produtos')
+          .select('id, descricao, unidade')
+          .in('id', prodIds);
+
+        const mapProds = new Map<string, any>();
+        (prodsData || []).forEach((p) => mapProds.set(p.id, p));
+
+        const linhasItens = (payload.itens || []).slice(0, 6).map((it) => {
+          const p = mapProds.get(it.produto_id);
+          const desc = (p?.descricao || 'Produto')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .toUpperCase();
+          return `• <b>${desc}</b>`;
+        }).join('\n');
+
+        const excesso = (payload.itens || []).length > 6 ? `\n<i>... e mais ${(payload.itens || []).length - 6} produto(s) sugerido(s)</i>` : '';
+
+        const msg =
+          `📥 <b>NOVA OFERTA ENVIADA PARA REVISÃO</b>\n\n` +
+          `<b>Código:</b> <code>#${codExibicao}</code>\n` +
+          `<b>Total de Itens Sugeridos:</b> ${(payload.itens || []).length} produtos\n` +
+          `<b>Cadastrado por:</b> ${nomeOperador}\n` +
+          `<b>Fase:</b> 🟡 AGUARDANDO REVISÃO / APROVAÇÃO\n\n` +
+          `<b>Produtos na Lista:</b>\n${linhasItens}${excesso}\n`;
+
+        dispararNotificacaoTelegram({
+          mensagemHtml: msg,
+          textoBotao: '🔎 Revisar Oferta no ERP',
+          urlBotao: '/?tela=ofertas'
+        }).catch((e) => console.error('Erro silencioso telegram momento 1:', e));
+      }
+
+      // MOMENTO 2: Oferta revisada e enviada para Precificação
+      else if (statusAtual === 'Precificar') {
+        const msg =
+          `💲 <b>OFERTA REVISADA - AGUARDANDO PRECIFICAÇÃO</b>\n\n` +
+          `<b>Código:</b> <code>#${codExibicao}</code>\n` +
+          `<b>Total de Itens Aprovados:</b> ${(payload.itens || []).length} produtos\n` +
+          `<b>Aprovado por:</b> ${nomeOperador}\n` +
+          `<b>Status:</b> Pronto para definição das datas de vigência e preços de oferta promocionais.\n`;
+
+        dispararNotificacaoTelegram({
+          mensagemHtml: msg,
+          textoBotao: '📊 Precificar Oferta',
+          urlBotao: '/?tela=ofertas'
+        }).catch((e) => console.error('Erro silencioso telegram momento 2:', e));
+      }
+
+      // MOMENTO 3: Oferta precificada e ativada/concluída
+      else if (statusAtual === 'Concluida') {
+        const tipoCampanha = payload.tipo_oferta === 'Data Comemorativa' && payload.tipo_oferta_customizado
+          ? `${payload.tipo_oferta} (${payload.tipo_oferta_customizado})`
+          : payload.tipo_oferta || 'Campanha';
+
+        const prodIds = (payload.itens || []).map((it) => it.produto_id);
+        const { data: prodsData } = await supabase
+          .from('produtos')
+          .select('id, descricao, unidade')
+          .in('id', prodIds);
+
+        const mapProds = new Map<string, any>();
+        (prodsData || []).forEach((p) => mapProds.set(p.id, p));
+
+        const destaquesPreco = (payload.itens || []).slice(0, 6).map((it) => {
+          const p = mapProds.get(it.produto_id);
+          const desc = (p?.descricao || 'Produto')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .toUpperCase();
+          const precoTab = Number(it.preco_venda_tabela || 0).toFixed(2).replace('.', ',');
+          const precoOf = Number(it.preco_oferta || 0).toFixed(2).replace('.', ',');
+          return `• <b>${desc}</b>: De R$ ${precoTab} por <b>R$ ${precoOf}</b>`;
+        }).join('\n');
+
+        const excesso = (payload.itens || []).length > 6 ? `\n<i>... e mais ${(payload.itens || []).length - 6} produto(s) precificado(s)</i>` : '';
+
+        const msg =
+          `🏷️ <b>OFERTA CONCLUÍDA & ATIVADA</b>\n\n` +
+          `<b>Campanha:</b> ${tipoCampanha.toUpperCase()}\n` +
+          `<b>Código:</b> <code>#${codExibicao}</code>\n` +
+          `<b>Período:</b> de ${formatarData(payload.data_inicio)} até ${formatarData(payload.data_fim)}\n` +
+          `<b>Total de Produtos:</b> ${(payload.itens || []).length} itens\n` +
+          `<b>Precificado por:</b> ${nomeOperador}\n\n` +
+          `<b>Destaques de Oferta:</b>\n${destaquesPreco}${excesso}\n`;
+
+        dispararNotificacaoTelegram({
+          mensagemHtml: msg,
+          textoBotao: '🎨 Gerar Encartes & Placas',
+          urlBotao: '/?tela=ofertas'
+        }).catch((e) => console.error('Erro silencioso telegram momento 3:', e));
+      }
+    } catch (errNotif) {
+      console.error('Erro ao processar notificações de ofertas no Telegram:', errNotif);
+    }
+
     return { id: ofertaId };
   },
 
@@ -117,7 +237,6 @@ export const ofertasService = {
     return data || [];
   },
 
-  // Buscar itens perdedores de Pesquisas de Preço para a Lista Sugerida
   async buscarSugestoesPesquisaPreco(): Promise<any[]> {
     const { data, error } = await supabase
       .from('pesquisa_precos_itens')
@@ -152,7 +271,6 @@ export const ofertasService = {
       return [];
     }
 
-    // Filtra apenas onde nosso preço de venda é maior que o do concorrente (perdedores)
     return (data || [])
       .filter((item: any) => Number(item.preco_venda) > Number(item.preco_concorrente))
       .map((item: any) => ({

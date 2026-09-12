@@ -1,6 +1,7 @@
 // src/pages/ConsumoLoja/services/consumoLojaService.ts
 import { supabase } from '../../../lib/supabaseClient';
 import type { ItemConsumoForm, ConsumoLojaItemView } from '../types/consumoLoja.types';
+import { dispararNotificacaoTelegram } from '../../../services/telegramNotificationService';
 
 export const consumoLojaService = {
   async buscarProdutos(termo: string) {
@@ -144,7 +145,6 @@ export const consumoLojaService = {
   },
 
   async atualizarItemConsumo(itemId: string, quantidade: number, local: string, custoUnitario: number) {
-    // Se for item originário da tabela de avarias
     if (itemId.startsWith('av-')) {
       const avariaId = itemId.replace('av-', '');
       const { error } = await supabase
@@ -213,6 +213,52 @@ export const consumoLojaService = {
       .insert(payloadItens);
 
     if (errorItens) throw errorItens;
+
+    // Disparo Telegram: Consumo Interno Registrado
+    try {
+      const prodIds = itens.map((it) => it.produto_id);
+      const [prodsRes, userRes] = await Promise.all([
+        supabase.from('produtos').select('id, descricao, codprod, unidade').in('id', prodIds),
+        usuarioId ? supabase.from('usuarios').select('nome').eq('id', usuarioId).single() : Promise.resolve({ data: null })
+      ]);
+
+      const mapaProdutos = new Map<string, any>();
+      (prodsRes.data || []).forEach((p) => mapaProdutos.set(p.id, p));
+
+      const nomeUsuario = userRes.data?.nome || 'Operador';
+
+      const linhasItens = itens.slice(0, 8).map((it) => {
+        const prod = mapaProdutos.get(it.produto_id);
+        const desc = (prod?.descricao || 'PRODUTO')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .toUpperCase();
+        const subtotal = Number(it.valor_total_item || 0).toFixed(2).replace('.', ',');
+        return `• <b>${desc}</b> (${it.local}): ${it.quantidade} ${it.unidade_medida || prod?.unidade || 'UN'} (R$ ${subtotal})`;
+      }).join('\n');
+
+      const excesso = itens.length > 8 ? `\n<i>... e mais ${itens.length - 8} produto(s)</i>` : '';
+
+      const mensagemTelegram =
+        `🛒 <b>CONSUMO INTERNO REGISTRADO</b>\n\n` +
+        `<b>Código:</b> <code>#${codigoCustomizado}</code>\n` +
+        `<b>Total de Produtos:</b> ${itens.length} itens\n` +
+        `<b>Custo Total Retirado:</b> <code>R$ ${valorTotal.toFixed(2).replace('.', ',')}</code>\n` +
+        `<b>Responsável:</b> ${nomeUsuario}\n` +
+        `<b>Data:</b> ${dataAtual.split('-').reverse().join('/')} às ${horaAtual.slice(0, 5)}\n\n` +
+        `<b>Itens e Locais de Uso:</b>\n${linhasItens}${excesso}\n` +
+        (observacao ? `\n📝 <i>"${observacao.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</i>\n` : '');
+
+      dispararNotificacaoTelegram({
+        mensagemHtml: mensagemTelegram,
+        textoBotao: '🛒 Ver Consumo Loja',
+        urlBotao: '/?tela=consumo-loja'
+      }).catch((e) => console.error('Erro silencioso telegram consumo loja:', e));
+    } catch (errNotif) {
+      console.error('Erro ao preparar notificação de consumo da loja:', errNotif);
+    }
+
     return true;
   }
 };

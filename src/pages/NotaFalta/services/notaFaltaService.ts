@@ -1,5 +1,6 @@
 // src/pages/NotaFalta/services/notaFaltaService.ts
 import { supabase } from '../../../lib/supabaseClient';
+import { dispararNotificacaoTelegram } from '../../../services/telegramNotificationService';
 
 export interface ItemNotaFaltaPayload {
   produto_id: string;
@@ -114,7 +115,7 @@ export const notaFaltaService = {
     return data || [];
   },
 
-  // 5. Salvar / Criar / Atualizar itens da Nota de Falta
+  // 5. Salvar / Criar / Atualizar itens da Nota de Falta + Alerta Telegram
   async salvarItensNotaFalta(payload: SalvarNotaFaltaPayload): Promise<void> {
     const agora = new Date();
     const dataAtual = agora.toLocaleDateString('sv-SE');
@@ -127,7 +128,6 @@ export const notaFaltaService = {
     const motivoDefaultId = motivos[0]?.id;
 
     if (codigoCustomizado) {
-      // Se estiver editando ou retomando, remove as linhas antigas deste código para reinserir
       await supabase
         .from('notas_falta')
         .delete()
@@ -137,7 +137,6 @@ export const notaFaltaService = {
     }
 
     const linhasInsert = payload.itens.map((it) => {
-      // Tenta achar o motivo correspondente pelo nome ('Estoque Baixo' ou 'Estoque Zero')
       const motEncontrado = motivos.find((m) =>
         m.descricao.toLowerCase().includes(it.tipo_motivo.toLowerCase())
       );
@@ -157,13 +156,57 @@ export const notaFaltaService = {
       };
     });
 
-    const { error } = await supabase
+    const { error: errorInsert } = await supabase
       .from('notas_falta')
       .insert(linhasInsert);
 
-    if (error) {
-      console.error('Erro ao salvar itens da nota de falta:', error);
-      throw error;
+    if (errorInsert) {
+      console.error('Erro ao salvar itens da nota de falta:', errorInsert);
+      throw errorInsert;
+    }
+
+    // Disparo Telegram: Notificação de Ruptura (Nota de Falta)
+    try {
+      const prodIds = payload.itens.map((i) => i.produto_id);
+      const [prodsRes, userRes] = await Promise.all([
+        supabase.from('produtos').select('id, codprod, descricao, unidade').in('id', prodIds),
+        payload.usuario_id ? supabase.from('usuarios').select('nome').eq('id', payload.usuario_id).single() : Promise.resolve({ data: null })
+      ]);
+
+      const produtosMap = new Map<string, any>();
+      (prodsRes.data || []).forEach((p) => produtosMap.set(p.id, p));
+
+      const nomeOperador = userRes.data?.nome || 'Operador';
+
+      const linhasProdutos = payload.itens.slice(0, 8).map((it) => {
+        const prod = produtosMap.get(it.produto_id);
+        const desc = (prod?.descricao || 'Produto')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .toUpperCase();
+        const iconeMotivo = it.tipo_motivo === 'Estoque Zero' ? '🔴' : '🟡';
+        return `• ${iconeMotivo} <b>${desc}</b>: Restante: <code>${it.quantidade_restante} ${it.unidade_restante || prod?.unidade || 'UN'}</code> (${it.tipo_motivo})`;
+      }).join('\n');
+
+      const excesso = payload.itens.length > 8 ? `\n<i>... e mais ${payload.itens.length - 8} produto(s)</i>` : '';
+
+      const mensagem =
+        `⚠️ <b>RUPTURA DE ESTOQUE (NOTA DE FALTA)</b>\n\n` +
+        `<b>Código:</b> <code>#${codigoCustomizado}</code>\n` +
+        `<b>Área:</b> ${payload.area.toUpperCase()} | <b>Local:</b> ${payload.local.toUpperCase()}\n` +
+        `<b>Total de Itens Apontados:</b> ${payload.itens.length}\n` +
+        `<b>Apontado por:</b> ${nomeOperador}\n` +
+        `<b>Data:</b> ${dataAtual.split('-').reverse().join('/')} às ${horaAtual.slice(0, 5)}\n\n` +
+        `<b>Itens Registrados:</b>\n${linhasProdutos}${excesso}\n`;
+
+      dispararNotificacaoTelegram({
+        mensagemHtml: mensagem,
+        textoBotao: '📝 Abrir Notas de Falta',
+        urlBotao: '/?tela=nota-falta'
+      }).catch((e) => console.error('Erro silencioso telegram nota falta:', e));
+    } catch (errNotif) {
+      console.error('Erro ao notificar nota de falta:', errNotif);
     }
   },
 
