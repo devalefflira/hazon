@@ -12,6 +12,8 @@ import NovoRegistroConsumo from './components/NovoRegistroConsumo';
 
 interface ConsumoLojaProps {
   onVoltar?: () => void;
+  onNavegar?: (tela: string) => void;
+  onNavegarParaHome?: () => void;
   usuarioLogadoId?: string;
   [key: string]: any;
 }
@@ -19,8 +21,21 @@ interface ConsumoLojaProps {
 type AbaNavegacao = 'principal' | 'consumo' | 'materia-prima';
 
 export default function ConsumoLoja(props: ConsumoLojaProps) {
-  const { onVoltar, usuarioLogadoId } = props;
+  const { onVoltar, onNavegar, onNavegarParaHome, usuarioLogadoId } = props;
   const usuarioId = usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id || '';
+
+  // Handler garantido de retorno para a Home
+  const handleVoltarParaHome = () => {
+    if (onVoltar) {
+      onVoltar();
+    } else if (onNavegarParaHome) {
+      onNavegarParaHome();
+    } else if (onNavegar) {
+      onNavegar('home');
+    } else {
+      window.history.back();
+    }
+  };
 
   // Modo tela cheia de Novo Registro
   const [modoNovoRegistro, setModoNovoRegistro] = useState(false);
@@ -48,7 +63,7 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
   const [historicoLimites, setHistoricoLimites] = useState<LimiteHistoricoView[]>([]);
   const [carregando, setCarregando] = useState(true);
 
-  // Modal / Ação de Edição de Finalidade
+  // Modal de Edição de Finalidade
   const [itemEmEdicao, setItemEmEdicao] = useState<ConsumoLojaItemView | null>(null);
   const [novaFinalidade, setNovaFinalidade] = useState<FinalidadeConsumo>('Consumo/Despesa');
   const [novoProdutoProduzido, setNovoProdutoProduzido] = useState('');
@@ -59,7 +74,7 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
   const [valorLimiteInput, setValorLimiteInput] = useState<number>(1000);
   const [salvandoLimite, setSalvandoLimite] = useState(false);
 
-  // Mês de referência atual (ex: '2026-09') e primeiro dia do mês
+  // Mês de referência atual e primeiro dia do mês
   const agora = new Date();
   const mesAtual = agora.toISOString().slice(0, 7);
   const primeiroDiaDoMes = `${mesAtual}-01`;
@@ -118,6 +133,22 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
     carregarDados();
   }, [abaAtiva, subAbaConsumo, dataInicio, dataFim, localFiltro]);
 
+  // Cálculos de Totais e Paginação (declarados no topo para respeitar as regras dos hooks)
+  const itensAtuais = abaAtiva === 'materia-prima' ? itensMateriaPrima : itensPrincipal;
+  const valorTotalPeriodo = itensAtuais.reduce((acc, curr) => acc + curr.valor_total_item, 0);
+
+  const totalPaginas = Math.ceil(itensAtuais.length / itensPorPagina) || 1;
+
+  const itensPaginados = useMemo(() => {
+    const inicio = (paginaAtual - 1) * itensPorPagina;
+    return itensAtuais.slice(inicio, inicio + itensPorPagina);
+  }, [itensAtuais, paginaAtual, itensPorPagina]);
+
+  const gastosPorLocal: Record<string, number> = {};
+  itensPrincipal.forEach((it) => {
+    gastosPorLocal[it.local] = (gastosPorLocal[it.local] || 0) + it.valor_total_item;
+  });
+
   const handleSalvarLimite = async () => {
     if (!usuarioId) {
       alert('Sessão de usuário não identificada.');
@@ -144,14 +175,12 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
     }
   };
 
-  // Abrir Modal de Edição de Finalidade
   const handleAbrirEdicao = (it: ConsumoLojaItemView) => {
     setItemEmEdicao(it);
     setNovaFinalidade(it.finalidade);
     setNovoProdutoProduzido(it.produto_produzido || '');
   };
 
-  // Salvar Edição de Finalidade
   const handleSalvarEdicaoFinalidade = async () => {
     if (!itemEmEdicao) return;
     if (novaFinalidade === 'Uso na Produção/Transformação' && !novoProdutoProduzido.trim()) {
@@ -175,6 +204,7 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
     }
   };
 
+  // Se estiver em modo novo registro, renderiza a tela de cadastro
   if (modoNovoRegistro) {
     return (
       <NovoRegistroConsumo
@@ -188,22 +218,6 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
     );
   }
 
-  // Cálculos de Totais
-  const itensAtuais = abaAtiva === 'materia-prima' ? itensMateriaPrima : itensPrincipal;
-  const valorTotalPeriodo = itensAtuais.reduce((acc, curr) => acc + curr.valor_total_item, 0);
-
-  // Paginação
-  const totalPaginas = Math.ceil(itensAtuais.length / itensPorPagina) || 1;
-  const itensPaginados = useMemo(() => {
-    const inicio = (paginaAtual - 1) * itensPorPagina;
-    return itensAtuais.slice(inicio, inicio + itensPorPagina);
-  }, [itensAtuais, paginaAtual, itensPorPagina]);
-
-  const gastosPorLocal: Record<string, number> = {};
-  itensPrincipal.forEach((it) => {
-    gastosPorLocal[it.local] = (gastosPorLocal[it.local] || 0) + it.valor_total_item;
-  });
-
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans relative">
       <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-7 flex flex-col gap-5 min-h-[calc(100vh-24px)]">
@@ -211,15 +225,14 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
         {/* HEADER SUPERIOR */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            {onVoltar && (
-              <button
-                type="button"
-                onClick={onVoltar}
-                className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-all cursor-pointer"
-              >
-                ←
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleVoltarParaHome}
+              className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-all cursor-pointer shadow-xs"
+              title="Voltar para a Página Inicial"
+            >
+              ←
+            </button>
             <div>
               <h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight">
                 Consumo da Loja
@@ -807,7 +820,7 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
                       </div>
 
                       <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-                        <span className="text-sm font-black font-mono text-amber-900 block">
+                        <span className="text-sm font-black text-amber-900 block font-mono">
                           R$ {it.valor_total_item.toFixed(2).replace('.', ',')}
                         </span>
                         <button
