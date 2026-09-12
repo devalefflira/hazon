@@ -11,9 +11,7 @@ import {
 import NovoRegistroConsumo from './components/NovoRegistroConsumo';
 
 interface ConsumoLojaProps {
-  onVoltar?: () => void;
-  onNavegar?: (tela: string) => void;
-  onNavegarParaHome?: () => void;
+  onVoltarParaHome?: () => void;
   usuarioLogadoId?: string;
   [key: string]: any;
 }
@@ -21,19 +19,12 @@ interface ConsumoLojaProps {
 type AbaNavegacao = 'principal' | 'consumo' | 'materia-prima';
 
 export default function ConsumoLoja(props: ConsumoLojaProps) {
-  const { onVoltar, onNavegar, onNavegarParaHome, usuarioLogadoId } = props;
+  const { onVoltarParaHome, usuarioLogadoId } = props;
   const usuarioId = usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id || '';
 
-  // Handler seguro de retorno para a Home
   const handleVoltarParaHome = () => {
-    if (typeof onVoltar === 'function') {
-      onVoltar();
-    } else if (typeof onNavegarParaHome === 'function') {
-      onNavegarParaHome();
-    } else if (typeof onNavegar === 'function') {
-      onNavegar('home');
-    } else {
-      window.location.href = '/';
+    if (typeof onVoltarParaHome === 'function') {
+      onVoltarParaHome();
     }
   };
 
@@ -133,7 +124,7 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
     carregarDados();
   }, [abaAtiva, subAbaConsumo, dataInicio, dataFim, localFiltro]);
 
-  // Cálculos de Totais e Paginação mantidos no topo da árvore
+  // Cálculos de Totais e Paginação
   const itensAtuais = abaAtiva === 'materia-prima' ? itensMateriaPrima : itensPrincipal;
   const valorTotalPeriodo = itensAtuais.reduce((acc, curr) => acc + curr.valor_total_item, 0);
   const totalPaginas = Math.ceil(itensAtuais.length / itensPorPagina) || 1;
@@ -797,73 +788,73 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
                               {it.descricao_produto}
                             </span>
                             <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-black uppercase">
-                              {it.local}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400 font-medium">
-                            <span>Qtd: <strong className="text-slate-700">{it.quantidade} {it.unidade_medida}</strong></span>
-                            <span>•</span>
-                            <span>Resp: <strong className="text-slate-700">{it.usuario_nome}</strong></span>
-                            <span>•</span>
-                            <span>Data: <strong className="text-slate-700">{it.data_registro.split('-').reverse().join('/')} às {it.hora_registro.slice(0, 5)}</strong></span>
-                          </div>
-
-                          {it.produto_produzido && (
-                            <div className="mt-1 text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 w-fit">
-                              🥖 Produziu: {it.produto_produzido}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-                          <span className="text-sm font-black font-mono text-amber-900 block">
-                            R$ {it.valor_total_item.toFixed(2).replace('.', ',')}
+                            {it.local}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleAbrirEdicao(it)}
-                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-[10px] font-black text-amber-900 uppercase flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                            title="Alterar Finalidade / Classificação"
-                          >
-                            ✏️ Editar Finalidade
-                          </button>
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400 font-medium">
+                          <span>Qtd: <strong className="text-slate-700">{it.quantidade} {it.unidade_medida}</strong></span>
+                          <span>•</span>
+                          <span>Resp: <strong className="text-slate-700">{it.usuario_nome}</strong></span>
+                          <span>•</span>
+                          <span>Data: <strong className="text-slate-700">{it.data_registro.split('-').reverse().join('/')} às {it.hora_registro.slice(0, 5)}</strong></span>
+                        </div>
+
+                        {it.produto_produzido && (
+                          <div className="mt-1 text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 w-fit">
+                            🥖 Produziu: {it.produto_produzido}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {totalPaginas > 1 && (
-                <div className="flex items-center justify-between border-t border-slate-100 pt-3 px-1">
-                  <button
-                    type="button"
-                    disabled={paginaAtual === 1}
-                    onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
-                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
-                  >
-                    ← Anterior
-                  </button>
-
-                  <span className="text-xs font-black text-slate-500 uppercase">
-                    Página <strong className="text-slate-800">{paginaAtual}</strong> de <strong className="text-slate-800">{totalPaginas}</strong>
-                  </span>
-
-                  <button
-                    type="button"
-                    disabled={paginaAtual === totalPaginas}
-                    onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
-                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
-                  >
-                    Próxima →
-                  </button>
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                        <span className="text-sm font-black font-mono text-amber-900 block">
+                          R$ {it.valor_total_item.toFixed(2).replace('.', ',')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleAbrirEdicao(it)}
+                          className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-[10px] font-black text-amber-900 uppercase flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                          title="Alterar Finalidade / Classificação"
+                        >
+                          ✏️ Editar Finalidade
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          )}
 
-        </div>
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3 px-1">
+                <button
+                  type="button"
+                  disabled={paginaAtual === 1}
+                  onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  ← Anterior
+                </button>
+
+                <span className="text-xs font-black text-slate-500 uppercase">
+                  Página <strong className="text-slate-800">{paginaAtual}</strong> de <strong className="text-slate-800">{totalPaginas}</strong>
+                </span>
+
+                <button
+                  type="button"
+                  disabled={paginaAtual === totalPaginas}
+                  onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  Próxima →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
       )}
 
       {/* MODAL DE EDIÇÃO DE FINALIDADE */}
