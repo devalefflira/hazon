@@ -24,16 +24,16 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
   const { onVoltar, onNavegar, onNavegarParaHome, usuarioLogadoId } = props;
   const usuarioId = usuarioLogadoId || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.id || '';
 
-  // Handler garantido de retorno para a Home
+  // Handler seguro de retorno para a Home
   const handleVoltarParaHome = () => {
-    if (onVoltar) {
+    if (typeof onVoltar === 'function') {
       onVoltar();
-    } else if (onNavegarParaHome) {
+    } else if (typeof onNavegarParaHome === 'function') {
       onNavegarParaHome();
-    } else if (onNavegar) {
+    } else if (typeof onNavegar === 'function') {
       onNavegar('home');
     } else {
-      window.history.back();
+      window.location.href = '/';
     }
   };
 
@@ -74,7 +74,7 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
   const [valorLimiteInput, setValorLimiteInput] = useState<number>(1000);
   const [salvandoLimite, setSalvandoLimite] = useState(false);
 
-  // Mês de referência atual e primeiro dia do mês
+  // Mês de referência atual (ex: '2026-09') e primeiro dia do mês
   const agora = new Date();
   const mesAtual = agora.toISOString().slice(0, 7);
   const primeiroDiaDoMes = `${mesAtual}-01`;
@@ -133,10 +133,9 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
     carregarDados();
   }, [abaAtiva, subAbaConsumo, dataInicio, dataFim, localFiltro]);
 
-  // Cálculos de Totais e Paginação (declarados no topo para respeitar as regras dos hooks)
+  // Cálculos de Totais e Paginação mantidos no topo da árvore
   const itensAtuais = abaAtiva === 'materia-prima' ? itensMateriaPrima : itensPrincipal;
   const valorTotalPeriodo = itensAtuais.reduce((acc, curr) => acc + curr.valor_total_item, 0);
-
   const totalPaginas = Math.ceil(itensAtuais.length / itensPorPagina) || 1;
 
   const itensPaginados = useMemo(() => {
@@ -204,669 +203,668 @@ export default function ConsumoLoja(props: ConsumoLojaProps) {
     }
   };
 
-  // Se estiver em modo novo registro, renderiza a tela de cadastro
-  if (modoNovoRegistro) {
-    return (
-      <NovoRegistroConsumo
-        usuarioId={usuarioId}
-        onVoltar={() => setModoNovoRegistro(false)}
-        onSalvoSucesso={() => {
-          setModoNovoRegistro(false);
-          carregarDados();
-        }}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans relative">
-      <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-7 flex flex-col gap-5 min-h-[calc(100vh-24px)]">
-        
-        {/* HEADER SUPERIOR */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleVoltarParaHome}
-              className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-all cursor-pointer shadow-xs"
-              title="Voltar para a Página Inicial"
-            >
-              ←
-            </button>
-            <div>
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight">
-                Consumo da Loja
-              </h1>
-              <p className="text-xs text-slate-400 font-bold">
-                Gestão de Despesas Internas &amp; Insumos de Produção
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setModoNovoRegistro(true)}
-            className="px-4 py-2.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md shadow-teal-900/20 active:scale-95 transition-all cursor-pointer"
-          >
-            + Novo Registro
-          </button>
+      {modoNovoRegistro ? (
+        <div className="w-full flex justify-center">
+          <NovoRegistroConsumo
+            usuarioId={usuarioId}
+            onVoltar={() => setModoNovoRegistro(false)}
+            onSalvoSucesso={() => {
+              setModoNovoRegistro(false);
+              carregarDados();
+            }}
+          />
         </div>
-
-        {/* NAVEGAÇÃO PRINCIPAL (3 ABAS) */}
-        <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-100 rounded-2xl">
-          <button
-            type="button"
-            onClick={() => setAbaAtiva('principal')}
-            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-              abaAtiva === 'principal'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            📋 Principal
-          </button>
-          <button
-            type="button"
-            onClick={() => setAbaAtiva('consumo')}
-            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-              abaAtiva === 'consumo'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            🛒 Controle de Consumo
-          </button>
-          <button
-            type="button"
-            onClick={() => setAbaAtiva('materia-prima')}
-            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-              abaAtiva === 'materia-prima'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            🥖 Matéria-Prima
-          </button>
-        </div>
-
-        {/* ================= ABA 1: PRINCIPAL ================= */}
-        {abaAtiva === 'principal' && (
-          <div className="flex flex-col gap-5">
-            {/* FILTROS RETRÁTEIS */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden transition-all">
+      ) : (
+        <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-7 flex flex-col gap-5 min-h-[calc(100vh-24px)]">
+          
+          {/* HEADER SUPERIOR */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setFiltrosAbertos(!filtrosAbertos)}
-                className="w-full p-3.5 flex items-center justify-between text-xs font-black uppercase text-slate-700 hover:bg-slate-100 cursor-pointer"
+                onClick={handleVoltarParaHome}
+                className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-all cursor-pointer shadow-xs"
+                title="Voltar para a Página Inicial"
               >
-                <div className="flex items-center gap-2">
-                  <span>🔍</span>
-                  <span>Filtros de Pesquisa</span>
-                </div>
-                <span>{filtrosAbertos ? '▲ Recolher' : '▼ Expandir Filtros'}</span>
+                ←
               </button>
-
-              {filtrosAbertos && (
-                <div className="p-4 pt-0 grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200/60 mt-2">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                      Data Inicial
-                    </label>
-                    <input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                      Data Final
-                    </label>
-                    <input
-                      type="date"
-                      value={dataFim}
-                      onChange={(e) => setDataFim(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                      Local / Setor
-                    </label>
-                    <select
-                      value={localFiltro}
-                      onChange={(e) => setLocalFiltro(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-800"
-                    >
-                      <option value="Todos">Todos os Locais</option>
-                      {LOCAIS_CONSUMO.map((loc) => (
-                        <option key={loc} value={loc}>{loc}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* TOTALIZADOR NO PERÍODO */}
-            <div className="bg-teal-50/60 border border-teal-200 rounded-2xl p-4 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-teal-800 block">
-                  Valor Total do Consumo {dataInicio ? 'no Período' : `em ${mesAtual}`}
-                </span>
-                <span className="text-2xl font-black font-mono text-teal-950">
-                  R$ {valorTotalPeriodo.toFixed(2).replace('.', ',')}
-                </span>
-              </div>
-
-              <span className="text-xs font-black uppercase text-teal-700 bg-white px-3 py-1.5 rounded-xl border border-teal-100 shadow-xs">
-                {itensPrincipal.length} {itensPrincipal.length === 1 ? 'registro' : 'registros'}
-              </span>
-            </div>
-
-            {/* BARRA DE CONTROLE DA PAGINAÇÃO */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">
-                Lançamentos Registrados ({itensPrincipal.length})
-              </span>
-
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase">Exibir Itens:</span>
-                <select
-                  value={itensPorPagina}
-                  onChange={(e) => {
-                    setItensPorPagina(Number(e.target.value));
-                    setPaginaAtual(1);
-                  }}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-black text-slate-700 cursor-pointer focus:outline-none focus:border-[#09797a]"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={30}>30</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight">
+                  Consumo da Loja
+                </h1>
+                <p className="text-xs text-slate-400 font-bold">
+                  Gestão de Despesas Internas &amp; Insumos de Produção
+                </p>
               </div>
             </div>
 
-            {/* CARDS COM OS ITENS */}
-            <div className="flex flex-col gap-2.5">
-              {carregando ? (
-                <div className="p-8 text-center text-xs font-black uppercase text-[#09797a] animate-pulse">
-                  Carregando lançamentos...
-                </div>
-              ) : itensPaginados.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs font-bold">
-                  Nenhum registro encontrado para os filtros selecionados.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2.5">
-                  {itensPaginados.map((it) => (
-                    <div
-                      key={it.id}
-                      className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs hover:border-[#09797a]/50 transition-all"
-                    >
-                      <div className="flex flex-col gap-1 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono font-black text-[10px]">
-                            {it.codprod || 'S/C'}
-                          </span>
-                          <span className="font-black text-xs text-slate-900 uppercase">
-                            {it.descricao_produto}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 text-[10px] font-black uppercase">
-                            {it.local}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400 font-medium">
-                          <span>Qtd: <strong className="text-slate-700">{it.quantidade} {it.unidade_medida}</strong></span>
-                          <span>•</span>
-                          <span>Resp: <strong className="text-slate-700">{it.usuario_nome}</strong></span>
-                          <span>•</span>
-                          <span>Data: <strong className="text-slate-700">{it.data_registro.split('-').reverse().join('/')} às {it.hora_registro.slice(0, 5)}</strong></span>
-                        </div>
-
-                        {it.observacao && (
-                          <div className="mt-0.5 text-[11px] text-slate-500 italic">
-                            "{it.observacao}"
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-                        <span className="text-sm font-black font-mono text-teal-900 block">
-                          R$ {it.valor_total_item.toFixed(2).replace('.', ',')}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleAbrirEdicao(it)}
-                          className="px-2.5 py-1 bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-xl text-[10px] font-black text-slate-600 hover:text-teal-800 uppercase flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                          title="Alterar Finalidade / Classificação"
-                        >
-                          ✏️ Editar Finalidade
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* NAVEGAÇÃO ENTRE PÁGINAS */}
-            {totalPaginas > 1 && (
-              <div className="flex items-center justify-between border-t border-slate-100 pt-3 px-1">
-                <button
-                  type="button"
-                  disabled={paginaAtual === 1}
-                  onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
-                >
-                  ← Anterior
-                </button>
-
-                <span className="text-xs font-black text-slate-500 uppercase">
-                  Página <strong className="text-slate-800">{paginaAtual}</strong> de <strong className="text-slate-800">{totalPaginas}</strong>
-                </span>
-
-                <button
-                  type="button"
-                  disabled={paginaAtual === totalPaginas}
-                  onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
-                >
-                  Próxima →
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => setModoNovoRegistro(true)}
+              className="px-4 py-2.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md shadow-teal-900/20 active:scale-95 transition-all cursor-pointer"
+            >
+              + Novo Registro
+            </button>
           </div>
-        )}
 
-        {/* ================= ABA 2: CONTROLE DE CONSUMO ================= */}
-        {abaAtiva === 'consumo' && (
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <div className="flex gap-2">
+          {/* NAVEGAÇÃO PRINCIPAL (3 ABAS) */}
+          <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-100 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setAbaAtiva('principal')}
+              className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                abaAtiva === 'principal'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              📋 Principal
+            </button>
+            <button
+              type="button"
+              onClick={() => setAbaAtiva('consumo')}
+              className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                abaAtiva === 'consumo'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              🛒 Controle de Consumo
+            </button>
+            <button
+              type="button"
+              onClick={() => setAbaAtiva('materia-prima')}
+              className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                abaAtiva === 'materia-prima'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              🥖 Matéria-Prima
+            </button>
+          </div>
+
+          {/* ================= ABA 1: PRINCIPAL ================= */}
+          {abaAtiva === 'principal' && (
+            <div className="flex flex-col gap-5">
+              {/* FILTROS RETRÁTEIS */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden transition-all">
                 <button
                   type="button"
-                  onClick={() => setSubAbaConsumo('visao-geral')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-                    subAbaConsumo === 'visao-geral'
-                      ? 'bg-teal-50 text-[#09797a] border border-teal-200'
-                      : 'text-slate-400 hover:text-slate-600'
-                  }`}
+                  onClick={() => setFiltrosAbertos(!filtrosAbertos)}
+                  className="w-full p-3.5 flex items-center justify-between text-xs font-black uppercase text-slate-700 hover:bg-slate-100 cursor-pointer"
                 >
-                  Visão Geral
+                  <div className="flex items-center gap-2">
+                    <span>🔍</span>
+                    <span>Filtros de Pesquisa</span>
+                  </div>
+                  <span>{filtrosAbertos ? '▲ Recolher' : '▼ Expandir Filtros'}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setSubAbaConsumo('limites')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-                    subAbaConsumo === 'limites'
-                      ? 'bg-teal-50 text-[#09797a] border border-teal-200'
-                      : 'text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  Limites
-                </button>
-              </div>
 
-              <span className="text-[11px] font-black uppercase text-slate-400">
-                Mês Ref: {mesAtual}
-              </span>
-            </div>
+                {filtrosAbertos && (
+                  <div className="p-4 pt-0 grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200/60 mt-2">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                        Data Inicial
+                      </label>
+                      <input
+                        type="date"
+                        value={dataInicio}
+                        onChange={(e) => setDataInicio(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                      />
+                    </div>
 
-            {subAbaConsumo === 'visao-geral' ? (
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500 px-1">
-                  Acompanhamento de Teto por Setor ({mesAtual})
-                </span>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                        Data Final
+                      </label>
+                      <input
+                        type="date"
+                        value={dataFim}
+                        onChange={(e) => setDataFim(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                      />
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {LOCAIS_CONSUMO.map((loc) => {
-                    const lim = limites.find((l) => l.local === loc);
-                    const teto = Number(lim?.valor_limite || 0);
-                    const gasto = Number(gastosPorLocal[loc] || 0);
-                    const perc = teto > 0 ? Math.min(100, Math.round((gasto / teto) * 100)) : 0;
-                    const restante = Math.max(0, teto - gasto);
-
-                    const corProgresso = perc >= 90 ? 'bg-red-500' : perc >= 70 ? 'bg-amber-500' : 'bg-[#09797a]';
-
-                    return (
-                      <div key={loc} className="bg-white border border-slate-200 rounded-2xl p-3.5 flex flex-col gap-2 shadow-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-slate-800 uppercase">{loc}</span>
-                          <span className="text-[11px] font-black text-slate-600 font-mono">{perc}% consumido</span>
-                        </div>
-
-                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                          <div className={`h-full ${corProgresso} transition-all`} style={{ width: `${perc}%` }} />
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] font-bold">
-                          <span className="text-slate-400">
-                            Gasto: <strong className="text-slate-700">R$ {gasto.toFixed(2).replace('.', ',')}</strong>
-                          </span>
-                          <span className="text-slate-400">
-                            Resta: <strong className={restante === 0 && teto > 0 ? 'text-red-600' : 'text-emerald-700'}>R$ {restante.toFixed(2).replace('.', ',')}</strong>
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-6">
-                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-4 sm:p-5 flex flex-col gap-4">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Ajustar Limite Mensal por Local
-                  </span>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
                         Local / Setor
                       </label>
                       <select
-                        value={localLimiteForm}
-                        onChange={(e) => setLocalLimiteForm(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800"
+                        value={localFiltro}
+                        onChange={(e) => setLocalFiltro(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-800"
                       >
+                        <option value="Todos">Todos os Locais</option>
                         {LOCAIS_CONSUMO.map((loc) => (
                           <option key={loc} value={loc}>{loc}</option>
                         ))}
                       </select>
                     </div>
-
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                        Teto Mensal (R$)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="50"
-                        value={valorLimiteInput}
-                        onChange={(e) => setValorLimiteInput(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-slate-800"
-                      />
-                    </div>
-
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        disabled={salvandoLimite}
-                        onClick={handleSalvarLimite}
-                        className="w-full py-2 bg-[#09797a] hover:bg-[#075f60] disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-xs active:scale-95 transition-all cursor-pointer"
-                      >
-                        {salvandoLimite ? 'Gravando...' : 'Gravar Limite'}
-                      </button>
-                    </div>
                   </div>
+                )}
+              </div>
+
+              {/* TOTALIZADOR NO PERÍODO */}
+              <div className="bg-teal-50/60 border border-teal-200 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-teal-800 block">
+                    Valor Total do Consumo {dataInicio ? 'no Período' : `em ${mesAtual}`}
+                  </span>
+                  <span className="text-2xl font-black font-mono text-teal-950">
+                    R$ {valorTotalPeriodo.toFixed(2).replace('.', ',')}
+                  </span>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <span className="text-xs font-black uppercase text-teal-700 bg-white px-3 py-1.5 rounded-xl border border-teal-100 shadow-xs">
+                  {itensPrincipal.length} {itensPrincipal.length === 1 ? 'registro' : 'registros'}
+                </span>
+              </div>
+
+              {/* BARRA DE CONTROLE DA PAGINAÇÃO */}
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  Lançamentos Registrados ({itensPrincipal.length})
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Exibir Itens:</span>
+                  <select
+                    value={itensPorPagina}
+                    onChange={(e) => {
+                      setItensPorPagina(Number(e.target.value));
+                      setPaginaAtual(1);
+                    }}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-black text-slate-700 cursor-pointer focus:outline-none focus:border-[#09797a]"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={30}>30</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* CARDS COM OS ITENS */}
+              <div className="flex flex-col gap-2.5">
+                {carregando ? (
+                  <div className="p-8 text-center text-xs font-black uppercase text-[#09797a] animate-pulse">
+                    Carregando lançamentos...
+                  </div>
+                ) : itensPaginados.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs font-bold">
+                    Nenhum registro encontrado para os filtros selecionados.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {itensPaginados.map((it) => (
+                      <div
+                        key={it.id}
+                        className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs hover:border-[#09797a]/50 transition-all"
+                      >
+                        <div className="flex flex-col gap-1 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono font-black text-[10px]">
+                              {it.codprod || 'S/C'}
+                            </span>
+                            <span className="font-black text-xs text-slate-900 uppercase">
+                              {it.descricao_produto}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 text-[10px] font-black uppercase">
+                              {it.local}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400 font-medium">
+                            <span>Qtd: <strong className="text-slate-700">{it.quantidade} {it.unidade_medida}</strong></span>
+                            <span>•</span>
+                            <span>Resp: <strong className="text-slate-700">{it.usuario_nome}</strong></span>
+                            <span>•</span>
+                            <span>Data: <strong className="text-slate-700">{it.data_registro.split('-').reverse().join('/')} às {it.hora_registro.slice(0, 5)}</strong></span>
+                          </div>
+
+                          {it.observacao && (
+                            <div className="mt-0.5 text-[11px] text-slate-500 italic">
+                              "{it.observacao}"
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                          <span className="text-sm font-black font-mono text-teal-900 block">
+                            R$ {it.valor_total_item.toFixed(2).replace('.', ',')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirEdicao(it)}
+                            className="px-2.5 py-1 bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-xl text-[10px] font-black text-slate-600 hover:text-teal-800 uppercase flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                            title="Alterar Finalidade / Classificação"
+                          >
+                            ✏️ Editar Finalidade
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* NAVEGAÇÃO ENTRE PÁGINAS */}
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-between border-t border-slate-100 pt-3 px-1">
+                  <button
+                    type="button"
+                    disabled={paginaAtual === 1}
+                    onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    ← Anterior
+                  </button>
+
+                  <span className="text-xs font-black text-slate-500 uppercase">
+                    Página <strong className="text-slate-800">{paginaAtual}</strong> de <strong className="text-slate-800">{totalPaginas}</strong>
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={paginaAtual === totalPaginas}
+                    onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    Próxima →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ================= ABA 2: CONTROLE DE CONSUMO ================= */}
+          {abaAtiva === 'consumo' && (
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSubAbaConsumo('visao-geral')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                      subAbaConsumo === 'visao-geral'
+                        ? 'bg-teal-50 text-[#09797a] border border-teal-200'
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    Visão Geral
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubAbaConsumo('limites')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                      subAbaConsumo === 'limites'
+                        ? 'bg-teal-50 text-[#09797a] border border-teal-200'
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    Limites
+                  </button>
+                </div>
+
+                <span className="text-[11px] font-black uppercase text-slate-400">
+                  Mês Ref: {mesAtual}
+                </span>
+              </div>
+
+              {subAbaConsumo === 'visao-geral' ? (
+                <div className="flex flex-col gap-3">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-500 px-1">
-                    Limites Definidos para {mesAtual}
+                    Acompanhamento de Teto por Setor ({mesAtual})
                   </span>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {LOCAIS_CONSUMO.map((loc) => {
                       const lim = limites.find((l) => l.local === loc);
+                      const teto = Number(lim?.valor_limite || 0);
+                      const gasto = Number(gastosPorLocal[loc] || 0);
+                      const perc = teto > 0 ? Math.min(100, Math.round((gasto / teto) * 100)) : 0;
+                      const restante = Math.max(0, teto - gasto);
+
+                      const corProgresso = perc >= 90 ? 'bg-red-500' : perc >= 70 ? 'bg-amber-500' : 'bg-[#09797a]';
+
                       return (
-                        <div key={loc} className="bg-white border border-slate-200 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
-                          <div>
-                            <span className="text-xs font-black text-slate-800 uppercase block">{loc}</span>
-                            {lim ? (
-                              <span className="text-[10px] text-slate-400 font-medium">
-                                Ajustado por {lim.usuario_nome} em {lim.data_ajuste} às {lim.hora_ajuste}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-amber-600 font-medium">Sem teto cadastrado</span>
-                            )}
+                        <div key={loc} className="bg-white border border-slate-200 rounded-2xl p-3.5 flex flex-col gap-2 shadow-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800 uppercase">{loc}</span>
+                            <span className="text-[11px] font-black text-slate-600 font-mono">{perc}% consumido</span>
                           </div>
-                          <span className="text-sm font-black font-mono text-[#09797a]">
-                            R$ {Number(lim?.valor_limite || 0).toFixed(2).replace('.', ',')}
-                          </span>
+
+                          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                            <div className={`h-full ${corProgresso} transition-all`} style={{ width: `${perc}%` }} />
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] font-bold">
+                            <span className="text-slate-400">
+                              Gasto: <strong className="text-slate-700">R$ {gasto.toFixed(2).replace('.', ',')}</strong>
+                            </span>
+                            <span className="text-slate-400">
+                              Resta: <strong className={restante === 0 && teto > 0 ? 'text-red-600' : 'text-emerald-700'}>R$ {restante.toFixed(2).replace('.', ',')}</strong>
+                            </span>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500 px-1">
-                    Auditoria de Alterações de Limites (Histórico do Mês)
-                  </span>
-
-                  {historicoLimites.length === 0 ? (
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-400 font-medium">
-                      Nenhuma alteração de limite registrada neste mês.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {historicoLimites.map((h) => (
-                        <div key={h.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center justify-between text-xs">
-                          <div>
-                            <span className="font-black text-slate-800 uppercase">{h.local}</span>
-                            <span className="text-[10px] text-slate-400 ml-2">
-                              {h.data_alteracao} às {h.hora_alteracao} por <strong>{h.usuario_nome}</strong>
-                            </span>
-                          </div>
-                          <div className="font-mono text-right">
-                            <span className="line-through text-slate-400 mr-2">
-                              R$ {h.valor_anterior.toFixed(2).replace('.', ',')}
-                            </span>
-                            <span className="font-black text-[#09797a]">
-                              R$ {h.valor_novo.toFixed(2).replace('.', ',')}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= ABA 3: MATÉRIA-PRIMA ================= */}
-        {abaAtiva === 'materia-prima' && (
-          <div className="flex flex-col gap-5">
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden transition-all">
-              <button
-                type="button"
-                onClick={() => setFiltrosAbertos(!filtrosAbertos)}
-                className="w-full p-3.5 flex items-center justify-between text-xs font-black uppercase text-slate-700 hover:bg-slate-100 cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <span>🔍</span>
-                  <span>Filtros de Matéria-Prima</span>
-                </div>
-                <span>{filtrosAbertos ? '▲ Recolher' : '▼ Expandir Filtros'}</span>
-              </button>
-
-              {filtrosAbertos && (
-                <div className="p-4 pt-0 grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200/60 mt-2">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                      Data Inicial
-                    </label>
-                    <input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                      Data Final
-                    </label>
-                    <input
-                      type="date"
-                      value={dataFim}
-                      onChange={(e) => setDataFim(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                      Local / Setor Produtivo
-                    </label>
-                    <select
-                      value={localFiltro}
-                      onChange={(e) => setLocalFiltro(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-800"
-                    >
-                      <option value="Todos">Todos os Locais</option>
-                      {LOCAIS_CONSUMO.map((loc) => (
-                        <option key={loc} value={loc}>{loc}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
-                  Custo Total de Matéria-Prima {dataInicio ? 'no Período' : `em ${mesAtual}`}
-                </span>
-                <span className="text-2xl font-black font-mono text-amber-950">
-                  R$ {valorTotalPeriodo.toFixed(2).replace('.', ',')}
-                </span>
-              </div>
-
-              <span className="text-xs font-black uppercase text-amber-800 bg-white px-3 py-1.5 rounded-xl border border-amber-200 shadow-xs">
-                {itensMateriaPrima.length} {itensMateriaPrima.length === 1 ? 'registro' : 'registros'}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">
-                Insumos Utilizados na Produção ({itensMateriaPrima.length})
-              </span>
-
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase">Exibir Itens:</span>
-                <select
-                  value={itensPorPagina}
-                  onChange={(e) => {
-                    setItensPorPagina(Number(e.target.value));
-                    setPaginaAtual(1);
-                  }}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-black text-slate-700 cursor-pointer focus:outline-none focus:border-[#09797a]"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={30}>30</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              {carregando ? (
-                <div className="p-8 text-center text-xs font-black uppercase text-amber-700 animate-pulse">
-                  Carregando registros de matéria-prima...
-                </div>
-              ) : itensPaginados.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs font-bold">
-                  Nenhum registro de matéria-prima encontrado para os filtros selecionados.
-                </div>
               ) : (
-                <div className="grid grid-cols-1 gap-2.5">
-                  {itensPaginados.map((it) => (
-                    <div
-                      key={it.id}
-                      className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs hover:border-amber-400 transition-all"
-                    >
-                      <div className="flex flex-col gap-1 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono font-black text-[10px]">
-                            {it.codprod || 'S/C'}
-                          </span>
-                          <span className="font-black text-xs text-slate-900 uppercase">
-                            {it.descricao_produto}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-black uppercase">
-                            {it.local}
-                          </span>
-                        </div>
+                <div className="flex flex-col gap-6">
+                  <div className="bg-slate-50 border border-slate-200 rounded-3xl p-4 sm:p-5 flex flex-col gap-4">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                      Ajustar Limite Mensal por Local
+                    </span>
 
-                        <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400 font-medium">
-                          <span>Qtd: <strong className="text-slate-700">{it.quantidade} {it.unidade_medida}</strong></span>
-                          <span>•</span>
-                          <span>Resp: <strong className="text-slate-700">{it.usuario_nome}</strong></span>
-                          <span>•</span>
-                          <span>Data: <strong className="text-slate-700">{it.data_registro.split('-').reverse().join('/')} às {it.hora_registro.slice(0, 5)}</strong></span>
-                        </div>
-
-                        {it.produto_produzido && (
-                          <div className="mt-1 text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 w-fit">
-                            🥖 Produziu: {it.produto_produzido}
-                          </div>
-                        )}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                          Local / Setor
+                        </label>
+                        <select
+                          value={localLimiteForm}
+                          onChange={(e) => setLocalLimiteForm(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800"
+                        >
+                          {LOCAIS_CONSUMO.map((loc) => (
+                            <option key={loc} value={loc}>{loc}</option>
+                          ))}
+                        </select>
                       </div>
 
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-                        <span className="text-sm font-black text-amber-900 block font-mono">
-                          R$ {it.valor_total_item.toFixed(2).replace('.', ',')}
-                        </span>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                          Teto Mensal (R$)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="50"
+                          value={valorLimiteInput}
+                          onChange={(e) => setValorLimiteInput(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-slate-800"
+                        />
+                      </div>
+
+                      <div className="flex items-end">
                         <button
                           type="button"
-                          onClick={() => handleAbrirEdicao(it)}
-                          className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-[10px] font-black text-amber-900 uppercase flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                          title="Alterar Finalidade / Classificação"
+                          disabled={salvandoLimite}
+                          onClick={handleSalvarLimite}
+                          className="w-full py-2 bg-[#09797a] hover:bg-[#075f60] disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-xs active:scale-95 transition-all cursor-pointer"
                         >
-                          ✏️ Editar Finalidade
+                          {salvandoLimite ? 'Gravando...' : 'Gravar Limite'}
                         </button>
                       </div>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-500 px-1">
+                      Limites Definidos para {mesAtual}
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {LOCAIS_CONSUMO.map((loc) => {
+                        const lim = limites.find((l) => l.local === loc);
+                        return (
+                          <div key={loc} className="bg-white border border-slate-200 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
+                            <div>
+                              <span className="text-xs font-black text-slate-800 uppercase block">{loc}</span>
+                              {lim ? (
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  Ajustado por {lim.usuario_nome} em {lim.data_ajuste} às {lim.hora_ajuste}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-amber-600 font-medium">Sem teto cadastrado</span>
+                              )}
+                            </div>
+                            <span className="text-sm font-black font-mono text-[#09797a]">
+                              R$ {Number(lim?.valor_limite || 0).toFixed(2).replace('.', ',')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-500 px-1">
+                      Auditoria de Alterações de Limites (Histórico do Mês)
+                    </span>
+
+                    {historicoLimites.length === 0 ? (
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-400 font-medium">
+                        Nenhuma alteração de limite registrada neste mês.
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {historicoLimites.map((h) => (
+                          <div key={h.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center justify-between text-xs">
+                            <div>
+                              <span className="font-black text-slate-800 uppercase">{h.local}</span>
+                              <span className="text-[10px] text-slate-400 ml-2">
+                                {h.data_alteracao} às {h.hora_alteracao} por <strong>{h.usuario_nome}</strong>
+                              </span>
+                            </div>
+                            <div className="font-mono text-right">
+                              <span className="line-through text-slate-400 mr-2">
+                                R$ {h.valor_anterior.toFixed(2).replace('.', ',')}
+                              </span>
+                              <span className="font-black text-[#09797a]">
+                                R$ {h.valor_novo.toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
+          )}
 
-            {totalPaginas > 1 && (
-              <div className="flex items-center justify-between border-t border-slate-100 pt-3 px-1">
+          {/* ================= ABA 3: MATÉRIA-PRIMA ================= */}
+          {abaAtiva === 'materia-prima' && (
+            <div className="flex flex-col gap-5">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden transition-all">
                 <button
                   type="button"
-                  disabled={paginaAtual === 1}
-                  onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
+                  onClick={() => setFiltrosAbertos(!filtrosAbertos)}
+                  className="w-full p-3.5 flex items-center justify-between text-xs font-black uppercase text-slate-700 hover:bg-slate-100 cursor-pointer"
                 >
-                  ← Anterior
+                  <div className="flex items-center gap-2">
+                    <span>🔍</span>
+                    <span>Filtros de Matéria-Prima</span>
+                  </div>
+                  <span>{filtrosAbertos ? '▲ Recolher' : '▼ Expandir Filtros'}</span>
                 </button>
 
-                <span className="text-xs font-black text-slate-500 uppercase">
-                  Página <strong className="text-slate-800">{paginaAtual}</strong> de <strong className="text-slate-800">{totalPaginas}</strong>
+                {filtrosAbertos && (
+                  <div className="p-4 pt-0 grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200/60 mt-2">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                        Data Inicial
+                      </label>
+                      <input
+                        type="date"
+                        value={dataInicio}
+                        onChange={(e) => setDataInicio(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                        Data Final
+                      </label>
+                      <input
+                        type="date"
+                        value={dataFim}
+                        onChange={(e) => setDataFim(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                        Local / Setor Produtivo
+                      </label>
+                      <select
+                        value={localFiltro}
+                        onChange={(e) => setLocalFiltro(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-800"
+                      >
+                        <option value="Todos">Todos os Locais</option>
+                        {LOCAIS_CONSUMO.map((loc) => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                    Custo Total de Matéria-Prima {dataInicio ? 'no Período' : `em ${mesAtual}`}
+                  </span>
+                  <span className="text-2xl font-black font-mono text-amber-950">
+                    R$ {valorTotalPeriodo.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+
+                <span className="text-xs font-black uppercase text-amber-800 bg-white px-3 py-1.5 rounded-xl border border-amber-200 shadow-xs">
+                  {itensMateriaPrima.length} {itensMateriaPrima.length === 1 ? 'registro' : 'registros'}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  Insumos Utilizados na Produção ({itensMateriaPrima.length})
                 </span>
 
-                <button
-                  type="button"
-                  disabled={paginaAtual === totalPaginas}
-                  onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
-                >
-                  Próxima →
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Exibir Itens:</span>
+                  <select
+                    value={itensPorPagina}
+                    onChange={(e) => {
+                      setItensPorPagina(Number(e.target.value));
+                      setPaginaAtual(1);
+                    }}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-black text-slate-700 cursor-pointer focus:outline-none focus:border-[#09797a]"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={30}>30</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
               </div>
-            )}
-          </div>
-        )}
 
-      </div>
+              <div className="flex flex-col gap-2.5">
+                {carregando ? (
+                  <div className="p-8 text-center text-xs font-black uppercase text-amber-700 animate-pulse">
+                    Carregando registros de matéria-prima...
+                  </div>
+                ) : itensPaginados.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs font-bold">
+                    Nenhum registro de matéria-prima encontrado para os filtros selecionados.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {itensPaginados.map((it) => (
+                      <div
+                        key={it.id}
+                        className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs hover:border-amber-400 transition-all"
+                      >
+                        <div className="flex flex-col gap-1 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono font-black text-[10px]">
+                              {it.codprod || 'S/C'}
+                            </span>
+                            <span className="font-black text-xs text-slate-900 uppercase">
+                              {it.descricao_produto}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-black uppercase">
+                              {it.local}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400 font-medium">
+                            <span>Qtd: <strong className="text-slate-700">{it.quantidade} {it.unidade_medida}</strong></span>
+                            <span>•</span>
+                            <span>Resp: <strong className="text-slate-700">{it.usuario_nome}</strong></span>
+                            <span>•</span>
+                            <span>Data: <strong className="text-slate-700">{it.data_registro.split('-').reverse().join('/')} às {it.hora_registro.slice(0, 5)}</strong></span>
+                          </div>
+
+                          {it.produto_produzido && (
+                            <div className="mt-1 text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 w-fit">
+                              🥖 Produziu: {it.produto_produzido}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                          <span className="text-sm font-black font-mono text-amber-900 block">
+                            R$ {it.valor_total_item.toFixed(2).replace('.', ',')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirEdicao(it)}
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-[10px] font-black text-amber-900 uppercase flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                            title="Alterar Finalidade / Classificação"
+                          >
+                            ✏️ Editar Finalidade
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-between border-t border-slate-100 pt-3 px-1">
+                  <button
+                    type="button"
+                    disabled={paginaAtual === 1}
+                    onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    ← Anterior
+                  </button>
+
+                  <span className="text-xs font-black text-slate-500 uppercase">
+                    Página <strong className="text-slate-800">{paginaAtual}</strong> de <strong className="text-slate-800">{totalPaginas}</strong>
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={paginaAtual === totalPaginas}
+                    onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    Próxima →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* MODAL DE EDIÇÃO DE FINALIDADE */}
       {itemEmEdicao && (
