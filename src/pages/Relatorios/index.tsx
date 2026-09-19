@@ -1,359 +1,438 @@
 // src/pages/Relatorios/index.tsx
-import React, { useState, useEffect } from "react";
-import { relatoriosService } from "./services/relatoriosService";
-import { gerarRelatorioVencimentos } from "./utils/generators/gerarRelatorioVencimentos";
-import { gerarRelatorioInventario } from "./utils/generators/gerarRelatorioInventario";
-import { gerarRelatorioNotasFalta } from "./utils/generators/gerarRelatorioNotasFalta";
-import { gerarRelatorioCotacoes } from "./utils/generators/gerarRelatorioCotacoes";
-import { gerarRelatorioOrcamentos } from "./utils/generators/gerarRelatorioOrcamentos";
-import { gerarRelatorioAvarias } from "./utils/generators/gerarRelatorioAvarias";
-import { gerarRelatorioTrocas } from "./utils/generators/gerarRelatorioTrocas";
-import { gerarRelatorioPedidos } from "./utils/generators/gerarRelatorioPedidos";
-import { gerarRelatorioTarefas } from "./utils/generators/gerarRelatorioTarefas";
-import { gerarRelatorioConfCega } from "./utils/generators/gerarRelatorioConfCega";
-import { gerarRelatorioTemperaturas } from "./utils/generators/gerarRelatorioTemperaturas";
-import { gerarRelatorioOfertas } from "./utils/generators/gerarRelatorioOfertas";
-import { gerarRelatorioConsumoLoja } from "./utils/generators/gerarRelatorioConsumoLoja";
+import { useState, useEffect } from 'react';
+import { relatoriosService } from './services/relatoriosService';
+import { gerarRelatorioAvarias } from './utils/generators/gerarRelatorioAvarias';
+import { gerarRelatorioConfCega } from './utils/generators/gerarRelatorioConfCega';
+import { gerarRelatorioConsumoLoja } from './utils/generators/gerarRelatorioConsumoLoja';
+import { gerarRelatorioCotacoes } from './utils/generators/gerarRelatorioCotacoes';
+import { gerarRelatorioInventario } from './utils/generators/gerarRelatorioInventario';
+import { gerarRelatorioNotasFalta } from './utils/generators/gerarRelatorioNotasFalta';
+import { gerarRelatorioOfertas } from './utils/generators/gerarRelatorioOfertas';
+import { gerarRelatorioOrcamentos } from './utils/generators/gerarRelatorioOrcamentos';
+import { gerarRelatorioPedidos } from './utils/generators/gerarRelatorioPedidos';
+import { gerarRelatorioTarefas } from './utils/generators/gerarRelatorioTarefas';
+import { gerarRelatorioTemperaturas } from './utils/generators/gerarRelatorioTemperaturas';
+import { gerarRelatorioTrocas } from './utils/generators/gerarRelatorioTrocas';
+import { gerarRelatorioVencimentos } from './utils/generators/gerarRelatorioVencimentos';
 
 interface RelatoriosProps {
   onVoltarParaHome?: () => void;
-  usuarioLogado?: any;
+  [key: string]: any;
 }
 
-interface SubmoduloOption {
-  id: string;
-  nome: string;
-  icone: string;
-}
+type TipoSubmodulo =
+  | 'avarias'
+  | 'conf-cega'
+  | 'consumo-loja'
+  | 'cotacoes'
+  | 'inventario'
+  | 'nota-falta'
+  | 'ofertas'
+  | 'orcamentos'
+  | 'pedidos'
+  | 'tarefas'
+  | 'temperaturas'
+  | 'trocas'
+  | 'vencimentos';
 
-const SUBMODULOS: SubmoduloOption[] = [
-  { id: "consumo_loja", nome: "CONSUMO DA LOJA", icone: "🛒" },
-  { id: "vencimentos", nome: "CONTROLE DE VALIDADES", icone: "🛡️" },
-  { id: "inventario", nome: "INVENTÁRIO", icone: "📦" },
-  { id: "notas_falta", nome: "NOTAS DE FALTA", icone: "⚠️" },
-  { id: "cotacoes", nome: "COTAÇÕES", icone: "💬" },
-  { id: "orcamentos", nome: "ORÇAMENTOS", icone: "📑" },
-  { id: "avarias", nome: "AVARIAS", icone: "❌" },
-  { id: "trocas", nome: "TROCAS", icone: "🔄" },
-  { id: "pedidos", nome: "PEDIDOS", icone: "🚚" },
-  { id: "tarefas", nome: "TAREFAS", icone: "✅" },
-  { id: "conf_cega", nome: "CONF. CEGA", icone: "🔍" },
-  { id: "temperatura", nome: "TEMPERATURAS", icone: "🌡️" },
-  { id: "ofertas", nome: "OFERTAS", icone: "🏷️" },
-];
+export default function Relatorios(props: RelatoriosProps) {
+  const { onVoltarParaHome } = props;
 
-const Relatorios: React.FC<RelatoriosProps> = ({ onVoltarParaHome, usuarioLogado }) => {
-  const usuarioNome = usuarioLogado?.nome || JSON.parse(localStorage.getItem('hazon_user') || '{}')?.nome || 'Usuário';
+  const hoje = new Date().toISOString().split('T')[0];
+  const [submodulo, setSubmodulo] = useState<TipoSubmodulo>('avarias');
+  const [dataInicio, setDataInicio] = useState(hoje);
+  const [dataFim, setDataFim] = useState(hoje);
 
-  const hoje = new Date().toISOString().split("T")[0];
-  const [submodulo, setSubmodulo] = useState<string>("consumo_loja");
-  const [dataInicio, setDataInicio] = useState<string>(hoje);
-  const [dataFim, setDataFim] = useState<string>(hoje);
-  const [carregando, setCarregando] = useState<boolean>(false);
+  // Filtros Mercadológicos
+  const [departamento, setDepartamento] = useState('TODOS');
+  const [secao, setSecao] = useState('TODOS');
+  const [categoria, setCategoria] = useState('TODOS');
 
-  // Filtros específicos para Avarias (Padrão: TODOS)
-  const [departamentoSel, setDepartamentoSel] = useState<string>("TODOS");
-  const [secaoSel, setSecaoSel] = useState<string>("TODOS");
-  const [categoriaSel, setCategoriaSel] = useState<string>("TODOS");
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
+  const [secoes, setSecoes] = useState<string[]>([]);
+  const [categorias, setCategorias] = useState<string[]>([]);
 
-  // Opções dinâmicas carregadas da base
-  const [opcoesDepartamentos, setOpcoesDepartamentos] = useState<string[]>([]);
-  const [opcoesSecoes, setOpcoesSecoes] = useState<string[]>([]);
-  const [opcoesCategorias, setOpcoesCategorias] = useState<string[]>([]);
+  // Filtro de Produto Específico (Avarias)
+  const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
+  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
 
+  const [gerando, setGerando] = useState(false);
+
+  // Carregar opções de filtros mercadológicos
   useEffect(() => {
-    async function carregarFiltros() {
+    async function carregarOpcoes() {
       try {
-        const { departamentos, secoes, categorias } =
+        const { departamentos: deps, secoes: secs, categorias: cats } =
           await relatoriosService.buscarOpcoesFiltrosProdutos();
-        setOpcoesDepartamentos(departamentos as string[]);
-        setOpcoesSecoes(secoes as string[]);
-        setOpcoesCategorias(categorias as string[]);
+        setDepartamentos(deps);
+        setSecoes(secs);
+        setCategorias(cats);
       } catch (err) {
-        console.error("Erro ao carregar opções de filtros:", err);
+        console.error('Erro ao carregar opções de filtros:', err);
       }
     }
-    carregarFiltros();
+    carregarOpcoes();
   }, []);
 
-  const handleVoltar = () => {
-    if (onVoltarParaHome) {
-      onVoltarParaHome();
-    } else {
-      window.history.back();
+  // Busca preditiva de produto para Avarias
+  const handleBuscarProduto = async (termo: string) => {
+    setTermoBuscaProduto(termo);
+    if (!termo.trim()) {
+      setProdutosEncontrados([]);
+      return;
     }
-  };
-
-  const formatarDataFiltro = (dt: string) => {
-    if (!dt) return "";
-    const partes = dt.split("-");
-    if (partes.length === 3) {
-      const [ano, mes, dia] = partes;
-      return `${dia}/${mes}/${ano}`;
-    }
-    return dt;
-  };
-
-  const handleGerarRelatorio = async () => {
     try {
-      setCarregando(true);
-      const dtInicioFmt = formatarDataFiltro(dataInicio);
-      const dtFimFmt = formatarDataFiltro(dataFim);
+      const prods = await relatoriosService.buscarProdutos(termo);
+      setProdutosEncontrados(prods);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSelecionarProduto = (p: any) => {
+    setProdutoSelecionado(p);
+    setTermoBuscaProduto(`${p.codprod} - ${p.descricao}`);
+    setProdutosEncontrados([]);
+  };
+
+  const handleLimparProduto = () => {
+    setProdutoSelecionado(null);
+    setTermoBuscaProduto('');
+    setProdutosEncontrados([]);
+  };
+
+  // Gerar PDF do submódulo selecionado
+  const handleGerarRelatorio = async () => {
+    if (!dataInicio || !dataFim) {
+      alert('Selecione as datas inicial e final.');
+      return;
+    }
+
+    try {
+      setGerando(true);
 
       switch (submodulo) {
-        case "consumo_loja": {
-          const dados = await relatoriosService.buscarDadosConsumoLoja(dataInicio, dataFim);
-          if (!dados || dados.length === 0) {
-            alert("Nenhum registro de consumo encontrado para o período selecionado.");
-            return;
-          }
-          gerarRelatorioConsumoLoja(dados, dataInicio, dataFim, usuarioNome);
-          break;
-        }
-        case "vencimentos": {
-          const dados = await relatoriosService.buscarVencimentos(dataInicio, dataFim);
-          gerarRelatorioVencimentos(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "inventario": {
-          const dados = await relatoriosService.buscarInventarios(dataInicio, dataFim);
-          gerarRelatorioInventario(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "notas_falta": {
-          const dados = await relatoriosService.buscarNotasFalta(dataInicio, dataFim);
-          gerarRelatorioNotasFalta(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "cotacoes": {
-          const dados = await relatoriosService.buscarCotacoes(dataInicio, dataFim);
-          gerarRelatorioCotacoes(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "orcamentos": {
-          const dados = await relatoriosService.buscarOrcamentos(dataInicio, dataFim);
-          gerarRelatorioOrcamentos(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "avarias": {
+        case 'avarias': {
           const dados = await relatoriosService.buscarAvarias(dataInicio, dataFim, {
-            departamento: departamentoSel,
-            secao: secaoSel,
-            categoria: categoriaSel,
+            departamento: departamento !== 'TODOS' ? departamento : undefined,
+            secao: secao !== 'TODOS' ? secao : undefined,
+            categoria: categoria !== 'TODOS' ? categoria : undefined,
+            produtoId: produtoSelecionado?.id
           });
-
-          if (!dados || dados.length === 0) {
-            alert("Nenhum registro de avaria encontrado para os filtros selecionados.");
+          if (dados.length === 0) {
+            alert('Nenhum registro de avaria encontrado para os filtros selecionados.');
             return;
           }
-
-          gerarRelatorioAvarias(dados, dtInicioFmt, dtFimFmt, {
-            departamento: departamentoSel,
-            secao: secaoSel,
-            categoria: categoriaSel,
+          await gerarRelatorioAvarias(dados, dataInicio, dataFim, {
+            departamento,
+            secao,
+            categoria
           });
           break;
         }
-        case "trocas": {
-          const dados = await relatoriosService.buscarTrocas(dataInicio, dataFim);
-          gerarRelatorioTrocas(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "pedidos": {
-          const dados = await relatoriosService.buscarPedidos(dataInicio, dataFim);
-          gerarRelatorioPedidos(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "tarefas": {
-          const dados = await relatoriosService.buscarTarefas(dataInicio, dataFim);
-          gerarRelatorioTarefas(dados, dtInicioFmt, dtFimFmt);
-          break;
-        }
-        case "conf_cega": {
+
+        case 'conf-cega': {
           const dados = await relatoriosService.buscarConferencias(dataInicio, dataFim);
-          gerarRelatorioConfCega(dados, dtInicioFmt, dtFimFmt);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioConfCega(dados, dataInicio, dataFim);
           break;
         }
-        case "temperatura": {
-          const dados = await relatoriosService.buscarTemperaturas(dataInicio, dataFim);
-          gerarRelatorioTemperaturas(dados, dtInicioFmt, dtFimFmt);
+
+        case 'consumo-loja': {
+          const dados = await relatoriosService.buscarDadosConsumoLoja(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioConsumoLoja(dados, dataInicio, dataFim);
           break;
         }
-        case "ofertas": {
+
+        case 'cotacoes': {
+          const dados = await relatoriosService.buscarCotacoes(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioCotacoes(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'inventario': {
+          const dados = await relatoriosService.buscarInventarios(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioInventario(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'nota-falta': {
+          const dados = await relatoriosService.buscarNotasFalta(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioNotasFalta(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'ofertas': {
           const dados = await relatoriosService.buscarOfertas(dataInicio, dataFim);
-          gerarRelatorioOfertas(dados, dtInicioFmt, dtFimFmt);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioOfertas(dados, dataInicio, dataFim);
           break;
         }
+
+        case 'orcamentos': {
+          const dados = await relatoriosService.buscarOrcamentos(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioOrcamentos(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'pedidos': {
+          const dados = await relatoriosService.buscarPedidos(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioPedidos(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'tarefas': {
+          const dados = await relatoriosService.buscarTarefas(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioTarefas(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'temperaturas': {
+          const dados = await relatoriosService.buscarTemperaturas(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioTemperaturas(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'trocas': {
+          const dados = await relatoriosService.buscarTrocas(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioTrocas(dados, dataInicio, dataFim);
+          break;
+        }
+
+        case 'vencimentos': {
+          const dados = await relatoriosService.buscarVencimentos(dataInicio, dataFim);
+          if (dados.length === 0) return alert('Nenhum registro encontrado.');
+          await gerarRelatorioVencimentos(dados, dataInicio, dataFim);
+          break;
+        }
+
+        default:
+          alert('Submódulo ainda não parametrizado para geração.');
       }
     } catch (err: any) {
-      alert("Erro ao buscar dados do relatório: " + (err.message || "Erro inesperado"));
+      console.error(err);
+      alert(`Erro ao emitir relatório: ${err.message}`);
     } finally {
-      setCarregando(false);
+      setGerando(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-start">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-sm border border-slate-200 p-8">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={handleVoltar}
-            className="p-2 hover:bg-slate-100 rounded-full text-teal-800 transition"
-            title="Voltar"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-          </button>
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+      <div className="w-full max-w-lg bg-white rounded-3xl sm:rounded-4xl shadow-xl p-5 sm:p-8 flex flex-col gap-6">
+        
+        {/* Topo */}
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+          {onVoltarParaHome && (
+            <button
+              type="button"
+              onClick={onVoltarParaHome}
+              className="w-10 h-10 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-all cursor-pointer shadow-xs"
+            >
+              ←
+            </button>
+          )}
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-teal-900 uppercase">
+            <h1 className="text-lg font-black text-teal-950 uppercase tracking-tight">
               Relatórios Gerenciais
             </h1>
-            <p className="text-sm font-medium text-slate-500">
+            <p className="text-xs text-slate-400 font-medium">
               Suporte à Auditoria e Tomada de Decisão
             </p>
           </div>
         </div>
 
-        {/* Card Formulário */}
-        <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-6">
-          {/* Linha 1: Submódulo e Período */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            {/* Seletor do Módulo */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                Selecione o Submódulo Analítico
-              </label>
-              <select
-                value={submodulo}
-                onChange={(e) => setSubmodulo(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer"
-              >
-                {SUBMODULOS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.icone} {opt.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* Card de Filtros */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-3xl p-5 flex flex-col gap-4">
+          
+          {/* Submódulo */}
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+              Selecione o Submódulo Analítico
+            </label>
+            <select
+              value={submodulo}
+              onChange={(e) => {
+                setSubmodulo(e.target.value as TipoSubmodulo);
+                handleLimparProduto();
+              }}
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800 focus:outline-none focus:border-[#09797a]"
+            >
+              <option value="avarias">❌ Avarias</option>
+              <option value="consumo-loja">🛒 Consumo Loja</option>
+              <option value="vencimentos">🕒 Vencimentos</option>
+              <option value="trocas">🔄 Trocas com Fornecedores</option>
+              <option value="inventario">📦 Inventário</option>
+              <option value="nota-falta">📄 Nota de Falta</option>
+              <option value="cotacoes">🏷️ Cotações</option>
+              <option value="pedidos">🚚 Pedidos</option>
+              <option value="conf-cega">📦 Conferência Cega</option>
+              <option value="orcamentos">💰 Orçamentos</option>
+              <option value="ofertas">📢 Ofertas</option>
+              <option value="temperaturas">❄️ Temperaturas</option>
+              <option value="tarefas">📋 Tarefas</option>
+            </select>
+          </div>
 
-            {/* Data Inicial */}
+          {/* Período de Datas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
                 Data Inicial
               </label>
               <input
                 type="date"
                 value={dataInicio}
                 onChange={(e) => setDataInicio(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#09797a]"
               />
             </div>
 
-            {/* Data Final */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
                 Data Final
               </label>
               <input
                 type="date"
                 value={dataFim}
                 onChange={(e) => setDataFim(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#09797a]"
               />
             </div>
           </div>
 
-          {/* Linha 2: Filtros Condicionais de Avarias (Departamento, Seção e Categoria) */}
-          {submodulo === "avarias" && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 pt-4 border-t border-slate-200">
-              {/* Departamento */}
+          {/* FILTRO DE PRODUTO ESPECÍFICO (EXCLUSIVO DE AVARIAS) */}
+          {submodulo === 'avarias' && (
+            <div className="relative animate-fadeIn border-t border-slate-200/60 pt-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-black uppercase text-slate-600 block">
+                  Filtrar por Item Específico (Opcional)
+                </label>
+                {produtoSelecionado && (
+                  <button
+                    type="button"
+                    onClick={handleLimparProduto}
+                    className="text-[10px] font-black text-rose-600 uppercase hover:underline cursor-pointer"
+                  >
+                    Limpar Item
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="text"
+                value={termoBuscaProduto}
+                onChange={(e) => handleBuscarProduto(e.target.value)}
+                placeholder="Busque por código, barras, descrição completa ou %"
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#09797a]"
+              />
+
+              {produtosEncontrados.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto z-30 flex flex-col">
+                  {produtosEncontrados.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleSelecionarProduto(p)}
+                      className="p-2.5 text-left border-b border-slate-100 hover:bg-teal-50 flex items-center justify-between text-xs cursor-pointer"
+                    >
+                      <div>
+                        <span className="font-black text-slate-800 uppercase block">
+                          {p.descricao}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          Cód: {p.codprod} {p.codbarra ? `| Barras: ${p.codbarra}` : ''}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md">
+                        {p.unidade || 'UN'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Filtros Mercadológicos (Exibidos em Avarias) */}
+          {submodulo === 'avarias' && (
+            <div className="flex flex-col gap-3 border-t border-slate-200/60 pt-3">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
                   Departamento
                 </label>
                 <select
-                  value={departamentoSel}
-                  onChange={(e) => setDepartamentoSel(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 uppercase cursor-pointer"
+                  value={departamento}
+                  onChange={(e) => setDepartamento(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800 focus:outline-none focus:border-[#09797a]"
                 >
                   <option value="TODOS">TODOS</option>
-                  {opcoesDepartamentos.map((dep) => (
-                    <option key={dep} value={dep}>
-                      {dep.toUpperCase()}
-                    </option>
+                  {departamentos.map((d) => (
+                    <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Seção */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
                   Seção
                 </label>
                 <select
-                  value={secaoSel}
-                  onChange={(e) => setSecaoSel(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 uppercase cursor-pointer"
+                  disabled={departamento === 'TODOS'}
+                  value={secao}
+                  onChange={(e) => setSecao(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800 disabled:opacity-50 focus:outline-none focus:border-[#09797a]"
                 >
-                  <option value="TODOS">TODOS</option>
-                  {opcoesSecoes.map((sec) => (
-                    <option key={sec} value={sec}>
-                      {sec.toUpperCase()}
-                    </option>
+                  <option value="TODOS">TODAS</option>
+                  {secoes.map((s) => (
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Categoria */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
                   Categoria
                 </label>
                 <select
-                  value={categoriaSel}
-                  onChange={(e) => setCategoriaSel(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-600 uppercase cursor-pointer"
+                  disabled={secao === 'TODOS'}
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800 disabled:opacity-50 focus:outline-none focus:border-[#09797a]"
                 >
-                  <option value="TODOS">TODOS</option>
-                  {opcoesCategorias.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat.toUpperCase()}
-                    </option>
+                  <option value="TODOS">TODAS</option>
+                  {categorias.map((c) => (
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
             </div>
           )}
 
-          {/* Botão de Ação */}
+          {/* Botão de Geração */}
           <button
+            type="button"
+            disabled={gerando}
             onClick={handleGerarRelatorio}
-            disabled={carregando}
-            className="w-full bg-teal-800 hover:bg-teal-900 active:scale-[0.99] text-white font-bold py-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 tracking-wider text-sm uppercase disabled:opacity-50"
+            className="w-full mt-2 py-3 bg-[#09797a] hover:bg-[#075f60] disabled:opacity-50 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md shadow-teal-900/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            {carregando ? (
-              <>
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                </svg>
-                Processando Relatório...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
-                Gerar Relatório A4
-              </>
-            )}
+            <span>📄</span>
+            <span>{gerando ? 'Compilando Dados...' : 'Gerar Relatório A4'}</span>
           </button>
+
         </div>
+
       </div>
     </div>
   );
-};
-
-export default Relatorios;
+}

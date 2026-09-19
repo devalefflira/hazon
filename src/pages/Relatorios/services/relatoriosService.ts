@@ -2,6 +2,27 @@
 import { supabase } from "../../../lib/supabaseClient";
 
 export const relatoriosService = {
+  // Busca preditiva de produtos para filtros (Cód, Barras, Descrição ou %)
+  async buscarProdutos(termo: string) {
+    if (!termo.trim()) return [];
+    const palavras = termo.trim().split(/\s+/).filter(Boolean);
+    let query = supabase
+      .from("produtos")
+      .select("id, codprod, codbarra, descricao, unidade, departamento, secao, categoria");
+
+    if (palavras.length === 1) {
+      const p = palavras[0];
+      query = query.or(`codprod.ilike.%${p}%,codbarra.ilike.%${p}%,descricao.ilike.%${p}%`);
+    } else if (palavras.length > 1) {
+      const pattern = `%${palavras.join("%")}%`;
+      query = query.ilike("descricao", pattern);
+    }
+
+    const { data, error } = await query.limit(20);
+    if (error) throw error;
+    return data || [];
+  },
+
   async buscarInventarios(inicio: string, fim: string) {
     const { data, error } = await supabase
       .from("inventario_itens")
@@ -46,14 +67,24 @@ export const relatoriosService = {
   async buscarAvarias(
     inicio: string,
     fim: string,
-    filtros?: { departamento?: string; secao?: string; categoria?: string }
+    filtros?: { 
+      departamento?: string; 
+      secao?: string; 
+      categoria?: string;
+      produtoId?: string; // Filtro por produto específico
+    }
   ) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("avarias")
-      .select("*, produtos(*), motivos_avaria(*)")
+      .select("*, produtos(*), motivos_avaria(*), usuarios(nome, setor)")
       .gte("data_registro", inicio)
-      .lte("data_registro", fim)
-      .order("data_registro", { ascending: false });
+      .lte("data_registro", fim);
+
+    if (filtros?.produtoId) {
+      query = query.eq("produto_id", filtros.produtoId);
+    }
+
+    const { data, error } = await query.order("data_registro", { ascending: false });
 
     if (error) throw error;
 
@@ -174,7 +205,7 @@ export const relatoriosService = {
   async buscarDadosConsumoLoja(dataInicio?: string, dataFim?: string): Promise<any[]> {
     // 1. Lançamentos Diretos em Consumo Loja
     let queryConsumo = supabase
-      .from('consumo_loja_itens')
+      .from("consumo_loja_itens")
       .select(`
         id,
         local,
@@ -197,12 +228,12 @@ export const relatoriosService = {
         )
       `);
 
-    if (dataInicio) queryConsumo = queryConsumo.gte('consumo_loja_mestre.data_registro', dataInicio);
-    if (dataFim) queryConsumo = queryConsumo.lte('consumo_loja_mestre.data_registro', dataFim);
+    if (dataInicio) queryConsumo = queryConsumo.gte("consumo_loja_mestre.data_registro", dataInicio);
+    if (dataFim) queryConsumo = queryConsumo.lte("consumo_loja_mestre.data_registro", dataFim);
 
     // 2. Lançamentos de Avarias com destino Consumo Interno
     let queryAvarias = supabase
-      .from('avarias')
+      .from("avarias")
       .select(`
         id,
         codigo_customizado,
@@ -222,10 +253,10 @@ export const relatoriosService = {
           nome
         )
       `)
-      .ilike('destinacao', '%consumo%');
+      .ilike("destinacao", "%consumo%");
 
-    if (dataInicio) queryAvarias = queryAvarias.gte('data_registro', dataInicio);
-    if (dataFim) queryAvarias = queryAvarias.lte('data_registro', dataFim);
+    if (dataInicio) queryAvarias = queryAvarias.gte("data_registro", dataInicio);
+    if (dataFim) queryAvarias = queryAvarias.lte("data_registro", dataFim);
 
     const [resConsumo, resAvarias] = await Promise.all([queryConsumo, queryAvarias]);
 
@@ -233,17 +264,17 @@ export const relatoriosService = {
     if (resAvarias.error) throw resAvarias.error;
 
     const listaConsumo = (resConsumo.data || []).map((item: any) => ({
-      codprod: item.produtos?.codprod || '-',
-      descricao: item.produtos?.descricao || 'PRODUTO',
-      unidade_medida: item.unidade_medida || 'UN',
-      local: item.local || 'Geral',
-      departamento: item.departamento || '-',
+      codprod: item.produtos?.codprod || "-",
+      descricao: item.produtos?.descricao || "PRODUTO",
+      unidade_medida: item.unidade_medida || "UN",
+      local: item.local || "Geral",
+      departamento: item.departamento || "-",
       quantidade: Number(item.quantidade || 0),
       custo_unitario: Number(item.custo_unitario || 0),
       valor_total_item: Number(item.valor_total_item || 0),
       data_registro: item.consumo_loja_mestre?.data_registro,
       hora_registro: item.consumo_loja_mestre?.hora_registro,
-      usuario_nome: item.consumo_loja_mestre?.usuarios?.nome || 'Sistema',
+      usuario_nome: item.consumo_loja_mestre?.usuarios?.nome || "Sistema",
       observacao: item.observacao
     }));
 
@@ -251,23 +282,23 @@ export const relatoriosService = {
       const qtd = Number(av.quantidade || 0);
       const custo = Number(av.preco_custo_na_perda || 0);
       return {
-        codprod: av.produtos?.codprod || '-',
-        descricao: av.produtos?.descricao || 'PRODUTO',
-        unidade_medida: av.produtos?.unidade || 'UN',
-        local: 'Consumo Interno (Avaria)',
-        departamento: av.produtos?.departamento || '-',
+        codprod: av.produtos?.codprod || "-",
+        descricao: av.produtos?.descricao || "PRODUTO",
+        unidade_medida: av.produtos?.unidade || "UN",
+        local: "Consumo Interno (Avaria)",
+        departamento: av.produtos?.departamento || "-",
         quantidade: qtd,
         custo_unitario: custo,
         valor_total_item: qtd * custo,
         data_registro: av.data_registro,
         hora_registro: av.hora_registro,
-        usuario_nome: av.usuarios?.nome || 'Sistema',
+        usuario_nome: av.usuarios?.nome || "Sistema",
         observacao: av.observacao
       };
     });
 
     const unificados = [...listaConsumo, ...listaAvarias];
-    unificados.sort((a, b) => (b.data_registro || '').localeCompare(a.data_registro || ''));
+    unificados.sort((a, b) => (b.data_registro || "").localeCompare(a.data_registro || ""));
     return unificados;
   }
 };
