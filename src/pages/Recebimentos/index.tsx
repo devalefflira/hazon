@@ -1,9 +1,9 @@
 // src/pages/Recebimentos/index.tsx
 import { useState, useEffect } from 'react';
 import { recebimentoService } from './services/recebimentoService';
-import type { 
-  RecebimentoFluxoView, 
-  StatusGeralFluxo 
+import type {
+  RecebimentoFluxoView,
+  StatusGeralFluxo
 } from './types/recebimento.types';
 import CardFluxoRecebimento from './components/CardFluxoRecebimento';
 import ModalNovoFluxo from './components/ModalNovoFluxo';
@@ -48,9 +48,9 @@ export default function Recebimentos(props: RecebimentosProps) {
   const carregarFluxos = async () => {
     try {
       setCarregando(true);
-      const statusParam: StatusGeralFluxo = 
-        abaAtiva === 'finalizados' 
-          ? 'Finalizado' 
+      const statusParam: StatusGeralFluxo =
+        abaAtiva === 'finalizados'
+          ? 'Finalizado'
           : subAbaFluxos;
 
       const dados = await recebimentoService.listarFluxos(statusParam);
@@ -126,7 +126,7 @@ export default function Recebimentos(props: RecebimentosProps) {
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans relative">
       <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-7 flex flex-col gap-5 min-h-[calc(100vh-24px)]">
-        
+
         {/* HEADER SUPERIOR */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
@@ -162,33 +162,30 @@ export default function Recebimentos(props: RecebimentosProps) {
           <button
             type="button"
             onClick={() => setAbaAtiva('fluxos')}
-            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-              abaAtiva === 'fluxos'
+            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${abaAtiva === 'fluxos'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             🚚 Fluxos
           </button>
           <button
             type="button"
             onClick={() => setAbaAtiva('notas')}
-            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-              abaAtiva === 'notas'
+            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${abaAtiva === 'notas'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             📄 Notas / Lançamento
           </button>
           <button
             type="button"
             onClick={() => setAbaAtiva('finalizados')}
-            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-              abaAtiva === 'finalizados'
+            className={`py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${abaAtiva === 'finalizados'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             ✓ Fluxos Finalizados
           </button>
@@ -200,22 +197,20 @@ export default function Recebimentos(props: RecebimentosProps) {
             <button
               type="button"
               onClick={() => setSubAbaFluxos('Em Andamento')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-                subAbaFluxos === 'Em Andamento'
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${subAbaFluxos === 'Em Andamento'
                   ? 'bg-teal-50 text-[#09797a] border border-teal-200'
                   : 'text-slate-400 hover:text-slate-600'
-              }`}
+                }`}
             >
               🟡 Em Andamento
             </button>
             <button
               type="button"
               onClick={() => setSubAbaFluxos('Pausado')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-                subAbaFluxos === 'Pausado'
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${subAbaFluxos === 'Pausado'
                   ? 'bg-teal-50 text-[#09797a] border border-teal-200'
                   : 'text-slate-400 hover:text-slate-600'
-              }`}
+                }`}
             >
               ⏸ Pausados
             </button>
@@ -239,7 +234,6 @@ export default function Recebimentos(props: RecebimentosProps) {
                   <CardFluxoRecebimento
                     key={fluxo.id}
                     fluxo={fluxo}
-                    usuarioId={userId}
                     onAvancarFase={handleAvancarFase}
                     onPausarFluxo={handlePausarFluxo}
                     onRetomarFluxo={handleRetomarFluxo}
@@ -298,11 +292,11 @@ export default function Recebimentos(props: RecebimentosProps) {
 
       {/* Modal Acesso ao Relatório e Início de Exposição na Gôndola */}
       {fluxoGondola && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 animate-fadeIn"
           onClick={() => setFluxoGondola(null)}
         >
-          <div 
+          <div
             className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl border border-slate-100 flex flex-col gap-4 animate-slideUp"
             onClick={(e) => e.stopPropagation()}
           >

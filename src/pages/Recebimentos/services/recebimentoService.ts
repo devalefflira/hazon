@@ -185,7 +185,6 @@ export const recebimentoService = {
 
   // 4. Listar documentos prontos para Lançamento (Aba Notas)
   async listarNotasParaLancamento(): Promise<RecebimentoFluxoView[]> {
-    // Busca fluxos onde a Fase 4 ('Entregar para Lançamento') já foi finalizada, mas a Fase 6 ainda não
     const { data, error } = await supabase
       .from('recebimento_fluxos')
       .select(`
@@ -262,6 +261,11 @@ export const recebimentoService = {
       })
       .eq('id', params.faseId);
 
+    // Se concluiu a Fase 6 (Finalizar Lançamento), limpa fotos temporárias
+    if (params.ordemAtual === 6) {
+      await this.excluirFotosFluxo(params.fluxoId);
+    }
+
     const proximaOrdem = params.ordemAtual + 1;
 
     if (proximaOrdem <= 8) {
@@ -286,7 +290,7 @@ export const recebimentoService = {
         })
         .eq('id', params.fluxoId);
     } else {
-      // Encerra todo o fluxo caso tenha passado da fase 8
+      // Encerra todo o fluxo caso passe da fase 8
       await supabase
         .from('recebimento_fluxos')
         .update({
@@ -329,7 +333,28 @@ export const recebimentoService = {
     if (error) throw error;
   },
 
-  // 8. Auditoria de Pausa do Temporizador de Lançamento
+  // 8. Buscar Fotos de um Fluxo (para visualização na Aba de Notas)
+  async buscarFotosFluxo(fluxoId: string): Promise<FotoRecebimento[]> {
+    const { data, error } = await supabase
+      .from('recebimento_fotos')
+      .select('id, tipo_foto, foto_url, descricao')
+      .eq('fluxo_id', fluxoId);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // 9. Excluir Fotos de um Fluxo (após finalizar lançamento)
+  async excluirFotosFluxo(fluxoId: string): Promise<void> {
+    const { error } = await supabase
+      .from('recebimento_fotos')
+      .delete()
+      .eq('fluxo_id', fluxoId);
+
+    if (error) console.error('Aviso ao excluir fotos temporárias:', error);
+  },
+
+  // 10. Auditoria de Pausa do Temporizador de Lançamento
   async pausarTemporizadorLancamento(payload: PausarTemporizadorPayload): Promise<string> {
     const { data, error } = await supabase
       .from('recebimento_pausas')

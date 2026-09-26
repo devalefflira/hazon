@@ -7,7 +7,6 @@ import type {
 
 interface CardFluxoRecebimentoProps {
   fluxo: RecebimentoFluxoView;
-  usuarioId: string;
   onAvancarFase: (fluxoId: string, faseId: string, ordem: number) => void;
   onPausarFluxo: (fluxoId: string) => void;
   onRetomarFluxo: (fluxoId: string) => void;
@@ -22,33 +21,30 @@ export default function CardFluxoRecebimento({
   onAbrirFotosRecepcao
 }: CardFluxoRecebimentoProps) {
   const [faseDetalhes, setFaseDetalhes] = useState<RecebimentoFaseView | null>(null);
+  
+  // Se for finalizado, inicia recolhido (false). Se estiver em andamento/pausado, inicia expandido (true).
+  const [expandido, setExpandido] = useState<boolean>(fluxo.status_geral !== 'Finalizado');
 
-  // Ação ao carregar no botão (+) de uma fase específica
   const handleBotaoMais = (fase: RecebimentoFaseView) => {
-    // Se a fase for anterior à fase atual ou já estiver finalizada, abre os detalhes
     if (fase.status === 'Finalizado') {
       setFaseDetalhes(fase);
       return;
     }
 
-    // Se for a fase ativa (Em Andamento)
     if (fase.ordem_fase === fluxo.fase_atual) {
-      // Fase 3 (Recepção da Nota): se for Não Fiscal ou Caminhão, exige modal de fotos
       if (fase.ordem_fase === 3 && fluxo.tipo_documento !== 'Nota Fiscal') {
         onAbrirFotosRecepcao(fluxo.id, fase.id);
         return;
       }
-
-      // Nas demais fases, avança/finaliza a etapa
       onAvancarFase(fluxo.id, fase.id, fase.ordem_fase);
     }
   };
 
   return (
-    <div className="w-full bg-white rounded-3xl border-2 border-slate-200/90 shadow-md p-5 sm:p-7 flex flex-col gap-6 relative">
+    <div className="w-full bg-white rounded-3xl border-2 border-slate-200/90 shadow-xs p-4 sm:p-6 flex flex-col gap-4 relative transition-all">
       
-      {/* Topo do Card */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      {/* Cabeçalho do Card */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div>
           <span className="font-mono text-xs font-black text-[#09797a] tracking-wider block">
             # Fluxo: {fluxo.codigo_customizado}
@@ -67,7 +63,7 @@ export default function CardFluxoRecebimento({
           </span>
         </div>
 
-        {/* Status Geral e Ações de Pausa */}
+        {/* Status e Ações */}
         <div className="flex items-center gap-2">
           {fluxo.status_geral === 'Em Andamento' && (
             <button
@@ -98,79 +94,104 @@ export default function CardFluxoRecebimento({
           }`}>
             {fluxo.status_geral}
           </span>
+
+          {/* Botão de Expandir / Recolher */}
+          <button
+            type="button"
+            onClick={() => setExpandido(!expandido)}
+            className="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-black cursor-pointer transition-transform active:scale-95 ml-1"
+            title={expandido ? 'Recolher Fases' : 'Ver Todas as Fases'}
+          >
+            {expandido ? '▲' : '▼'}
+          </button>
         </div>
       </div>
 
-      {/* Esteira Gráfica Vertical das 8 Fases */}
-      <div className="relative flex flex-col gap-7 my-2 pl-2 sm:pl-28">
-        
-        {/* Linha vertical contínua conectando os círculos */}
-        <div className="absolute left-[38px] sm:left-[142px] top-6 bottom-6 w-1 bg-slate-300 -translate-x-1/2 z-0" />
+      {/* Resumo quando estiver retraído */}
+      {!expandido && (
+        <div className="flex items-center justify-between py-1 text-xs text-slate-500">
+          <span className="font-semibold">
+            {fluxo.status_geral === 'Finalizado' 
+              ? '✓ Todas as 8 etapas concluídas com sucesso' 
+              : `Etapa atual: ${fluxo.fases.find(f => f.ordem_fase === fluxo.fase_atual)?.nome_fase || 'Em Andamento'}`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setExpandido(true)}
+            className="text-[11px] font-black uppercase text-[#09797a] hover:underline cursor-pointer"
+          >
+            Ver detalhes das fases ➔
+          </button>
+        </div>
+      )}
 
-        {fluxo.fases.map((fase) => {
-          const isAtiva = fase.ordem_fase === fluxo.fase_atual && fluxo.status_geral !== 'Finalizado';
-          const isConcluida = fase.status === 'Finalizado';
-          const isPendente = fase.status === 'Pendente';
+      {/* Esteira Gráfica Vertical das 8 Fases (Renderizada quando expandido) */}
+      {expandido && (
+        <div className="relative flex flex-col gap-7 my-2 pl-2 sm:pl-28 animate-fadeIn">
+          
+          {/* Linha vertical contínua */}
+          <div className="absolute left-[38px] sm:left-[142px] top-6 bottom-6 w-1 bg-slate-300 -translate-x-1/2 z-0" />
 
-          // Estilo dos círculos baseado no status
-          const circleColor = isConcluida
-            ? 'bg-emerald-500 border-emerald-600 text-white'
-            : isAtiva
-            ? 'bg-amber-400 border-amber-500 text-white animate-pulse'
-            : 'bg-rose-500 border-rose-600 text-white';
+          {fluxo.fases.map((fase) => {
+            const isAtiva = fase.ordem_fase === fluxo.fase_atual && fluxo.status_geral !== 'Finalizado';
+            const isConcluida = fase.status === 'Finalizado';
+            const isPendente = fase.status === 'Pendente';
 
-          return (
-            <div key={fase.id} className="relative flex items-center gap-4 z-10">
-              
-              {/* Indicador "Fase Atual" à esquerda (visível em desktop/telas médias) */}
-              {isAtiva && (
-                <div className="hidden sm:flex items-center gap-2 absolute -left-28 text-[#09797a] font-black text-xs uppercase animate-pulse">
-                  <span>Fase Atual</span>
-                  <span className="text-xl">➔</span>
-                </div>
-              )}
+            const circleColor = isConcluida
+              ? 'bg-emerald-500 border-emerald-600 text-white'
+              : isAtiva
+              ? 'bg-amber-400 border-amber-500 text-white animate-pulse'
+              : 'bg-rose-500 border-rose-600 text-white';
 
-              {/* Círculo Principal com Ícone de Status e Botão (+) sobreposto */}
-              <div className="relative">
-                <div 
-                  className={`w-14 h-14 rounded-full border-4 flex items-center justify-center text-xl font-black shadow-md transition-transform ${circleColor}`}
-                >
-                  {isConcluida && '✓'}
-                  {isAtiva && '⏳'}
-                  {isPendente && '—'}
-                </div>
-
-                {/* Botão (+) sobreposto no canto superior direito do círculo */}
-                <button
-                  type="button"
-                  onClick={() => handleBotaoMais(fase)}
-                  className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-slate-400 hover:bg-[#09797a] text-white border-2 border-white flex items-center justify-center font-black text-xs cursor-pointer shadow-sm active:scale-95 transition-all"
-                  title={isConcluida ? 'Ver Detalhes' : 'Avançar Fase'}
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Rótulo da Fase */}
-              <div className="flex flex-col">
-                <span className={`text-xs sm:text-sm font-black uppercase tracking-tight ${
-                  isAtiva ? 'text-[#09797a]' : isConcluida ? 'text-slate-800' : 'text-slate-500'
-                }`}>
-                  {fase.nome_fase}
-                </span>
-
-                {isConcluida && fase.finalizado_em && (
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    Concluído em: {new Date(fase.finalizado_em).toLocaleDateString('pt-BR')} às {new Date(fase.finalizado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+            return (
+              <div key={fase.id} className="relative flex items-center gap-4 z-10">
+                
+                {isAtiva && (
+                  <div className="hidden sm:flex items-center gap-2 absolute -left-28 text-[#09797a] font-black text-xs uppercase animate-pulse">
+                    <span>Fase Atual</span>
+                    <span className="text-xl">➔</span>
+                  </div>
                 )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Modal de Detalhes da Fase Finalizada */}
+                <div className="relative">
+                  <div 
+                    className={`w-14 h-14 rounded-full border-4 flex items-center justify-center text-xl font-black shadow-md transition-transform ${circleColor}`}
+                  >
+                    {isConcluida && '✓'}
+                    {isAtiva && '⏳'}
+                    {isPendente && '—'}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBotaoMais(fase)}
+                    className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-slate-400 hover:bg-[#09797a] text-white border-2 border-white flex items-center justify-center font-black text-xs cursor-pointer shadow-xs active:scale-95 transition-all"
+                    title={isConcluida ? 'Ver Detalhes' : 'Avançar Fase'}
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div className="flex flex-col">
+                  <span className={`text-xs sm:text-sm font-black uppercase tracking-tight ${
+                    isAtiva ? 'text-[#09797a]' : isConcluida ? 'text-slate-800' : 'text-slate-500'
+                  }`}>
+                    {fase.nome_fase}
+                  </span>
+
+                  {isConcluida && fase.finalizado_em && (
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      Concluído em: {new Date(fase.finalizado_em).toLocaleDateString('pt-BR')} às {new Date(fase.finalizado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal de Detalhes da Fase */}
       {faseDetalhes && (
         <div 
           className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 animate-fadeIn"
