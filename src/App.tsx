@@ -1,4 +1,4 @@
-// Arquivo: src/App.tsx
+// src/App.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabaseClient';
 import Login from './pages/Login';
@@ -31,6 +31,7 @@ import PesquisaPrecos from './pages/PesquisaPrecos';
 import Encartes from './pages/Encartes';
 import Solicitacoes from './pages/Solicitacoes';
 import Recebimentos from './pages/Recebimentos';
+import Mensagens from './pages/Mensagens';
 
 interface UsuarioLogado {
   id: string;
@@ -69,10 +70,10 @@ type TelaAtiva =
   | 'pesquisa-precos'
   | 'encartes'
   | 'solicitacoes'
-  | 'recebimentos';
+  | 'recebimentos'
+  | 'mensagens';
 
 export default function App() {
-  // 1. Inicializa o usuário direto do localStorage para não perder sessão no F5
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(() => {
     try {
       const salvo = localStorage.getItem('hazon_user');
@@ -82,7 +83,6 @@ export default function App() {
     }
   });
 
-  // 2. Inicializa as permissões do usuário salvas
   const [permissoesUsuario, setPermissoesUsuario] = useState<string[]>(() => {
     try {
       const salvas = localStorage.getItem('hazon_permissoes');
@@ -92,7 +92,6 @@ export default function App() {
     }
   });
 
-  // 3. Inicializa a tela onde o usuário estava antes do F5
   const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>(() => {
     try {
       const userSalvo = localStorage.getItem('hazon_user');
@@ -108,7 +107,6 @@ export default function App() {
 
   const [tokenAcesso, setTokenAcesso] = useState<string | null>(null);
 
-  // Função auxiliar para mudar tela e persistir no storage
   const mudarTela = (novaTela: TelaAtiva) => {
     setTelaAtiva(novaTela);
     localStorage.setItem('hazon_tela_ativa', novaTela);
@@ -251,6 +249,7 @@ export default function App() {
         onNavegarParaEncartes={() => mudarTela('encartes')}
         onNavegarParaSolicitacoes={() => mudarTela('solicitacoes')}
         onNavegarParaRecebimentos={() => mudarTela('recebimentos')}
+        onNavegarParaMensagens={() => mudarTela('mensagens')}
       />
     );
   }
@@ -349,6 +348,16 @@ export default function App() {
     if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
     return (
       <Recebimentos
+        onVoltarParaHome={() => mudarTela('home')}
+        usuarioLogadoId={usuario.id}
+      />
+    );
+  }
+
+  if (telaAtiva === 'mensagens') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Mensagens
         onVoltarParaHome={() => mudarTela('home')}
         usuarioLogadoId={usuario.id}
       />
