@@ -32,6 +32,7 @@ import Encartes from './pages/Encartes';
 import Solicitacoes from './pages/Solicitacoes';
 import Recebimentos from './pages/Recebimentos';
 import Mensagens from './pages/Mensagens';
+import { oneSignalService } from './services/oneSignalService';
 
 interface UsuarioLogado {
   id: string;
@@ -112,6 +113,7 @@ export default function App() {
     localStorage.setItem('hazon_tela_ativa', novaTela);
   };
 
+  // 1. Processar tokens de link externo (Cotação / Pedido)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenCotacao = params.get('token');
@@ -126,9 +128,19 @@ export default function App() {
     }
   }, []);
 
+  // 2. Registar utilizador no OneSignal sempre que houver utilizador ativo
+  useEffect(() => {
+    if (usuario?.id) {
+      oneSignalService.loginUsuario(usuario.id);
+    }
+  }, [usuario]);
+
   const handleLoginSuccess = async (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);
     localStorage.setItem('hazon_user', JSON.stringify(usuarioLogado));
+
+    // Associa ID do utilizador autenticado no OneSignal
+    await oneSignalService.loginUsuario(usuarioLogado.id);
 
     try {
       const { data } = await supabase
@@ -149,6 +161,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Desvincula utilizador no OneSignal
+    oneSignalService.logoutUsuario();
+
     setUsuario(null);
     setPermissoesUsuario([]);
     localStorage.removeItem('hazon_user');
