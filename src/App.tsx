@@ -113,6 +113,18 @@ export default function App() {
     localStorage.setItem('hazon_tela_ativa', novaTela);
   };
 
+  // Inicialização do OneSignal e vinculação do usuário
+  useEffect(() => {
+    const configurarPush = async () => {
+      await oneSignalService.inicializar();
+      if (usuario?.id) {
+        await oneSignalService.loginUsuario(usuario.id);
+      }
+    };
+
+    configurarPush();
+  }, [usuario?.id]);
+
   // 1. Processar tokens de link externo (Cotação / Pedido)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
