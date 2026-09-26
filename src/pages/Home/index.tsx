@@ -16,6 +16,7 @@ interface HomeProps {
   onNavegarParaPesquisaPrecos?: () => void;
   onNavegarParaEncartes?: () => void;
   onNavegarParaSolicitacoes?: () => void;
+  onNavegarParaRecebimentos?: () => void;
   [key: string]: any;
 }
 
@@ -49,7 +50,8 @@ export default function Home(props: HomeProps) {
     onNavegarParaVencimentos,
     onNavegarParaPesquisaPrecos,
     onNavegarParaEncartes,
-    onNavegarParaSolicitacoes
+    onNavegarParaSolicitacoes,
+    onNavegarParaRecebimentos
   } = props;
 
   // Estados de Interface
@@ -91,7 +93,7 @@ export default function Home(props: HomeProps) {
     try {
       setCarregandoMetricas(true);
 
-      // 1. Avarias: Itens distintos + Valor Total em R$
+      // 1. Avarias
       const { data: avariasData } = await supabase
         .from('avarias')
         .select('produto_id, quantidade, preco_custo_na_perda, destinacao');
@@ -106,7 +108,7 @@ export default function Home(props: HomeProps) {
         valorTotalAvarias += qtd * preco;
       });
 
-      // 2. Próximo do Vencimento: Quantidade de itens distintos <= 30 dias
+      // 2. Vencimento <= 30 dias
       const hoje = new Date();
       const limite30Dias = new Date();
       limite30Dias.setDate(hoje.getDate() + 30);
@@ -122,13 +124,13 @@ export default function Home(props: HomeProps) {
         if (item.produto_id) produtosVencendoDistintos.add(item.produto_id);
       });
 
-      // 3. Itens para Troca: Total de pendentes
+      // 3. Trocas
       const { count: trocasCount } = await supabase
         .from('trocas')
         .select('id', { count: 'exact', head: true })
         .eq('troca_realizada', false);
 
-      // 4. Consumo Loja: Valor Total acumulado
+      // 4. Consumo Loja
       const { data: consumoMestre } = await supabase
         .from('consumo_loja_mestre')
         .select('valor_total');
@@ -161,11 +163,14 @@ export default function Home(props: HomeProps) {
   };
 
   // Disparadores de Ação Rápida
-  const handleAcaoRapida = (tipo: 'nota-falta' | 'avarias' | 'consumo-loja' | 'vencimentos') => {
+  const handleAcaoRapida = (tipo: 'nota-falta' | 'avarias' | 'consumo-loja' | 'vencimentos' | 'recebimentos') => {
     setSpeedDialAberto(false);
     setMenuAberto(false);
 
-    if (tipo === 'nota-falta') {
+    if (tipo === 'recebimentos') {
+      if (onNavegarParaRecebimentos) onNavegarParaRecebimentos();
+      else if (onNavegar) onNavegar('recebimentos');
+    } else if (tipo === 'nota-falta') {
       if (onNavegarParaNotaFalta) onNavegarParaNotaFalta();
       else if (onNavegar) onNavegar('nota-falta');
     } else if (tipo === 'avarias') {
@@ -212,6 +217,7 @@ export default function Home(props: HomeProps) {
       titulo: 'Estoque',
       iconeSvg: 'M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9',
       modulos: [
+        { id: 'recebimentos', nome: 'RECEBIMENTOS', descricao: 'Ciclo operacional e esteira de mercadorias', tela: 'recebimentos', callbackProp: 'onNavegarParaRecebimentos' },
         { id: 'produtos', nome: 'PRODUTOS', descricao: 'Catálogo de códigos e custos', tela: 'produtos', callbackProp: 'onNavegarParaProdutos' },
         { id: 'inventario', nome: 'INVENTÁRIO', descricao: 'Auditoria e contagem de itens', tela: 'inventario', callbackProp: 'onNavegarParaInventario' },
         { id: 'nota-falta', nome: 'NOTA DE FALTA', descricao: 'Controle de ruptura de estoque', tela: 'nota-falta', callbackProp: 'onNavegarParaNotaFalta' },
@@ -239,6 +245,10 @@ export default function Home(props: HomeProps) {
     setMenuAberto(false);
     setSpeedDialAberto(false);
 
+    if (mod.tela === 'recebimentos' && onNavegarParaRecebimentos) {
+      onNavegarParaRecebimentos();
+      return;
+    }
     if (mod.tela === 'solicitacoes' && onNavegarParaSolicitacoes) {
       onNavegarParaSolicitacoes();
       return;
@@ -301,7 +311,6 @@ export default function Home(props: HomeProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* SAIR */}
             {onLogout && (
               <button
                 onClick={onLogout}
@@ -359,7 +368,7 @@ export default function Home(props: HomeProps) {
               </div>
             </div>
 
-            {/* 2. PRÓXIMO DO VENCIMENTO (<= 30 DIAS) */}
+            {/* 2. PRÓXIMO DO VENCIMENTO */}
             <div 
               onClick={() => onNavegarParaVencimentos ? onNavegarParaVencimentos() : onNavegar?.('vencimentos')}
               className="cursor-pointer bg-amber-50/40 hover:bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 transition-all hover:shadow-md flex flex-col justify-between group"
@@ -445,6 +454,16 @@ export default function Home(props: HomeProps) {
               Ações Rápidas
             </span>
 
+            {/* INICIAR RECEBIMENTO */}
+            <button 
+              type="button"
+              onClick={() => handleAcaoRapida('recebimentos')}
+              className="flex items-center gap-2.5 p-2.5 bg-teal-50/80 hover:bg-teal-100/90 rounded-2xl text-xs font-black text-[#09797a] uppercase transition-all text-left cursor-pointer border border-teal-200/80"
+            >
+              <span className="w-7 h-7 rounded-xl bg-[#09797a] text-white flex items-center justify-center text-xs flex-shrink-0">🚚</span>
+              Iniciar Recebimento
+            </button>
+
             {/* NOVA NOTA DE FALTA */}
             <button 
               type="button"
@@ -492,7 +511,7 @@ export default function Home(props: HomeProps) {
       <div className="fixed bottom-3 left-0 right-0 max-w-4xl mx-auto px-4 z-40">
         <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-3xl shadow-xl h-14 flex items-center justify-between px-5 relative">
           
-          {/* Botão Hambúrguer (Esquerda) */}
+          {/* Botão Hambúrguer */}
           <button
             type="button"
             onClick={() => {
@@ -519,7 +538,7 @@ export default function Home(props: HomeProps) {
             <span className="text-2xl font-black leading-none">+</span>
           </button>
 
-          {/* Botão Recarregar Indicadores (Direita) */}
+          {/* Botão Recarregar Indicadores */}
           <button
             type="button"
             onClick={carregarMetricas}
@@ -539,7 +558,6 @@ export default function Home(props: HomeProps) {
         <div className="fixed inset-0 z-50 flex justify-start bg-black/50 backdrop-blur-xs animate-fadeIn">
           <div className="w-80 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col z-10 animate-slideRight">
             
-            {/* Header do Drawer */}
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               {categoriaAtivaNoMenu ? (
                 <button
@@ -567,7 +585,6 @@ export default function Home(props: HomeProps) {
               </button>
             </div>
 
-            {/* Conteúdo do Menu */}
             <div className="p-3 overflow-y-auto flex-1 flex flex-col gap-1.5">
               {!categoriaAtivaNoMenu ? (
                 (Object.keys(CATEGORIAS_MENU) as MacroCategoriaId[]).map((catKey) => {
@@ -619,7 +636,6 @@ export default function Home(props: HomeProps) {
               )}
             </div>
 
-            {/* Footer do Drawer */}
             <div className="p-4 border-t border-slate-100 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase">
                 Hazon ERP • v2.0

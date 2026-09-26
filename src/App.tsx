@@ -30,6 +30,7 @@ import Trocas from './pages/Trocas';
 import PesquisaPrecos from './pages/PesquisaPrecos';
 import Encartes from './pages/Encartes';
 import Solicitacoes from './pages/Solicitacoes';
+import Recebimentos from './pages/Recebimentos';
 
 interface UsuarioLogado {
   id: string;
@@ -67,7 +68,8 @@ type TelaAtiva =
   | 'trocas'
   | 'pesquisa-precos'
   | 'encartes'
-  | 'solicitacoes';
+  | 'solicitacoes'
+  | 'recebimentos';
 
 export default function App() {
   // 1. Inicializa o usuário direto do localStorage para não perder sessão no F5
@@ -247,6 +249,8 @@ export default function App() {
         onNavegarParaPesquisaPrecos={() => mudarTela('pesquisa-precos')}
         onNavegarParaNotificacoes={() => mudarTela('notificacoes')}
         onNavegarParaEncartes={() => mudarTela('encartes')}
+        onNavegarParaSolicitacoes={() => mudarTela('solicitacoes')}
+        onNavegarParaRecebimentos={() => mudarTela('recebimentos')}
       />
     );
   }
@@ -331,15 +335,25 @@ export default function App() {
   }
 
   if (telaAtiva === 'solicitacoes') {
-  if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-  return (
-    <Solicitacoes
-      onVoltarParaHome={() => mudarTela('home')}
-      usuarioLogado={usuario}
-      usuarioLogadoId={usuario.id}
-    />
-  );
-}
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Solicitacoes
+        onVoltarParaHome={() => mudarTela('home')}
+        usuarioLogado={usuario}
+        usuarioLogadoId={usuario.id}
+      />
+    );
+  }
+
+  if (telaAtiva === 'recebimentos') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Recebimentos
+        onVoltarParaHome={() => mudarTela('home')}
+        usuarioLogadoId={usuario.id}
+      />
+    );
+  }
 
   if (telaAtiva === 'nota-falta') {
     return <NotaFalta onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
