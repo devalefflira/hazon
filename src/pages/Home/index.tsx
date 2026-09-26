@@ -40,11 +40,11 @@ interface MetricasVisaoGeral {
 }
 
 export default function Home(props: HomeProps) {
-  const { 
-    onNavegar, 
-    nomeUsuario: nomeProp, 
-    perfilUsuario: setorProp, 
-    onLogout, 
+  const {
+    onNavegar,
+    nomeUsuario: nomeProp,
+    perfilUsuario: setorProp,
+    onLogout,
     onNavegarParaNotaFalta,
     onNavegarParaAvarias,
     onNavegarParaConsumoLoja,
@@ -83,7 +83,7 @@ export default function Home(props: HomeProps) {
           const setor = parsed.setor || parsed.department || parsed.usuario?.setor;
           if (nome) return { nome, setor: setor || 'Operação' };
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return { nome: 'Usuário', setor: 'Operação' };
   };
@@ -129,7 +129,7 @@ export default function Home(props: HomeProps) {
       // 3. Trocas
       const { count: trocasCount } = await supabase
         .from('trocas')
-        .select('id', { count: 'exact', head: true })
+        .select('id', { count: 'exact' })
         .eq('troca_realizada', false);
 
       // 4. Consumo Loja
@@ -290,7 +290,7 @@ export default function Home(props: HomeProps) {
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans relative">
       <div className="w-full max-w-4xl bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-7 flex flex-col gap-4 min-h-[calc(100vh-24px)] pb-24">
-        
+
         {/* HEADER SUPERIOR */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
@@ -342,7 +342,7 @@ export default function Home(props: HomeProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* 1. ITENS AVARIADOS */}
-            <div 
+            <div
               onClick={() => onNavegarParaAvarias ? onNavegarParaAvarias() : onNavegar?.('avarias')}
               className="cursor-pointer bg-red-50/40 hover:bg-red-50/80 border border-red-200/80 rounded-2xl p-4 transition-all hover:shadow-md flex flex-col justify-between group"
             >
@@ -371,7 +371,7 @@ export default function Home(props: HomeProps) {
             </div>
 
             {/* 2. PRÓXIMO DO VENCIMENTO */}
-            <div 
+            <div
               onClick={() => onNavegarParaVencimentos ? onNavegarParaVencimentos() : onNavegar?.('vencimentos')}
               className="cursor-pointer bg-amber-50/40 hover:bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 transition-all hover:shadow-md flex flex-col justify-between group"
             >
@@ -397,7 +397,7 @@ export default function Home(props: HomeProps) {
             </div>
 
             {/* 3. ITENS PARA TROCA */}
-            <div 
+            <div
               onClick={() => onNavegar?.('trocas')}
               className="cursor-pointer bg-blue-50/40 hover:bg-blue-50/80 border border-blue-200/80 rounded-2xl p-4 transition-all hover:shadow-md flex flex-col justify-between group"
             >
@@ -418,7 +418,7 @@ export default function Home(props: HomeProps) {
             </div>
 
             {/* 4. CONSUMO LOJA */}
-            <div 
+            <div
               onClick={() => onNavegarParaConsumoLoja ? onNavegarParaConsumoLoja() : onNavegar?.('consumo-loja')}
               className="cursor-pointer bg-teal-50/40 hover:bg-teal-50/80 border border-teal-200/80 rounded-2xl p-4 transition-all hover:shadow-md flex flex-col justify-between group"
             >
@@ -444,11 +444,11 @@ export default function Home(props: HomeProps) {
 
       {/* 2. BACKDROP DO SPEED DIAL DE AÇÃO RÁPIDA */}
       {speedDialAberto && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 animate-fadeIn"
           onClick={() => setSpeedDialAberto(false)}
         >
-          <div 
+          <div
             className="absolute bottom-20 left-1/2 -translate-x-1/2 w-64 bg-white rounded-3xl p-3 shadow-2xl border border-slate-100 flex flex-col gap-1.5 z-50 animate-slideUp"
             onClick={(e) => e.stopPropagation()}
           >
@@ -457,7 +457,7 @@ export default function Home(props: HomeProps) {
             </span>
 
             {/* INICIAR RECEBIMENTO */}
-            <button 
+            <button
               type="button"
               onClick={() => handleAcaoRapida('recebimentos')}
               className="flex items-center gap-2.5 p-2.5 bg-teal-50/80 hover:bg-teal-100/90 rounded-2xl text-xs font-black text-[#09797a] uppercase transition-all text-left cursor-pointer border border-teal-200/80"
@@ -467,7 +467,7 @@ export default function Home(props: HomeProps) {
             </button>
 
             {/* NOVA NOTA DE FALTA */}
-            <button 
+            <button
               type="button"
               onClick={() => handleAcaoRapida('nota-falta')}
               className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
@@ -477,7 +477,7 @@ export default function Home(props: HomeProps) {
             </button>
 
             {/* NOVA AVARIA */}
-            <button 
+            <button
               type="button"
               onClick={() => handleAcaoRapida('avarias')}
               className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
@@ -487,7 +487,7 @@ export default function Home(props: HomeProps) {
             </button>
 
             {/* NOVO CONSUMO LOJA */}
-            <button 
+            <button
               type="button"
               onClick={() => handleAcaoRapida('consumo-loja')}
               className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
@@ -497,7 +497,7 @@ export default function Home(props: HomeProps) {
             </button>
 
             {/* NOVO VENCIMENTO */}
-            <button 
+            <button
               type="button"
               onClick={() => handleAcaoRapida('vencimentos')}
               className="flex items-center gap-2.5 p-2.5 hover:bg-teal-50 rounded-2xl text-xs font-black text-slate-700 uppercase transition-all text-left cursor-pointer"
@@ -512,7 +512,7 @@ export default function Home(props: HomeProps) {
       {/* 3. BARRA INFERIOR FIXA */}
       <div className="fixed bottom-3 left-0 right-0 max-w-4xl mx-auto px-4 z-40">
         <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-3xl shadow-xl h-14 flex items-center justify-between px-5 relative">
-          
+
           {/* Botão Hambúrguer */}
           <button
             type="button"
@@ -532,9 +532,8 @@ export default function Home(props: HomeProps) {
           <button
             type="button"
             onClick={() => setSpeedDialAberto(!speedDialAberto)}
-            className={`absolute left-1/2 -top-5 -translate-x-1/2 w-13 h-13 rounded-full bg-[#09797a] hover:bg-[#075f60] text-white flex items-center justify-center shadow-lg shadow-teal-900/30 transition-transform active:scale-95 cursor-pointer ${
-              speedDialAberto ? 'rotate-45' : ''
-            }`}
+            className={`absolute left-1/2 -top-5 -translate-x-1/2 w-13 h-13 rounded-full bg-[#09797a] hover:bg-[#075f60] text-white flex items-center justify-center shadow-lg shadow-teal-900/30 transition-transform active:scale-95 cursor-pointer ${speedDialAberto ? 'rotate-45' : ''
+              }`}
             title="Ação Rápida"
           >
             <span className="text-2xl font-black leading-none">+</span>
@@ -577,7 +576,7 @@ export default function Home(props: HomeProps) {
       {menuAberto && (
         <div className="fixed inset-0 z-50 flex justify-start bg-black/50 backdrop-blur-xs animate-fadeIn">
           <div className="w-80 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col z-10 animate-slideRight">
-            
+
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               {categoriaAtivaNoMenu ? (
                 <button
