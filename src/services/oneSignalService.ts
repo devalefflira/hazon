@@ -20,7 +20,7 @@ export const oneSignalService = {
         await OneSignal.init({
           appId: ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: true,
-          // Força o SDK a procurar os workers na raiz pública do domínio
+          // Aponta explicitamente para os ficheiros na raiz
           serviceWorkerPath: 'OneSignalSDKWorker.js',
           serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js',
         });
