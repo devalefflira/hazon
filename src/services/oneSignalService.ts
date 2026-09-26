@@ -1,8 +1,7 @@
 // src/services/oneSignalService.ts
 import OneSignal from 'react-onesignal';
 
-// O seu App ID do OneSignal
-const ONESIGNAL_APP_ID = 'b16b50f0-fe65-4fe1-920f-8bfe48800e0b';
+const ONESIGNAL_APP_ID = 'b16b50f0-fe65-4fe1-920f-8bfe48880e0b';
 
 export const oneSignalService = {
   iniciado: false,
@@ -21,7 +20,9 @@ export const oneSignalService = {
         await OneSignal.init({
           appId: ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: true,
+          // Força o SDK a procurar os workers na raiz pública do domínio
           serviceWorkerPath: 'OneSignalSDKWorker.js',
+          serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js',
         });
         this.iniciado = true;
       } catch (error: any) {
@@ -44,8 +45,6 @@ export const oneSignalService = {
       if (!this.iniciado) {
         await this.inicializar();
       }
-
-      // Só executa o login se houver permissão concedida para evitar erro de 'login-user'
       if (OneSignal.Notifications?.permission) {
         await OneSignal.login(usuarioId);
       }
@@ -54,7 +53,6 @@ export const oneSignalService = {
     }
   },
 
-  // Método para pedir a permissão e em seguida associar o ID do utilizador
   async solicitarPermissao(usuarioId?: string): Promise<boolean> {
     try {
       if (!this.iniciado) {
