@@ -1,5 +1,5 @@
 // src/pages/Recebimentos/components/AbaNotasLancamento.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { recebimentoService } from '../services/recebimentoService';
 import type { RecebimentoFluxoView, FotoRecebimento } from '../types/recebimento.types';
 
@@ -21,7 +21,11 @@ export default function AbaNotasLancamento({
   const [detalhePausa, setDetalhePausa] = useState('');
 
   const [itemParaFinalizar, setItemParaFinalizar] = useState<{ fluxoId: string; faseId: string; ordem: number } | null>(null);
-  const [linkRelatorio, setLinkRelatorio] = useState('');
+  const [arquivoPdfBase64, setArquivoPdfBase64] = useState<string | null>(null);
+  const [nomeArquivoPdf, setNomeArquivoPdf] = useState<string>('');
+  const [tamanhoArquivoPdf, setTamanhoArquivoPdf] = useState<string>('');
+  const inputPdfRef = useRef<HTMLInputElement>(null);
+
   const [processando, setProcessando] = useState(false);
 
   // Modal para Visualizar Fotos Anexadas
@@ -135,27 +139,49 @@ export default function AbaNotasLancamento({
     }
   };
 
+  // Processar arquivo PDF anexado
+  const handleSelecionarPdf = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      alert('O arquivo selecionado deve estar no formato PDF.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setArquivoPdfBase64(reader.result);
+        setNomeArquivoPdf(file.name);
+        setTamanhoArquivoPdf((file.size / 1024).toFixed(1) + ' KB');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleConfirmarFinalizacao = async () => {
     if (!itemParaFinalizar) return;
-    if (!linkRelatorio.trim()) {
-      alert('Por favor, informe o link do relatório de lançamento.');
+    if (!arquivoPdfBase64) {
+      alert('Por favor, anexe o arquivo PDF do relatório de lançamento.');
       return;
     }
 
     try {
       setProcessando(true);
-      // Finaliza fase 6 e limpa as fotos automaticamente
       await recebimentoService.finalizarFaseEAvancar({
         fluxoId: itemParaFinalizar.fluxoId,
         faseId: itemParaFinalizar.faseId,
         ordemAtual: 6,
         usuarioId,
-        linkRelatorio: linkRelatorio.trim()
+        linkRelatorio: arquivoPdfBase64
       });
 
-      alert('Lançamento concluído com sucesso! As fotos temporárias foram eliminadas.');
+      alert('Lançamento concluído! PDF encaminhado para a Gôndola e fotos temporárias excluídas.');
       setItemParaFinalizar(null);
-      setLinkRelatorio('');
+      setArquivoPdfBase64(null);
+      setNomeArquivoPdf('');
+      setTamanhoArquivoPdf('');
       await carregarDocumentos();
       onAtualizar();
     } catch (err: any) {
@@ -165,7 +191,6 @@ export default function AbaNotasLancamento({
     }
   };
 
-  // Abrir fotos da carga
   const handleVisualizarFotos = async (doc: RecebimentoFluxoView) => {
     try {
       setProcessando(true);
@@ -241,7 +266,6 @@ export default function AbaNotasLancamento({
                     </p>
                   </div>
 
-                  {/* Botão de Ver Fotos (quando for Não Fiscal ou Caminhão) */}
                   {doc.tipo_documento !== 'Nota Fiscal' && (
                     <button
                       type="button"
@@ -253,7 +277,6 @@ export default function AbaNotasLancamento({
                     </button>
                   )}
 
-                  {/* Cronômetro */}
                   <div className={`p-3 rounded-2xl border flex items-center justify-between ${
                     tempoEsgotado 
                       ? 'bg-rose-50 border-rose-200 text-rose-800' 
@@ -274,7 +297,6 @@ export default function AbaNotasLancamento({
                   </div>
                 </div>
 
-                {/* Ações */}
                 <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
                   {!lancamentoIniciado ? (
                     <button
@@ -445,7 +467,7 @@ export default function AbaNotasLancamento({
         </div>
       )}
 
-      {/* MODAL DE FINALIZAÇÃO (RELATÓRIO) */}
+      {/* MODAL DE FINALIZAÇÃO: ANEXAR PDF DO RELATÓRIO */}
       {itemParaFinalizar && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 animate-fadeIn"
@@ -460,23 +482,58 @@ export default function AbaNotasLancamento({
                 Conclusão de Lançamento
               </span>
               <h3 className="text-xs font-black text-slate-900 uppercase">
-                Adicionar Link do Relatório de Entrada
+                Anexar Relatório de Lançamento (PDF)
               </h3>
             </div>
 
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
-                * Link do Relatório de Lançamento
+            <input
+              type="file"
+              accept="application/pdf"
+              ref={inputPdfRef}
+              onChange={handleSelecionarPdf}
+              className="hidden"
+            />
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black uppercase text-slate-500 block">
+                * Arquivo do Relatório (PDF)
               </label>
-              <input
-                type="url"
-                value={linkRelatorio}
-                onChange={(e) => setLinkRelatorio(e.target.value)}
-                placeholder="https://drive.google.com/... ou link do ERP"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#09797a]"
-              />
+
+              <button
+                type="button"
+                onClick={() => inputPdfRef.current?.click()}
+                className={`w-full py-5 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 font-black text-xs uppercase cursor-pointer transition-all active:scale-95 ${
+                  arquivoPdfBase64
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                    : 'border-teal-600 bg-teal-50/50 text-[#09797a] hover:bg-teal-50'
+                }`}
+              >
+                <span className="text-3xl">{arquivoPdfBase64 ? '📄' : '📎'}</span>
+                <span>{arquivoPdfBase64 ? 'Trocar Arquivo PDF' : 'Selecionar Relatório PDF'}</span>
+              </button>
+
+              {arquivoPdfBase64 && (
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                  <div className="flex flex-col truncate">
+                    <span className="font-black text-slate-800 truncate">{nomeArquivoPdf}</span>
+                    <span className="text-[10px] text-slate-400">{tamanhoArquivoPdf}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setArquivoPdfBase64(null);
+                      setNomeArquivoPdf('');
+                      setTamanhoArquivoPdf('');
+                    }}
+                    className="text-red-600 font-bold text-xs hover:underline cursor-pointer"
+                  >
+                    Remover
+                  </button>
+                </div>
+              )}
+
               <span className="text-[10px] text-slate-400 mt-1 block">
-                ℹ️ Ao concluir, as fotos temporárias dos produtos serão excluídas automaticamente para liberar espaço.
+                ℹ️ Este PDF ficará disponível para visualização e download na etapa de Gôndola e será excluído do banco de dados ao finalizá-la.
               </span>
             </div>
 
@@ -490,9 +547,9 @@ export default function AbaNotasLancamento({
               </button>
               <button
                 type="button"
-                disabled={processando}
+                disabled={processando || !arquivoPdfBase64}
                 onClick={handleConfirmarFinalizacao}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase shadow-xs active:scale-95 transition-all cursor-pointer"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-xs active:scale-95 transition-all cursor-pointer"
               >
                 Concluir Lançamento
               </button>

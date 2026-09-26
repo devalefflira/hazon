@@ -11,7 +11,7 @@ import {
 } from '../types/recebimento.types';
 
 export const recebimentoService = {
-  // 1. Busca preditiva de fornecedores para o modal
+  // 1. Busca preditiva de fornecedores
   async buscarFornecedores(termo: string) {
     if (!termo.trim()) return [];
     const p = termo.trim();
@@ -25,7 +25,7 @@ export const recebimentoService = {
     return data || [];
   },
 
-  // 2. Criar novo fluxo com inicialização automática das 8 fases
+  // 2. Criar novo fluxo
   async iniciarNovoFluxo(payload: IniciarFluxoPayload): Promise<string> {
     const agora = new Date();
     const agoraIso = agora.toISOString();
@@ -33,7 +33,6 @@ export const recebimentoService = {
     const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const codigoCustomizado = `FLX-${Date.now().toString().slice(-4)}`;
 
-    // Gerador de número aleatório de 6 dígitos se necessário
     let numeroFinal = payload.numero_documento?.trim() || '';
     let isGerado = Boolean(payload.is_numero_gerado);
 
@@ -42,10 +41,8 @@ export const recebimentoService = {
       isGerado = true;
     }
 
-    // Tempo de SLA da etapa de lançamento (minutos)
     const tempoLimite = payload.tipo_documento === 'Nota Fiscal' ? 60 : 180;
 
-    // 2.1 Cria cabeçalho do Fluxo
     const { data: fluxo, error: errFluxo } = await supabase
       .from('recebimento_fluxos')
       .insert([{
@@ -68,7 +65,6 @@ export const recebimentoService = {
 
     if (errFluxo) throw errFluxo;
 
-    // 2.2 Cria as 8 fases (a Fase 1 já nasce 'Em Andamento')
     const fasesInsert = LISTA_FASES_RECEBIMENTO.map((fase) => {
       const isPrimeira = fase.ordem === 1;
       const isLancamento = fase.ordem === 5 || fase.ordem === 6;
@@ -95,9 +91,12 @@ export const recebimentoService = {
     return fluxo.id;
   },
 
-  // 3. Listar fluxos (Abas: Em Andamento, Pausados, Finalizados)
-  async listarFluxos(statusAba: StatusGeralFluxo): Promise<RecebimentoFluxoView[]> {
-    const { data, error } = await supabase
+  // 3. Listar fluxos com suporte a filtro de período
+  async listarFluxos(
+    statusAba: StatusGeralFluxo,
+    filtros?: { dataInicio?: string; dataFim?: string }
+  ): Promise<RecebimentoFluxoView[]> {
+    let query = supabase
       .from('recebimento_fluxos')
       .select(`
         *,
@@ -125,8 +124,16 @@ export const recebimentoService = {
           descricao
         )
       `)
-      .eq('status_geral', statusAba)
-      .order('created_at', { ascending: false });
+      .eq('status_geral', statusAba);
+
+    if (filtros?.dataInicio) {
+      query = query.gte('data_registro', filtros.dataInicio);
+    }
+    if (filtros?.dataFim) {
+      query = query.lte('data_registro', filtros.dataFim);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
 
@@ -183,7 +190,7 @@ export const recebimentoService = {
     });
   },
 
-  // 4. Listar documentos prontos para Lançamento (Aba Notas)
+  // 4. Listar documentos prontos para Lançamento
   async listarNotasParaLancamento(): Promise<RecebimentoFluxoView[]> {
     const { data, error } = await supabase
       .from('recebimento_fluxos')
@@ -266,6 +273,14 @@ export const recebimentoService = {
       await this.excluirFotosFluxo(params.fluxoId);
     }
 
+    // Se concluiu a Fase 8 (Finalizar Exposição na Gôndola), apaga o PDF do relatório
+    if (params.ordemAtual === 8) {
+      await supabase
+        .from('recebimento_fases')
+        .update({ link_relatorio: null, updated_at: agora })
+        .eq('fluxo_id', params.fluxoId);
+    }
+
     const proximaOrdem = params.ordemAtual + 1;
 
     if (proximaOrdem <= 8) {
@@ -281,7 +296,6 @@ export const recebimentoService = {
         .eq('fluxo_id', params.fluxoId)
         .eq('ordem_fase', proximaOrdem);
 
-      // Atualiza o ponteiro do fluxo
       await supabase
         .from('recebimento_fluxos')
         .update({
@@ -333,7 +347,7 @@ export const recebimentoService = {
     if (error) throw error;
   },
 
-  // 8. Buscar Fotos de um Fluxo (para visualização na Aba de Notas)
+  // 8. Buscar Fotos de um Fluxo
   async buscarFotosFluxo(fluxoId: string): Promise<FotoRecebimento[]> {
     const { data, error } = await supabase
       .from('recebimento_fotos')
@@ -344,7 +358,7 @@ export const recebimentoService = {
     return data || [];
   },
 
-  // 9. Excluir Fotos de um Fluxo (após finalizar lançamento)
+  // 9. Excluir Fotos de um Fluxo
   async excluirFotosFluxo(fluxoId: string): Promise<void> {
     const { error } = await supabase
       .from('recebimento_fotos')
