@@ -31,6 +31,9 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
   const [mensagemRespondendo, setMensagemRespondendo] = useState<MensagemView | null>(null);
   const [respostaTexto, setRespostaTexto] = useState('');
 
+  // Visualizador Rápido de Foto em Tela Cheia (Zoom)
+  const [fotoVisualizando, setFotoVisualizando] = useState<{ nome: string; url: string } | null>(null);
+
   // Câmera & Documentos Refs
   const inputCameraRef = useRef<HTMLInputElement>(null);
   const inputDocRef = useRef<HTMLInputElement>(null);
@@ -85,7 +88,7 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
-    e.target.value = ''; // Permite tirar outra foto em seguida sem conflito de cache
+    e.target.value = '';
   };
 
   // Upload de Múltiplos Documentos (PDF, Planilhas, TXT, Word)
@@ -110,6 +113,37 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
 
   const removerAnexo = (index: number) => {
     setAnexos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Ação ao clicar no anexo: VISUALIZAR
+  const handleVisualizarAnexo = (anexo: AnexoMensagem) => {
+    if (anexo.tipo === 'foto') {
+      setFotoVisualizando({ nome: anexo.nome, url: anexo.url });
+    } else {
+      // Abre PDF ou outro documento diretamente em nova aba
+      try {
+        const byteCharacters = atob(anexo.url.split(',')[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const mimeType = anexo.url.substring(anexo.url.indexOf(':') + 1, anexo.url.indexOf(';'));
+        const blob = new Blob([byteArray], { type: mimeType });
+        const fileURL = URL.createObjectURL(blob);
+        window.open(fileURL, '_blank');
+      } catch {
+        window.open(anexo.url, '_blank');
+      }
+    }
+  };
+
+  // Ação de DOWNLOAD (disponibilizada no modal antes da finalização)
+  const baixarArquivo = (anexo: AnexoMensagem) => {
+    const link = document.createElement('a');
+    link.href = anexo.url;
+    link.download = anexo.nome;
+    link.click();
   };
 
   const handleEnviar = async () => {
@@ -161,13 +195,6 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
     } finally {
       setEnviando(false);
     }
-  };
-
-  const baixarArquivo = (anexo: AnexoMensagem) => {
-    const link = document.createElement('a');
-    link.href = anexo.url;
-    link.download = anexo.nome;
-    link.click();
   };
 
   return (
@@ -283,25 +310,26 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
                         {msg.conteudo}
                       </p>
 
-                      {/* Anexos (se houver) */}
+                      {/* Anexos: Clique para Visualizar na Tela */}
                       {msg.anexos && msg.anexos.length > 0 && (
                         <div className="flex flex-col gap-1.5">
                           <span className="text-[10px] font-black uppercase text-slate-400">
-                            Arquivos Anexados ({msg.anexos.length}) - Baixe antes de finalizar:
+                            Anexos ({msg.anexos.length}) - Toque para Visualizar:
                           </span>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {msg.anexos.map((a, i) => (
                               <button
                                 key={i}
                                 type="button"
-                                onClick={() => baixarArquivo(a)}
-                                className="p-2 bg-teal-50 border border-teal-200 hover:bg-teal-100 text-[#09797a] rounded-xl text-xs font-black uppercase flex items-center justify-between gap-1 cursor-pointer transition-all active:scale-95"
+                                onClick={() => handleVisualizarAnexo(a)}
+                                className="p-2.5 bg-teal-50/80 border border-teal-200/80 hover:bg-teal-100 text-[#09797a] rounded-2xl text-xs font-black uppercase flex items-center justify-between gap-1.5 cursor-pointer transition-all active:scale-95"
+                                title="Clique para Visualizar"
                               >
                                 <div className="flex items-center gap-1.5 truncate">
                                   <span>{a.tipo === 'foto' ? '📸' : '📄'}</span>
                                   <span className="truncate text-[11px]">{a.nome}</span>
                                 </div>
-                                <span className="text-sm">⬇</span>
+                                <span className="text-xs text-teal-700 opacity-70">🔍 Ver</span>
                               </button>
                             ))}
                           </div>
@@ -337,6 +365,40 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
         </div>
 
       </div>
+
+      {/* MODAL VISUALIZADOR DE FOTO EM TELA CHEIA (SEM BAIXAR) */}
+      {fotoVisualizando && (
+        <div 
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-60 flex flex-col items-center justify-center p-3 animate-fadeIn"
+          onClick={() => setFotoVisualizando(null)}
+        >
+          <div 
+            className="max-w-2xl w-full bg-white rounded-3xl p-3 sm:p-4 shadow-2xl flex flex-col gap-3 max-h-[90vh] animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2 px-1">
+              <span className="text-xs font-black uppercase text-slate-800 truncate">
+                {fotoVisualizando.nome}
+              </span>
+              <button 
+                type="button"
+                onClick={() => setFotoVisualizando(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-900/5 rounded-2xl p-1">
+              <img 
+                src={fotoVisualizando.url} 
+                alt="Visualização" 
+                className="max-h-[72vh] w-auto object-contain rounded-xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* INPUTS OCULTOS */}
       <input
@@ -380,7 +442,6 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
               </button>
             </div>
 
-            {/* Tipo */}
             <div>
               <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Tipo de Mensagem</label>
               <select
@@ -395,7 +456,6 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
               </select>
             </div>
 
-            {/* Subtipo de Solicitação */}
             {tipoMensagem === 'Solicitação' && (
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Subtipo da Solicitação</label>
@@ -412,7 +472,6 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
               </div>
             )}
 
-            {/* Mensagem */}
             <div>
               <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Mensagem</label>
               <textarea
@@ -424,7 +483,6 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
               />
             </div>
 
-            {/* Botões de Anexo e Galeria Múltipla */}
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-black uppercase text-slate-500">
                 Anexos ({anexos.length})
@@ -449,7 +507,6 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
                 </button>
               </div>
 
-              {/* LISTAGEM DE ARQUIVOS ADICIONADOS */}
               {anexos.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 max-h-48 overflow-y-auto p-1">
                   {anexos.map((a, i) => (
@@ -509,14 +566,14 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
         </div>
       )}
 
-      {/* MODAL RESPONDER & FINALIZAR */}
+      {/* MODAL RESPONDER & FINALIZAR COM OPÇÃO DE DOWNLOAD ANTES DA EXCLUSÃO */}
       {mensagemRespondendo && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 animate-fadeIn" 
           onClick={() => setMensagemRespondendo(null)}
         >
           <div 
-            className="w-full max-w-md bg-white rounded-3xl p-5 shadow-2xl flex flex-col gap-4 animate-slideUp" 
+            className="w-full max-w-md bg-white rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col gap-4 animate-slideUp max-h-[90vh] overflow-y-auto" 
             onClick={(e) => e.stopPropagation()}
           >
             <div>
@@ -524,16 +581,47 @@ export default function Mensagens({ usuarioLogadoId, onVoltarParaHome }: Mensage
               <h3 className="text-xs font-black text-slate-900 uppercase">Responder e Finalizar Mensagem</h3>
             </div>
 
-            <textarea
-              rows={3}
-              value={respostaTexto}
-              onChange={(e) => setRespostaTexto(e.target.value)}
-              placeholder="Digite o parecer da resolução (ex: Produto cadastrado com sucesso!)..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800"
-            />
+            {/* SEÇÃO DE DOWNLOAD OPCIONAL ANTES DE FINALIZAR */}
+            {mensagemRespondendo.anexos && mensagemRespondendo.anexos.length > 0 && (
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase text-slate-500">
+                  Arquivos da Solicitação ({mensagemRespondendo.anexos.length}) - Deseja baixar algum?
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  {mensagemRespondendo.anexos.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200 text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <span>{a.tipo === 'foto' ? '📸' : '📄'}</span>
+                        <span className="font-bold text-slate-800 truncate">{a.nome}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => baixarArquivo(a)}
+                        className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-[#09797a] border border-teal-200 rounded-lg text-[10px] font-black uppercase cursor-pointer"
+                      >
+                        Baixar ⬇
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                * Parecer / Resposta do Destinatário
+              </label>
+              <textarea
+                rows={3}
+                value={respostaTexto}
+                onChange={(e) => setRespostaTexto(e.target.value)}
+                placeholder="Digite o parecer da resolução (ex: Produto cadastrado com sucesso!)..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800"
+              />
+            </div>
 
             <span className="text-[10px] text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200 block font-medium">
-              ⚠️ Ao finalizar, a mensagem será marcada como resolvida e todos os arquivos anexados serão deletados do banco de dados para economizar espaço.
+              ⚠️ Ao clicar em Concluir Chamado, a mensagem será finalizada e todos os arquivos anexados serão deletados do banco de dados para poupar espaço.
             </span>
 
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
