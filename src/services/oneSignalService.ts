@@ -1,8 +1,8 @@
 // src/services/oneSignalService.ts
 import OneSignal from 'react-onesignal';
 
-// Substitua pelo seu OneSignal App ID real
-const ONESIGNAL_APP_ID = 'b16b50f0-fe65-4fe1-920f-8bfe48800e0b';
+// O seu App ID do OneSignal
+const ONESIGNAL_APP_ID = 'b16b50f0-fe65-4fe1-920f-8bfe48880e0b';
 
 export const oneSignalService = {
   iniciado: false,
@@ -21,10 +21,10 @@ export const oneSignalService = {
         await OneSignal.init({
           appId: ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: true,
+          serviceWorkerPath: 'OneSignalSDKWorker.js',
         });
         this.iniciado = true;
       } catch (error: any) {
-        // Se o OneSignal já tiver sido inicializado pelo navegador, marca como ativo e não quebra
         if (error?.message?.includes('already initialized')) {
           this.iniciado = true;
         } else {
@@ -44,20 +44,31 @@ export const oneSignalService = {
       if (!this.iniciado) {
         await this.inicializar();
       }
-      // Garante que o SDK processou a inicialização antes de chamar o login
-      await OneSignal.login(usuarioId);
+
+      // Só executa o login se houver permissão concedida para evitar erro de 'login-user'
+      if (OneSignal.Notifications?.permission) {
+        await OneSignal.login(usuarioId);
+      }
     } catch (error) {
-      console.warn('OneSignal ainda em carregamento ou erro ao associar usuário:', error);
+      console.warn('OneSignal aguardando subscrição para login:', error);
     }
   },
 
-  async solicitarPermissao(): Promise<boolean> {
+  // Método para pedir a permissão e em seguida associar o ID do utilizador
+  async solicitarPermissao(usuarioId?: string): Promise<boolean> {
     try {
       if (!this.iniciado) {
         await this.inicializar();
       }
+
       await OneSignal.Notifications.requestPermission();
-      return Boolean(OneSignal.Notifications.permission);
+      const permitido = Boolean(OneSignal.Notifications.permission);
+
+      if (permitido && usuarioId) {
+        await OneSignal.login(usuarioId);
+      }
+
+      return permitido;
     } catch (error) {
       console.error('Erro ao solicitar permissão de notificações:', error);
       return false;
