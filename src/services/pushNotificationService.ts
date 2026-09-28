@@ -1,57 +1,61 @@
-interface EnviarPushParams {
+// src/services/pushNotificationService.ts
+import { supabase } from '../lib/supabaseClient';
+
+export interface EnviarPushParams {
   titulo: string;
   mensagem: string;
-  destinatariosIds?: string[]; // IDs específicos (ex: destinatário de mensagem). Se vazio, envia a todos.
-  urlRedirecionamento?: string; // Ex: tela de mensagens ou rota específica
+  destinatariosIds?: string[]; // IDs dos usuários. Se vazio, envia para todos os cadastrados.
+  urlRedirecionamento?: string;
 }
-
-const ONESIGNAL_APP_ID = 'b16b50f0-fe65-4fe1-920f-8bfe48800e0b';
-const ONESIGNAL_REST_API_KEY = 'SUA_REST_API_KEY_AQUI';
 
 export const pushNotificationService = {
   async enviarNotificacao({
     titulo,
     mensagem,
     destinatariosIds,
-    urlRedirecionamento
+    urlRedirecionamento = '/'
   }: EnviarPushParams): Promise<void> {
     try {
-      const payload: Record<string, any> = {
-        app_id: ONESIGNAL_APP_ID,
-        target_channel: 'push',
-        headings: { pt: titulo, en: titulo },
-        contents: { pt: mensagem, en: mensagem },
-      };
-
-      if (urlRedirecionamento) {
-        payload.url = urlRedirecionamento;
-      }
-
-      // Se informados utilizadores específicos, envia apenas para eles
+      // Se foram passados IDs específicos, dispara para cada um deles
       if (destinatariosIds && destinatariosIds.length > 0) {
-        payload.include_aliases = {
-          external_id: destinatariosIds
-        };
-      } else {
-        // Envia para toda a equipa
-        payload.included_segments = ['Total Subscriptions'];
+        await Promise.all(
+          destinatariosIds.map(async (usuarioId) => {
+            await supabase.functions.invoke('enviar-push', {
+              body: {
+                destinatario_id: usuarioId,
+                titulo,
+                corpo: mensagem,
+                url: urlRedirecionamento
+              }
+            });
+          })
+        );
+        return;
       }
 
-      const response = await fetch('https://onesignal.com/api/v1/notifications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`
-        },
-        body: JSON.stringify(payload)
-      });
+      // Se nenhum ID foi especificado, busca todos os usuários com subscrição ativa
+      const { data: assinaturas } = await supabase
+        .from('web_push_subscriptions')
+        .select('usuario_id');
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.warn('Falha no envio de push OneSignal:', errorData);
-      }
+      if (!assinaturas || assinaturas.length === 0) return;
+
+      const usuariosUnicos = Array.from(new Set(assinaturas.map((a: { usuario_id: string }) => a.usuario_id)));
+
+      await Promise.all(
+        usuariosUnicos.map(async (usuarioId) => {
+          await supabase.functions.invoke('enviar-push', {
+            body: {
+              destinatario_id: usuarioId,
+              titulo,
+              corpo: mensagem,
+              url: urlRedirecionamento
+            }
+          });
+        })
+      );
     } catch (err) {
-      console.error('Erro de rede ao enviar notificação push:', err);
+      console.warn('Falha silenciosa ao disparar push nativo:', err);
     }
   }
 };

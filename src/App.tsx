@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabaseClient';
 import Login from './pages/Login';
+import { nativePushService } from './services/nativePushService';
 import Home from './pages/Home';
 import CategoriasHub from './pages/Categorias';
 import Usuarios from './pages/Usuarios';
@@ -32,7 +33,7 @@ import Encartes from './pages/Encartes';
 import Solicitacoes from './pages/Solicitacoes';
 import Recebimentos from './pages/Recebimentos';
 import Mensagens from './pages/Mensagens';
-import { oneSignalService } from './services/oneSignalService';
+import Dashboard from './pages/Dashboard';
 
 interface UsuarioLogado {
   id: string;
@@ -44,6 +45,7 @@ interface UsuarioLogado {
 type TelaAtiva =
   | 'login'
   | 'home'
+  | 'dashboard'
   | 'categorias'
   | 'usuarios'
   | 'permissoes'
@@ -113,19 +115,18 @@ export default function App() {
     localStorage.setItem('hazon_tela_ativa', novaTela);
   };
 
-  // Inicialização do OneSignal e vinculação do usuário
+  // Inicialização do Service Worker nativo para Push
   useEffect(() => {
-    const configurarPush = async () => {
-      await oneSignalService.inicializar();
+    const registrarPush = async () => {
       if (usuario?.id) {
-        await oneSignalService.loginUsuario(usuario.id);
+        await nativePushService.registrarServiceWorker();
       }
     };
 
-    configurarPush();
+    registrarPush();
   }, [usuario?.id]);
 
-  // 1. Processar tokens de link externo (Cotação / Pedido)
+  // Processar tokens de link externo (Cotação / Pedido)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenCotacao = params.get('token');
@@ -140,19 +141,16 @@ export default function App() {
     }
   }, []);
 
-  // 2. Registar utilizador no OneSignal sempre que houver utilizador ativo
-  useEffect(() => {
-    if (usuario?.id) {
-      oneSignalService.loginUsuario(usuario.id);
-    }
-  }, [usuario]);
-
   const handleLoginSuccess = async (usuarioLogado: UsuarioLogado) => {
     setUsuario(usuarioLogado);
     localStorage.setItem('hazon_user', JSON.stringify(usuarioLogado));
 
-    // Associa ID do utilizador autenticado no OneSignal
-    await oneSignalService.loginUsuario(usuarioLogado.id);
+    // Solicita permissão do navegador e salva o token no Supabase
+    try {
+      await nativePushService.solicitarPermissaoESalvar(usuarioLogado.id);
+    } catch (e) {
+      console.warn('Aviso push:', e);
+    }
 
     try {
       const { data } = await supabase
@@ -172,9 +170,10 @@ export default function App() {
     mudarTela('home');
   };
 
-  const handleLogout = () => {
-    // Desvincula utilizador no OneSignal
-    oneSignalService.logoutUsuario();
+  const handleLogout = async () => {
+    if (usuario?.id) {
+      await nativePushService.desinscrever(usuario.id);
+    }
 
     setUsuario(null);
     setPermissoesUsuario([]);
@@ -186,6 +185,11 @@ export default function App() {
 
   if (telaAtiva === 'responder_cotacao' && tokenAcesso) {
     return <ResponderCotacao token={tokenAcesso} />;
+  }
+
+  if (telaAtiva === 'dashboard') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Dashboard onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (telaAtiva === 'formalizar_pedido_externo' && tokenAcesso) {
@@ -250,6 +254,7 @@ export default function App() {
         permissoesDoUsuario={permissoesUsuario}
         onLogout={handleLogout}
         onNavegar={(tela: string) => mudarTela(tela as TelaAtiva)}
+        onNavegarParaDashboard={() => mudarTela('dashboard')}
         onNavegarParaCategorias={() => mudarTela('categorias')}
         onNavegarParaUsuarios={() => mudarTela('usuarios')}
         onNavegarParaPermissoes={() => mudarTela('permissoes')}
