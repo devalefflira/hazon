@@ -13,6 +13,18 @@ interface CardFluxoRecebimentoProps {
   onAbrirFotosRecepcao: (fluxoId: string, faseId: string) => void;
 }
 
+// Mapeamento dinâmico dos nomes das fases antes e após a conclusão
+const NOMES_FASES_MAP: Record<number, { antes: string; apos: string }> = {
+  1: { antes: 'Iniciar Recebimento', apos: 'Recebimento Iniciado' },
+  2: { antes: 'Finalizar Recebimento', apos: 'Recebimento Finalizado' },
+  3: { antes: 'Recepção da Nota', apos: 'Nota Recepcionada' },
+  4: { antes: 'Entregar para Lançamento', apos: 'Nota Entregue' },
+  5: { antes: 'Iniciar Lançamento', apos: 'Lançamento Iniciado' },
+  6: { antes: 'Finalizar Lançamento', apos: 'Lançamento Finalizado' },
+  7: { antes: 'Iniciar Exposição na Gôndola', apos: 'Exposição na Gôndola Iniciada' },
+  8: { antes: 'Finalizar Exposição na Gôndola', apos: 'Exposição na Gôndola Finalizada' },
+};
+
 export default function CardFluxoRecebimento({
   fluxo,
   onAvancarFase,
@@ -22,8 +34,14 @@ export default function CardFluxoRecebimento({
 }: CardFluxoRecebimentoProps) {
   const [faseDetalhes, setFaseDetalhes] = useState<RecebimentoFaseView | null>(null);
   
-  // Se for finalizado, inicia recolhido (false). Se estiver em andamento/pausado, inicia expandido (true).
-  const [expandido, setExpandido] = useState<boolean>(fluxo.status_geral !== 'Finalizado');
+  // Regra: Por padrão, todos os fluxos carregam retraídos/fechados
+  const [expandido, setExpandido] = useState<boolean>(false);
+
+  const obterTextoFase = (fase: RecebimentoFaseView) => {
+    const mapa = NOMES_FASES_MAP[fase.ordem_fase];
+    if (!mapa) return fase.nome_fase;
+    return fase.status === 'Finalizado' ? mapa.apos : mapa.antes;
+  };
 
   const handleBotaoMais = (fase: RecebimentoFaseView) => {
     if (fase.status === 'Finalizado') {
@@ -113,7 +131,7 @@ export default function CardFluxoRecebimento({
           <span className="font-semibold">
             {fluxo.status_geral === 'Finalizado' 
               ? '✓ Todas as 8 etapas concluídas com sucesso' 
-              : `Etapa atual: ${fluxo.fases.find(f => f.ordem_fase === fluxo.fase_atual)?.nome_fase || 'Em Andamento'}`}
+              : `Etapa atual: ${obterTextoFase(fluxo.fases.find(f => f.ordem_fase === fluxo.fase_atual) || fluxo.fases[0])}`}
           </span>
           <button
             type="button"
@@ -136,6 +154,7 @@ export default function CardFluxoRecebimento({
             const isAtiva = fase.ordem_fase === fluxo.fase_atual && fluxo.status_geral !== 'Finalizado';
             const isConcluida = fase.status === 'Finalizado';
             const isPendente = fase.status === 'Pendente';
+            const textoFase = obterTextoFase(fase);
 
             const circleColor = isConcluida
               ? 'bg-emerald-500 border-emerald-600 text-white'
@@ -176,7 +195,7 @@ export default function CardFluxoRecebimento({
                   <span className={`text-xs sm:text-sm font-black uppercase tracking-tight ${
                     isAtiva ? 'text-[#09797a]' : isConcluida ? 'text-slate-800' : 'text-slate-500'
                   }`}>
-                    {fase.nome_fase}
+                    {textoFase}
                   </span>
 
                   {isConcluida && fase.finalizado_em && (
@@ -207,7 +226,7 @@ export default function CardFluxoRecebimento({
                   Auditoria de Etapa Concluída
                 </span>
                 <h3 className="text-xs font-black text-slate-900 uppercase">
-                  {faseDetalhes.nome_fase}
+                  {obterTextoFase(faseDetalhes)}
                 </h3>
               </div>
               <button

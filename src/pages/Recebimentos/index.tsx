@@ -1,5 +1,5 @@
 // src/pages/Recebimentos/index.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { recebimentoService } from './services/recebimentoService';
 import type { 
   RecebimentoFluxoView, 
@@ -19,6 +19,17 @@ interface RecebimentosProps {
 type AbaPrincipal = 'fluxos' | 'notas' | 'finalizados';
 type SubAbaFluxos = 'Em Andamento' | 'Pausado';
 
+const NOMES_FASES_FILTRO = [
+  { ordem: 1, nome: '1. Iniciar Recebimento' },
+  { ordem: 2, nome: '2. Finalizar Recebimento' },
+  { ordem: 3, nome: '3. Recepção da Nota' },
+  { ordem: 4, nome: '4. Entregar para Lançamento' },
+  { ordem: 5, nome: '5. Iniciar Lançamento' },
+  { ordem: 6, nome: '6. Finalizar Lançamento' },
+  { ordem: 7, nome: '7. Iniciar Exposição na Gôndola' },
+  { ordem: 8, nome: '8. Finalizar Exposição na Gôndola' },
+];
+
 export default function Recebimentos(props: RecebimentosProps) {
   const { onVoltarParaHome, usuarioLogadoId } = props;
   const userStorage = JSON.parse(localStorage.getItem('hazon_user') || '{}');
@@ -33,6 +44,10 @@ export default function Recebimentos(props: RecebimentosProps) {
   // Navegação
   const [abaAtiva, setAbaAtiva] = useState<AbaPrincipal>('fluxos');
   const [subAbaFluxos, setSubAbaFluxos] = useState<SubAbaFluxos>('Em Andamento');
+
+  // Filtros na aba Fluxos
+  const [filtroFornecedor, setFiltroFornecedor] = useState('');
+  const [filtroFaseAtual, setFiltroFaseAtual] = useState<string>('todas');
 
   // Filtro de Período para Finalizados
   const hoje = new Date().toISOString().split('T')[0];
@@ -89,6 +104,41 @@ export default function Recebimentos(props: RecebimentosProps) {
       carregarFluxos();
     }
   }, [abaAtiva, subAbaFluxos]);
+
+  // Lista de fornecedores para autocomplete de filtro
+  const fornecedoresDisponiveis = useMemo(() => {
+    const nomes = new Set<string>();
+    fluxos.forEach((f) => {
+      if (f.fornecedor_nome && f.fornecedor_nome !== 'Não informado') {
+        nomes.add(f.fornecedor_nome);
+      }
+    });
+    return Array.from(nomes).sort();
+  }, [fluxos]);
+
+  // Filtros aplicados na aba Fluxos
+  const fluxosExibidosAbaFluxos = useMemo(() => {
+    if (abaAtiva !== 'fluxos') return fluxos;
+
+    return fluxos.filter((f) => {
+      if (filtroFornecedor.trim()) {
+        const termo = filtroFornecedor.toLowerCase();
+        const nomeForn = (f.fornecedor_nome || '').toLowerCase();
+        const doc = (f.numero_documento || '').toLowerCase();
+        if (!nomeForn.includes(termo) && !doc.includes(termo)) {
+          return false;
+        }
+      }
+
+      if (filtroFaseAtual !== 'todas') {
+        if (f.fase_atual !== Number(filtroFaseAtual)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [fluxos, abaAtiva, filtroFornecedor, filtroFaseAtual]);
 
   // Avançar fase a partir do Card
   const handleAvancarFase = async (fluxoId: string, faseId: string, ordem: number) => {
@@ -173,7 +223,7 @@ export default function Recebimentos(props: RecebimentosProps) {
   const totalPaginas = Math.ceil(fluxos.length / itensPorPagina) || 1;
   const fluxosExibidos = abaAtiva === 'finalizados'
     ? fluxos.slice((paginaAtual - 1) * itensPorPagina, paginaAtual * itensPorPagina)
-    : fluxos;
+    : fluxosExibidosAbaFluxos;
 
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans relative">
@@ -246,31 +296,87 @@ export default function Recebimentos(props: RecebimentosProps) {
           </button>
         </div>
 
-        {/* SUB-ABAS (Fluxos em Andamento / Pausados) */}
+        {/* SUB-ABAS E FILTROS NA ABA FLUXOS */}
         {abaAtiva === 'fluxos' && (
-          <div className="flex gap-2 border-b border-slate-100 pb-2">
-            <button
-              type="button"
-              onClick={() => setSubAbaFluxos('Em Andamento')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-                subAbaFluxos === 'Em Andamento'
-                  ? 'bg-teal-50 text-[#09797a] border border-teal-200'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              🟡 Em Andamento
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubAbaFluxos('Pausado')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
-                subAbaFluxos === 'Pausado'
-                  ? 'bg-teal-50 text-[#09797a] border border-teal-200'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              ⏸ Pausados
-            </button>
+          <div className="flex flex-col gap-3 border-b border-slate-100 pb-3">
+            {/* SUB-ABAS: EM ANDAMENTO / PAUSADOS */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSubAbaFluxos('Em Andamento')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                  subAbaFluxos === 'Em Andamento'
+                    ? 'bg-teal-50 text-[#09797a] border border-teal-200'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                🟡 Em Andamento
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubAbaFluxos('Pausado')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                  subAbaFluxos === 'Pausado'
+                    ? 'bg-teal-50 text-[#09797a] border border-teal-200'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                ⏸ Pausados
+              </button>
+            </div>
+
+            {/* FILTROS: FORNECEDOR E FASE ATUAL */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              {/* Filtro Fornecedor */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                  Filtrar por Fornecedor ou Doc
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="fornecedores-sugestoes"
+                    value={filtroFornecedor}
+                    onChange={(e) => setFiltroFornecedor(e.target.value)}
+                    placeholder="Digite fornecedor ou nº documento..."
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 placeholder:text-slate-400"
+                  />
+                  {filtroFornecedor && (
+                    <button
+                      type="button"
+                      onClick={() => setFiltroFornecedor('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-bold text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <datalist id="fornecedores-sugestoes">
+                    {fornecedoresDisponiveis.map((forn) => (
+                      <option key={forn} value={forn} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Filtro Fase Atual */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                  Filtrar por Fase Atual
+                </label>
+                <select
+                  value={filtroFaseAtual}
+                  onChange={(e) => setFiltroFaseAtual(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800"
+                >
+                  <option value="todas">Todas as Fases</option>
+                  {NOMES_FASES_FILTRO.map((f) => (
+                    <option key={f.ordem} value={f.ordem}>
+                      {f.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         )}
 
