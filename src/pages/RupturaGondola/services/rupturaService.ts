@@ -19,8 +19,11 @@ export const rupturaService = {
 
   async criarAuditoria(dados: {
     usuario_id: string;
-    setor_nome: string;
+    departamento: string;
+    secao: string;
+    categoria: string;
     rua_corredor?: string;
+    classe_produto?: string;
     observacao?: string;
   }): Promise<RupturaAuditoria> {
     const codigo = `RUP-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -30,8 +33,12 @@ export const rupturaService = {
       .insert({
         codigo_customizado: codigo,
         usuario_id: dados.usuario_id,
-        setor_nome: dados.setor_nome,
+        setor_nome: dados.departamento,
+        departamento: dados.departamento,
+        secao: dados.secao,
+        categoria: dados.categoria,
         rua_corredor: dados.rua_corredor,
+        classe_produto: dados.classe_produto,
         observacao: dados.observacao,
         status: 'Em Andamento'
       })
@@ -71,7 +78,6 @@ export const rupturaService = {
     }));
   },
 
-  // Verifica se o produto teve entrada recente no ERP
   async verificarEntradaErp(codprod: string, codbarra?: string): Promise<{ teveEntrada: boolean; entrada?: ErpEntradaMercadoria }> {
     let query = supabase.from('erp_entradas_mercadorias').select('*');
 
@@ -150,7 +156,6 @@ export const rupturaService = {
     if (error) throw error;
   },
 
-  // Gestão de Importação do CSV de Entradas ERP
   async listarUltimasImportacoes(): Promise<ErpEntradaImportacao[]> {
     const { data, error } = await supabase
       .from('erp_entradas_importacoes')
@@ -160,6 +165,50 @@ export const rupturaService = {
 
     if (error) throw error;
     return data || [];
+  },
+
+  // Retorna a árvore única de departamentos, seções e categorias existentes no banco para popular os selects
+  async carregarArvoreCategoriasErp(): Promise<{
+    departamentos: string[];
+    secoesPorDepto: Record<string, string[]>;
+    categoriasPorSecao: Record<string, string[]>;
+  }> {
+    const { data } = await supabase
+      .from('erp_entradas_mercadorias')
+      .select('departamento, secao, categoria');
+
+    const departamentosSet = new Set<string>();
+    const secoesPorDepto: Record<string, Set<string>> = {};
+    const categoriasPorSecao: Record<string, Set<string>> = {};
+
+    (data || []).forEach((row: any) => {
+      const dep = (row.departamento || '').trim();
+      const sec = (row.secao || '').trim();
+      const cat = (row.categoria || '').trim();
+
+      if (dep) {
+        departamentosSet.add(dep);
+        if (!secoesPorDepto[dep]) secoesPorDepto[dep] = new Set<string>();
+        if (sec) secoesPorDepto[dep].add(sec);
+      }
+
+      if (sec) {
+        if (!categoriasPorSecao[sec]) categoriasPorSecao[sec] = new Set<string>();
+        if (cat) categoriasPorSecao[sec].add(cat);
+      }
+    });
+
+    const formatObj = (src: Record<string, Set<string>>) => {
+      const res: Record<string, string[]> = {};
+      for (const k in src) res[k] = Array.from(src[k]).sort();
+      return res;
+    };
+
+    return {
+      departamentos: Array.from(departamentosSet).sort(),
+      secoesPorDepto: formatObj(secoesPorDepto),
+      categoriasPorSecao: formatObj(categoriasPorSecao)
+    };
   },
 
   async importarCsvEntradas(dados: {
@@ -182,7 +231,6 @@ export const rupturaService = {
     const dataInicio = parseDataBr(primeiraLinha['Data Inicial Entradas'] || primeiraLinha['Data Inicial'] || '');
     const dataFim = parseDataBr(primeiraLinha['Data Final Entradas'] || primeiraLinha['Data Final'] || '');
 
-    // Cria registro de importação
     const { data: imp, error: errImp } = await supabase
       .from('erp_entradas_importacoes')
       .insert({
@@ -197,7 +245,6 @@ export const rupturaService = {
 
     if (errImp) throw errImp;
 
-    // Prepara e insere itens em lotes de 200
     const formatados = dados.linhas.map((row) => ({
       importacao_id: imp.id,
       data_inicial: parseDataBr(row['Data Inicial Entradas'] || row['Data Inicial'] || ''),
@@ -225,8 +272,13 @@ export const rupturaService = {
     };
   },
 
-  // Cruzamento inverso: produtos com entrada recente que NÃO foram auditados como presentes
+  // Cruzamento estrito: filtra apenas mercadorias do mesmo Departamento, Seção e Categoria da Auditoria
   async obterProdutosNaoExpostos(auditoriaId: string): Promise<ErpEntradaMercadoria[]> {
+    // 1. Obtém dados do escopo da auditoria
+    const aud = await this.obterAuditoriaPorId(auditoriaId);
+    if (!aud) return [];
+
+    // 2. Obtém os códigos de produtos já auditados como presentes
     const { data: itensAuditados } = await supabase
       .from('ruptura_itens')
       .select('produto_id, tem_estoque_gondola, produtos(codprod)')
@@ -238,13 +290,30 @@ export const rupturaService = {
         .map((i: any) => i.produtos?.codprod)
     );
 
-    const { data: entradas } = await supabase
-      .from('erp_entradas_mercadorias')
-      .select('*')
-      .order('descricao', { ascending: true });
+    // 3. Monta query filtrando estritamente pelo escopo
+    let query = supabase.from('erp_entradas_mercadorias').select('*');
 
-    if (!entradas) return [];
+    if (aud.departamento) {
+      query = query.ilike('departamento', `%${aud.departamento.trim()}%`);
+    }
+    if (aud.secao && aud.secao !== 'Todas') {
+      query = query.ilike('secao', `%${aud.secao.trim()}%`);
+    }
+    if (aud.categoria && aud.categoria !== 'Todas') {
+      query = query.ilike('categoria', `%${aud.categoria.trim()}%`);
+    }
 
-    return entradas.filter((e) => !codsPresentes.has(e.codprod));
+    const { data: entradas, error } = await query.order('descricao', { ascending: true });
+    if (error || !entradas) return [];
+
+    // 4. Se o usuário informou uma Classe de Produto (ex: "2L"), aplica filtro refinado na descrição
+    let filtrados = entradas;
+    if (aud.classe_produto && aud.classe_produto.trim().length > 0) {
+      const termoClasse = aud.classe_produto.trim().toLowerCase();
+      filtrados = filtrados.filter((e) => e.descricao.toLowerCase().includes(termoClasse));
+    }
+
+    // 5. Retorna somente os itens do escopo que NÃO estão na gôndola
+    return filtrados.filter((e) => !codsPresentes.has(e.codprod));
   }
 };

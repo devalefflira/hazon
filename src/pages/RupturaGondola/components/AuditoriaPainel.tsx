@@ -137,8 +137,14 @@ export function AuditoriaPainel({ auditoriaId, onVoltar }: AuditoriaPainelProps)
               #{auditoria.codigo_customizado}
             </span>
             <h2 className="text-sm font-black text-slate-900 uppercase">
-              {auditoria.setor_nome} {auditoria.rua_corredor ? `• ${auditoria.rua_corredor}` : ''}
+              {auditoria.departamento || auditoria.setor_nome}
+              {auditoria.secao && auditoria.secao !== 'Todas' ? ` • ${auditoria.secao}` : ''}
+              {auditoria.categoria && auditoria.categoria !== 'Todas' ? ` • ${auditoria.categoria}` : ''}
             </h2>
+            <span className="text-[11px] text-slate-500 font-semibold block">
+              {auditoria.rua_corredor ? `Local: ${auditoria.rua_corredor}` : ''}
+              {auditoria.classe_produto ? ` | Classe: ${auditoria.classe_produto}` : ''}
+            </span>
           </div>
         </div>
 

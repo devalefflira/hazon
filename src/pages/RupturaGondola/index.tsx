@@ -18,20 +18,47 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
   const [modalImportarAberto, setModalImportarAberto] = useState(false);
   const [carregando, setCarregando] = useState(true);
 
-  // Form nova auditoria
-  const [setor, setSetor] = useState('Mercearia');
-  const [corredor, setCorredor] = useState('');
-  const [obs, setObs] = useState('');
+  // Árvore dinâmica de categorias
+  const [arvoreCategorias, setArvoreCategorias] = useState<{
+    departamentos: string[];
+    secoesPorDepto: Record<string, string[]>;
+    categoriasPorSecao: Record<string, string[]>;
+  }>({
+    departamentos: [],
+    secoesPorDepto: {},
+    categoriasPorSecao: {}
+  });
+
+  // Form nova auditoria com os novos campos
+  const [departamento, setDepartamento] = useState('');
+  const [secao, setSecao] = useState('');
+  const [categoria, setCategoria] = useState('');
+  const [ruaCorredor, setRuaCorredor] = useState('');
+  const [classeProduto, setClasseProduto] = useState('');
 
   const carregarDados = async () => {
     try {
       setCarregando(true);
-      const [dadosAuditorias, dadosImportacoes] = await Promise.all([
+      const [dadosAuditorias, dadosImportacoes, arvore] = await Promise.all([
         rupturaService.listarAuditorias(),
-        rupturaService.listarUltimasImportacoes()
+        rupturaService.listarUltimasImportacoes(),
+        rupturaService.carregarArvoreCategoriasErp()
       ]);
       setAuditorias(dadosAuditorias);
       setImportacoes(dadosImportacoes);
+      setArvoreCategorias(arvore);
+
+      // Preenchimento inicial dos selects caso existam dados
+      if (arvore.departamentos.length > 0 && !departamento) {
+        const primeiroDepto = arvore.departamentos[0];
+        setDepartamento(primeiroDepto);
+        const secoes = arvore.secoesPorDepto[primeiroDepto] || [];
+        if (secoes.length > 0) {
+          setSecao(secoes[0]);
+          const cats = arvore.categoriasPorSecao[secoes[0]] || [];
+          if (cats.length > 0) setCategoria(cats[0]);
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -43,18 +70,47 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
     carregarDados();
   }, []);
 
+  // Tratamento de mudança em cascata no formulário
+  const handleDepartamentoChange = (novoDepto: string) => {
+    setDepartamento(novoDepto);
+    const secoes = arvoreCategorias.secoesPorDepto[novoDepto] || [];
+    const primeiraSec = secoes.length > 0 ? secoes[0] : '';
+    setSecao(primeiraSec);
+
+    if (primeiraSec) {
+      const cats = arvoreCategorias.categoriasPorSecao[primeiraSec] || [];
+      setCategoria(cats.length > 0 ? cats[0] : '');
+    } else {
+      setCategoria('');
+    }
+  };
+
+  const handleSecaoChange = (novaSec: string) => {
+    setSecao(novaSec);
+    const cats = arvoreCategorias.categoriasPorSecao[novaSec] || [];
+    setCategoria(cats.length > 0 ? cats[0] : '');
+  };
+
   const handleCriarAuditoria = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!departamento) {
+      alert('Selecione ao menos o Departamento.');
+      return;
+    }
+
     try {
       const nova = await rupturaService.criarAuditoria({
         usuario_id: usuarioLogadoId,
-        setor_nome: setor,
-        rua_corredor: corredor,
-        observacao: obs
+        departamento,
+        secao: secao || 'Todas',
+        categoria: categoria || 'Todas',
+        rua_corredor: ruaCorredor,
+        classe_produto: classeProduto
       });
+
       setModalNovaAberto(false);
-      setCorredor('');
-      setObs('');
+      setRuaCorredor('');
+      setClasseProduto('');
       setAuditoriaAtivaId(nova.id);
     } catch (err: any) {
       alert(`Erro: ${err.message}`);
@@ -90,7 +146,7 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
                     Ruptura de Gôndola
                   </h1>
                   <p className="text-xs text-slate-400 font-bold">
-                    Auditoria de Presença e Cruzamento com Entradas ERP
+                    Auditoria Setorizada e Cruzamento com Entradas ERP
                   </p>
                 </div>
               </div>
@@ -114,7 +170,7 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
               </div>
             </div>
 
-            {/* STATUS DA BASE DE ENTRADAS DO ERP */}
+            {/* STATUS DA BASE DE ENTRADAS ERP */}
             {importacoes.length > 0 && (
               <div className="p-3.5 bg-teal-50/60 border border-teal-200/80 rounded-2xl flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
@@ -151,8 +207,14 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
                         #{aud.codigo_customizado}
                       </span>
                       <strong className="text-xs font-black uppercase text-slate-900 mt-0.5">
-                        {aud.setor_nome} {aud.rua_corredor ? `• ${aud.rua_corredor}` : ''}
+                        {aud.departamento || aud.setor_nome}
+                        {aud.secao ? ` • ${aud.secao}` : ''}
+                        {aud.categoria ? ` • ${aud.categoria}` : ''}
                       </strong>
+                      <span className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                        {aud.rua_corredor ? `Local: ${aud.rua_corredor}` : ''}
+                        {aud.classe_produto ? ` | Classe: ${aud.classe_produto}` : ''}
+                      </span>
                       <span className="text-[10px] text-slate-400 font-medium">
                         Por: {aud.usuario_nome} • {new Date(aud.created_at).toLocaleDateString('pt-BR')}
                       </span>
@@ -177,7 +239,7 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
         )}
       </div>
 
-      {/* MODAL NOVA AUDITORIA */}
+      {/* MODAL INICIAR NOVA AUDITORIA COM OS CAMPOS SOLICITADOS */}
       {modalNovaAberto && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 animate-fadeIn"
@@ -186,7 +248,7 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
           <form
             onSubmit={handleCriarAuditoria}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 animate-slideUp font-sans"
+            className="w-full max-w-md bg-white rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 animate-slideUp font-sans"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h3 className="text-xs font-black uppercase text-slate-900">
@@ -201,55 +263,107 @@ export default function RupturaGondola({ usuarioLogadoId, onVoltarParaHome }: Ru
               </button>
             </div>
 
+            {/* 1. DEPARTAMENTO */}
             <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Setor</label>
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                Departamento *
+              </label>
               <select
-                value={setor}
-                onChange={(e) => setSetor(e.target.value)}
+                value={departamento}
+                onChange={(e) => handleDepartamentoChange(e.target.value)}
+                required
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
               >
-                <option value="Mercearia">Mercearia</option>
-                <option value="Hortifrúti">Hortifrúti</option>
-                <option value="Açougue">Açougue</option>
-                <option value="Frios e Laticínios">Frios e Laticínios</option>
-                <option value="Padaria">Padaria</option>
-                <option value="Bebidas">Bebidas</option>
-                <option value="Higiene e Limpeza">Higiene e Limpeza</option>
+                <option value="">Selecione um Departamento...</option>
+                {arvoreCategorias.departamentos.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
               </select>
             </div>
 
+            {/* 2. SEÇÃO */}
             <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Rua / Corredor</label>
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                Seção
+              </label>
+              <select
+                value={secao}
+                onChange={(e) => handleSecaoChange(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+              >
+                <option value="Todas">Todas as Seções</option>
+                {(arvoreCategorias.secoesPorDepto[departamento] || []).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. CATEGORIA */}
+            <div>
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                Categoria
+              </label>
+              <select
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+              >
+                <option value="Todas">Todas as Categorias</option>
+                {(arvoreCategorias.categoriasPorSecao[secao] || []).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. RUA / CORREDOR */}
+            <div>
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                Rua / Corredor
+              </label>
               <input
                 type="text"
-                value={corredor}
-                onChange={(e) => setCorredor(e.target.value)}
-                placeholder="Ex: Corredor 04 - Biscoitos"
+                value={ruaCorredor}
+                onChange={(e) => setRuaCorredor(e.target.value)}
+                placeholder="Ex: Corredor 01 - Bebidas"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
               />
             </div>
 
+            {/* 5. CLASSE DE PRODUTOS */}
             <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Observações (Opcional)</label>
-              <textarea
-                rows={2}
-                value={obs}
-                onChange={(e) => setObs(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800"
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                Classe de Produtos (Opcional)
+              </label>
+              <input
+                type="text"
+                value={classeProduto}
+                onChange={(e) => setClasseProduto(e.target.value)}
+                placeholder="Ex: 2L ou Garrafa ou Lata"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
               />
+              <span className="text-[9px] text-slate-400 mt-0.5 block">
+                Refina o cruzamento de estoque para produtos com esse termo na descrição.
+              </span>
             </div>
 
+            {/* BOTÕES DE CANCELAR E INICIAR */}
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setModalNovaAberto(false)}
-                className="px-3.5 py-1.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase cursor-pointer"
+                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-xs active:scale-95 cursor-pointer"
+                className="px-5 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-xs active:scale-95 cursor-pointer"
               >
                 Iniciar
               </button>

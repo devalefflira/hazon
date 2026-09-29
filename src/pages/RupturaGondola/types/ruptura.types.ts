@@ -5,8 +5,12 @@ export interface RupturaAuditoria {
   codigo_customizado: string;
   usuario_id: string;
   usuario_nome?: string;
-  setor_nome: string;
+  setor_nome: string; // Mantido para compatibilidade
+  departamento?: string;
+  secao?: string;
+  categoria?: string;
   rua_corredor?: string;
+  classe_produto?: string;
   status: 'Em Andamento' | 'Concluída' | 'Cancelada';
   total_itens_auditados: number;
   total_rupturas: number;
