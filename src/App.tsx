@@ -34,6 +34,7 @@ import Solicitacoes from './pages/Solicitacoes';
 import Recebimentos from './pages/Recebimentos';
 import Mensagens from './pages/Mensagens';
 import Dashboard from './pages/Dashboard';
+import RupturaGondola from './pages/RupturaGondola';
 
 interface UsuarioLogado {
   id: string;
@@ -45,6 +46,7 @@ interface UsuarioLogado {
 type TelaAtiva =
   | 'login'
   | 'home'
+  | 'ruptura-gondola'
   | 'dashboard'
   | 'categorias'
   | 'usuarios'
@@ -192,6 +194,16 @@ export default function App() {
     return <Dashboard onVoltarParaHome={() => mudarTela('home')} />;
   }
 
+  if (telaAtiva === 'ruptura-gondola') {
+    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <RupturaGondola
+        usuarioLogadoId={usuario.id}
+        onVoltarParaHome={() => mudarTela('home')}
+      />
+    );
+  }
+
   if (telaAtiva === 'formalizar_pedido_externo' && tokenAcesso) {
     return <FormalizarPedidoExterno token={tokenAcesso} />;
   }
@@ -282,6 +294,7 @@ export default function App() {
         onNavegarParaSolicitacoes={() => mudarTela('solicitacoes')}
         onNavegarParaRecebimentos={() => mudarTela('recebimentos')}
         onNavegarParaMensagens={() => mudarTela('mensagens')}
+        onNavegarParaRupturaGondola={() => mudarTela('ruptura-gondola')}
       />
     );
   }

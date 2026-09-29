@@ -18,6 +18,7 @@ interface HomeProps {
   onNavegarParaSolicitacoes?: () => void;
   onNavegarParaRecebimentos?: () => void;
   onNavegarParaMensagens?: () => void;
+  onNavegarParaRupturaGondola?: () => void;
   [key: string]: any;
 }
 
@@ -53,7 +54,8 @@ export default function Home(props: HomeProps) {
     onNavegarParaEncartes,
     onNavegarParaSolicitacoes,
     onNavegarParaRecebimentos,
-    onNavegarParaMensagens
+    onNavegarParaMensagens,
+    onNavegarParaRupturaGondola
   } = props;
 
   // Estados de Interface
@@ -219,6 +221,7 @@ export default function Home(props: HomeProps) {
       titulo: 'Estoque',
       iconeSvg: 'M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9',
       modulos: [
+        { id: 'ruptura-gondola', nome: 'RUPTURA DE GÔNDOLA', descricao: 'Auditoria de presença e falta no salão', tela: 'ruptura-gondola', callbackProp: 'onNavegarParaRupturaGondola' },
         { id: 'recebimentos', nome: 'RECEBIMENTOS', descricao: 'Ciclo operacional e esteira de mercadorias', tela: 'recebimentos', callbackProp: 'onNavegarParaRecebimentos' },
         { id: 'produtos', nome: 'PRODUTOS', descricao: 'Catálogo de códigos e custos', tela: 'produtos', callbackProp: 'onNavegarParaProdutos' },
         { id: 'inventario', nome: 'INVENTÁRIO', descricao: 'Auditoria e contagem de itens', tela: 'inventario', callbackProp: 'onNavegarParaInventario' },
@@ -247,6 +250,10 @@ export default function Home(props: HomeProps) {
     setMenuAberto(false);
     setSpeedDialAberto(false);
 
+    if (mod.tela === 'ruptura-gondola' && onNavegarParaRupturaGondola) {
+      onNavegarParaRupturaGondola();
+      return;
+    }
     if (mod.tela === 'recebimentos' && onNavegarParaRecebimentos) {
       onNavegarParaRecebimentos();
       return;
