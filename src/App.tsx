@@ -302,7 +302,7 @@ export default function App() {
   }
 
   if (usuario && telaAtiva === 'almoxarifado') {
-    return <AlmoxarifadoPage />;
+    return <AlmoxarifadoPage onVoltarParaHome={() => mudarTela('home')} />;
   }
 
   if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => mudarTela('home')} />;
