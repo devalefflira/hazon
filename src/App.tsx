@@ -35,6 +35,7 @@ import Recebimentos from './pages/Recebimentos';
 import Mensagens from './pages/Mensagens';
 import Dashboard from './pages/Dashboard';
 import RupturaGondola from './pages/RupturaGondola';
+import { AlmoxarifadoPage } from './pages/Almoxarifado';
 
 interface UsuarioLogado {
   id: string;
@@ -76,7 +77,8 @@ type TelaAtiva =
   | 'encartes'
   | 'solicitacoes'
   | 'recebimentos'
-  | 'mensagens';
+  | 'mensagens'
+  | 'almoxarifado';
 
 export default function App() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(() => {
@@ -289,14 +291,18 @@ export default function App() {
         onNavegarParaVencimentos={() => mudarTela('vencimentos')}
         onNavegarParaTrocas={() => mudarTela('trocas')}
         onNavegarParaPesquisaPrecos={() => mudarTela('pesquisa-precos')}
-        onNavegarParaNotificacoes={() => mudarTela('notificacoes')}
         onNavegarParaEncartes={() => mudarTela('encartes')}
         onNavegarParaSolicitacoes={() => mudarTela('solicitacoes')}
         onNavegarParaRecebimentos={() => mudarTela('recebimentos')}
         onNavegarParaMensagens={() => mudarTela('mensagens')}
         onNavegarParaRupturaGondola={() => mudarTela('ruptura-gondola')}
+        onNavegarParaAlmoxarifado={() => mudarTela('almoxarifado')}
       />
     );
+  }
+
+  if (usuario && telaAtiva === 'almoxarifado') {
+    return <AlmoxarifadoPage />;
   }
 
   if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => mudarTela('home')} />;
