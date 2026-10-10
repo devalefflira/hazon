@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { notaFaltaService } from './services/notaFaltaService';
 import { gerarPdfNotaFalta } from './utils/gerarPdfNotaFalta';
 import { gerarPdfNotaFaltaAgrupada } from './utils/gerarPdfNotaFaltaAgrupada';
+import { SeletorProdutoScanner, type ProdutoBusca } from '../../components/SeletorProdutoScanner';
 
 interface NotaFaltaProps {
   onVoltarParaHome?: () => void;
@@ -54,10 +55,8 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
   const [localEscolhido, setLocalEscolhido] = useState<string>('Geral');
   const [codigoNotaEmEdicao, setCodigoNotaEmEdicao] = useState<string | null>(null);
 
-  // Formulário de Itens
-  const [termoBusca, setTermoBusca] = useState('');
-  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
-  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
+  // Formulário de Itens com Seletor/Scanner
+  const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoBusca | null>(null);
   const [tipoMotivo, setTipoMotivo] = useState<'Estoque Baixo' | 'Estoque Zero'>('Estoque Baixo');
   const [qtdRestante, setQtdRestante] = useState<number | ''>(1);
   const [unidadeRestante, setUnidadeRestante] = useState<string>(UNIDADES_OPCOES[0]);
@@ -87,24 +86,6 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
   useEffect(() => {
     carregarDados();
   }, []);
-
-  // Busca Inteligente de Produtos
-  useEffect(() => {
-    if (!termoBusca.trim() || produtoSelecionado) {
-      setProdutosEncontrados([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await notaFaltaService.buscarProdutos(termoBusca);
-        setProdutosEncontrados(res);
-      } catch (err) {
-        console.error(err);
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [termoBusca, produtoSelecionado]);
 
   // Lista dinâmica de locais conforme a área
   const listaLocaisAtuais = useMemo(() => {
@@ -174,7 +155,6 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
     return dataStr;
   };
 
-  // Funções de Seleção Múltipla
   const toggleSelecionarNota = (codigoCustomizado: string) => {
     setNotasSelecionadasIds((prev) =>
       prev.includes(codigoCustomizado)
@@ -230,7 +210,6 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
     ]);
 
     setProdutoSelecionado(null);
-    setTermoBusca('');
     setQtdRestante(1);
   };
 
@@ -301,52 +280,39 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
             <button
               type="button"
               onClick={() => setPassoCriacao('FECHADO')}
-              className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center"
+              className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center cursor-pointer"
             >
               ✕
             </button>
           </div>
 
-          {/* Painel de Inserção */}
+          {/* Painel de Inserção com Seletor e Scanner */}
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3">
-            <div className="flex flex-col gap-1 relative">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Buscar Produto</label>
-              <input
-                type="text"
-                placeholder="Bipe o código de barras ou digite parte do nome / código..."
-                value={termoBusca}
-                onChange={(e) => {
-                  setTermoBusca(e.target.value);
-                  setProdutoSelecionado(null);
-                }}
-                className="w-full h-11 text-xs bg-white border border-slate-300 rounded-xl px-3 font-bold text-slate-800 focus:border-[#09797a]"
-              />
+            <SeletorProdutoScanner
+              produtoSelecionadoId={produtoSelecionado?.id}
+              onSelecionarProduto={(p) => setProdutoSelecionado(p)}
+              tituloCard="LOCALIZAR PRODUTO EM FALTA (BIPAGEM / BUSCA)"
+              placeholder="Bipe o código de barras ou digite descrição/código..."
+            />
 
-              {produtosEncontrados.length > 0 && !produtoSelecionado && (
-                <div className="absolute top-18 left-0 right-0 z-30 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto divide-y divide-slate-100">
-                  {produtosEncontrados.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setProdutoSelecionado(p);
-                        setTermoBusca(`${p.codprod} - ${p.descricao}`);
-                        setProdutosEncontrados([]);
-                      }}
-                      className="w-full text-left p-3 hover:bg-teal-50 flex justify-between items-center text-xs font-bold text-slate-800 uppercase"
-                    >
-                      <div>
-                        <div>{p.codprod} - {p.descricao}</div>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          Último Custo: <strong className="text-emerald-700">R$ {Number(p.custoreal || 0).toFixed(2)}</strong> • Un: {p.unidade || 'UN'}
-                        </span>
-                      </div>
-                      <span className="text-[#09797a] text-[10px] font-black">+ Selecionar</span>
-                    </button>
-                  ))}
+            {produtoSelecionado && (
+              <div className="p-3 bg-white border border-teal-200 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[9px] font-mono text-[#09797a] font-black block">
+                    CÓD: {produtoSelecionado.codprod} {produtoSelecionado.codbarra ? `| EAN: ${produtoSelecionado.codbarra}` : ''}
+                  </span>
+                  <span className="font-black text-slate-800 uppercase">
+                    {produtoSelecionado.descricao}
+                  </span>
                 </div>
-              )}
-            </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Último Custo</span>
+                  <span className="font-mono font-black text-emerald-800">
+                    R$ {Number(produtoSelecionado.custoreal || 0).toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
               <div className="flex flex-col gap-1">
@@ -395,7 +361,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               type="button"
               disabled={!produtoSelecionado}
               onClick={handleAdicionarItemForm}
-              className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+              className="w-full bg-[#09797a] hover:bg-[#075f60] text-white py-3 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 cursor-pointer"
             >
               + Adicionar à Lista
             </button>
@@ -436,7 +402,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                     <button
                       type="button"
                       onClick={() => setItensCriacao(itensCriacao.filter((i) => i.produto_id !== it.produto_id))}
-                      className="text-red-500 hover:text-red-700 font-black text-sm p-1"
+                      className="text-red-500 hover:text-red-700 font-black text-sm p-1 cursor-pointer"
                     >
                       ✕
                     </button>
@@ -451,7 +417,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
             <button
               type="button"
               onClick={() => setPassoCriacao('FECHADO')}
-              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold uppercase transition-all"
+              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold uppercase transition-all cursor-pointer"
             >
               Cancelar
             </button>
@@ -459,7 +425,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               type="button"
               disabled={salvando || itensCriacao.length === 0}
               onClick={() => handleSalvarFluxo('Em Andamento')}
-              className="flex-1 py-3 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-2xl text-xs font-black uppercase transition-all disabled:opacity-40"
+              className="flex-1 py-3 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-2xl text-xs font-black uppercase transition-all disabled:opacity-40 cursor-pointer"
             >
               ⏸ Pausar
             </button>
@@ -467,7 +433,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               type="button"
               disabled={salvando || itensCriacao.length === 0}
               onClick={() => handleSalvarFluxo('Salva')}
-              className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+              className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 cursor-pointer"
             >
               {salvando ? 'Salvando...' : 'Salvar Nota'}
             </button>
@@ -488,7 +454,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
             <button
               type="button"
               onClick={onVoltarParaHome || (() => window.history.back())}
-              className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none"
+              className="p-2 hover:bg-slate-50 rounded-full text-[#09797a] font-bold text-xl leading-none cursor-pointer"
             >
               ←
             </button>
@@ -509,7 +475,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               setCodigoNotaEmEdicao(null);
               setPassoCriacao('MODAL_LOCAL');
             }}
-            className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all"
+            className="bg-[#09797a] hover:bg-[#075f60] text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all cursor-pointer"
           >
             + NOVA NOTA
           </button>
@@ -520,7 +486,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
           <button
             type="button"
             onClick={() => setAbaPipeline('EM_ANDAMENTO')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               abaPipeline === 'EM_ANDAMENTO' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -533,7 +499,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
           <button
             type="button"
             onClick={() => setAbaPipeline('SALVAS')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               abaPipeline === 'SALVAS' ? 'bg-[#09797a] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -546,7 +512,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
           <button
             type="button"
             onClick={() => setAbaPipeline('FINALIZADAS')}
-            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2.5 rounded-xl uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               abaPipeline === 'FINALIZADAS' ? 'bg-emerald-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -566,7 +532,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
             <button
               type="button"
               onClick={() => setFiltrosExpandidos((prev) => !prev)}
-              className="w-7 h-7 rounded-xl bg-white border border-slate-300 text-[#09797a] font-black text-sm flex items-center justify-center shadow-sm"
+              className="w-7 h-7 rounded-xl bg-white border border-slate-300 text-[#09797a] font-black text-sm flex items-center justify-center shadow-sm cursor-pointer"
             >
               {filtrosExpandidos ? '−' : '+'}
             </button>
@@ -636,7 +602,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               <button
                 type="button"
                 onClick={toggleSelecionarTodas}
-                className="text-[10px] font-bold uppercase text-[#09797a] hover:underline"
+                className="text-[10px] font-bold uppercase text-[#09797a] hover:underline cursor-pointer"
               >
                 {notasSelecionadasIds.length === notasPaginadas.length ? 'Desmarcar Página' : 'Selecionar Página'}
               </button>
@@ -649,7 +615,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               <button
                 type="button"
                 onClick={handleGerarNotaAgrupada}
-                className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 transition-all flex items-center gap-1.5 animate-fadeIn"
+                className="px-4 py-2 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md active:scale-95 transition-all flex items-center gap-1.5 animate-fadeIn cursor-pointer"
               >
                 <span>📄</span>
                 <span>Nota de Falta Agrupada ({notasSelecionadasIds.length})</span>
@@ -762,7 +728,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                           );
                           setPassoCriacao('FORM_ITENS');
                         }}
-                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all"
+                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all cursor-pointer"
                       >
                         ▶ Retomar
                       </button>
@@ -771,7 +737,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                     <button
                       type="button"
                       onClick={() => setNotaParaVerItens(grupo)}
-                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-all"
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer"
                     >
                       Ver Itens
                     </button>
@@ -779,7 +745,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                     <button
                       type="button"
                       onClick={() => gerarPdfNotaFalta(grupo, grupo.itens || [])}
-                      className="px-3.5 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all"
+                      className="px-3.5 py-1.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-sm transition-all cursor-pointer"
                     >
                       📄 PDF
                     </button>
@@ -788,7 +754,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                       <button
                         type="button"
                         onClick={() => setNotaParaFinalizar(grupo)}
-                        className="w-8 h-8 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl flex items-center justify-center text-sm transition-all active:scale-95"
+                        className="w-8 h-8 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl flex items-center justify-center text-sm transition-all active:scale-95 cursor-pointer"
                         title="Finalizar Ciclo"
                       >
                         👍
@@ -813,7 +779,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                 type="button"
                 disabled={paginaAtual === 1}
                 onClick={() => setPaginaAtual((prev) => Math.max(1, prev - 1))}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
               >
                 ← Anterior
               </button>
@@ -822,7 +788,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                 type="button"
                 disabled={paginaAtual === totalPaginas}
                 onClick={() => setPaginaAtual((prev) => Math.min(totalPaginas, prev + 1))}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
               >
                 Próxima →
               </button>
@@ -841,7 +807,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               <button
                 type="button"
                 onClick={() => setPassoCriacao('FECHADO')}
-                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs"
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -879,14 +845,14 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               <button
                 type="button"
                 onClick={() => setPassoCriacao('FECHADO')}
-                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase transition-all"
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={() => setPassoCriacao('FORM_ITENS')}
-                className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md transition-all active:scale-95"
+                className="flex-2 py-3 bg-[#09797a] hover:bg-[#075f60] text-white rounded-xl text-xs font-black uppercase shadow-md transition-all active:scale-95 cursor-pointer"
               >
                 Avançar para Itens →
               </button>
@@ -911,7 +877,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               <button
                 type="button"
                 onClick={() => setNotaParaFinalizar(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase transition-all"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer"
               >
                 Cancelar
               </button>
@@ -919,7 +885,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
                 type="button"
                 disabled={salvando}
                 onClick={handleConfirmarFinalizacaoCiclo}
-                className="flex-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase shadow-md transition-all active:scale-95"
+                className="flex-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase shadow-md transition-all active:scale-95 cursor-pointer"
               >
                 {salvando ? 'Concluindo...' : 'Sim (Finalizar)'}
               </button>
@@ -944,7 +910,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
               <button
                 type="button"
                 onClick={() => setNotaParaVerItens(null)}
-                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs"
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 font-bold flex items-center justify-center text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -970,7 +936,7 @@ export default function NotaFalta({ onVoltarParaHome, usuarioLogado, usuarioLoga
             <button
               type="button"
               onClick={() => setNotaParaVerItens(null)}
-              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase"
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase cursor-pointer"
             >
               Fechar
             </button>

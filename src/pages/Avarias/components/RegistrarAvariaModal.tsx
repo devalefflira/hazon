@@ -1,6 +1,7 @@
 // src/pages/Avarias/components/RegistrarAvariaModal.tsx
 import { useState, useEffect } from 'react';
 import { avariasService } from '../services/avariasService';
+import { SeletorProdutoScanner, type ProdutoBusca } from '../../../components/SeletorProdutoScanner';
 
 export interface RegistrarAvariaModalProps {
   onFechar?: () => void;
@@ -42,10 +43,7 @@ export default function RegistrarAvariaModal({
 }: RegistrarAvariaModalProps) {
   const listaMotivosFinal = motivos && motivos.length > 0 ? motivos : MOTIVOS_PADRAO;
 
-  const [termoBuscaProduto, setTermoBuscaProduto] = useState('');
-  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
-  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
-
+  const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoBusca | null>(null);
   const [motivoId, setMotivoId] = useState(listaMotivosFinal[0]?.id || '');
   const [quantidade, setQuantidade] = useState<number | ''>(1);
   const [destinacao, setDestinacao] = useState(DESTINACOES_OPCOES[0]);
@@ -64,25 +62,6 @@ export default function RegistrarAvariaModal({
       setMotivoId(listaMotivosFinal[0].id);
     }
   }, [listaMotivosFinal]);
-
-  // Autocomplete de produtos
-  useEffect(() => {
-    if (!termoBuscaProduto.trim() || produtoSelecionado) {
-      setProdutosEncontrados([]);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        const res = await avariasService.buscarProdutos(termoBuscaProduto);
-        setProdutosEncontrados(res || []);
-      } catch (err) {
-        console.error(err);
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [termoBuscaProduto, produtoSelecionado]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,48 +127,32 @@ export default function RegistrarAvariaModal({
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-        {/* BUSCA PRODUTO */}
-        <div className="flex flex-col gap-1 relative">
-          <label className="text-[10px] font-bold text-slate-500 uppercase px-1">
-            Buscar Produto *
-          </label>
-          <input
-            type="text"
-            required
-            value={termoBuscaProduto}
-            onChange={(e) => {
-              setTermoBuscaProduto(e.target.value);
-              setProdutoSelecionado(null);
-            }}
-            placeholder="Bipe o EAN ou digite o nome/código..."
-            className="w-full h-11 text-xs bg-slate-50 border border-slate-300 px-3 rounded-2xl font-bold text-slate-800 outline-none focus:border-[#09797a] focus:bg-white"
-          />
+        {/* BUSCA PRODUTO COM BIPAGEM VIA CÂMERA */}
+        <SeletorProdutoScanner
+          produtoSelecionadoId={produtoSelecionado?.id}
+          onSelecionarProduto={(p) => setProdutoSelecionado(p)}
+          tituloCard="LOCALIZAR PRODUTO AVARIADO (BIPAGEM / BUSCA)"
+          placeholder="Bipe o código de barras ou digite descrição/código..."
+        />
 
-          {produtosEncontrados.length > 0 && !produtoSelecionado && (
-            <div className="absolute top-16 left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto z-30 divide-y divide-slate-100">
-              {produtosEncontrados.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setProdutoSelecionado(p);
-                    setTermoBuscaProduto(`${p.codprod} - ${p.descricao}`);
-                    setProdutosEncontrados([]);
-                  }}
-                  className="w-full text-left p-3 hover:bg-teal-50 flex justify-between items-center text-xs font-bold text-slate-800 uppercase"
-                >
-                  <div>
-                    <span>{p.codprod} - {p.descricao}</span>
-                    <span className="text-[10px] text-slate-400 font-mono block">
-                      UN: {p.unidade || 'UN'} • Custo: R$ {p.custoreal || 0}
-                    </span>
-                  </div>
-                  <span className="text-[#09797a] font-black">+ Selecionar</span>
-                </button>
-              ))}
+        {produtoSelecionado && (
+          <div className="px-3.5 py-2.5 bg-teal-50/50 border border-teal-200/80 rounded-2xl flex items-center justify-between text-xs">
+            <div>
+              <span className="font-mono text-[10px] font-black text-[#09797a] block">
+                CÓD: {produtoSelecionado.codprod} {produtoSelecionado.codbarra ? `| EAN: ${produtoSelecionado.codbarra}` : ''}
+              </span>
+              <span className="font-black text-slate-800 uppercase">
+                {produtoSelecionado.descricao}
+              </span>
             </div>
-          )}
-        </div>
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Custo na Perda</span>
+              <span className="font-mono font-black text-emerald-800">
+                R$ {Number(produtoSelecionado.custoreal || 0).toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Motivo e Quantidade */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -267,14 +230,14 @@ export default function RegistrarAvariaModal({
           <button
             type="button"
             onClick={handleAcaoVoltar}
-            className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold uppercase transition-all"
+            className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold uppercase transition-all cursor-pointer"
           >
             Voltar
           </button>
           <button
             type="submit"
             disabled={salvando || !produtoSelecionado}
-            className="flex-2 py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40"
+            className="flex-2 py-3.5 bg-[#09797a] hover:bg-[#075f60] text-white rounded-2xl text-xs font-black uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 cursor-pointer"
           >
             {salvando ? 'Salvando...' : 'Confirmar e Salvar Avaria'}
           </button>

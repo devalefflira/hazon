@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { consumoLojaService } from '../services/consumoLojaService';
 import { LOCAIS_CONSUMO, type FinalidadeConsumo, type ItemConsumoForm } from '../types/consumoLoja.types';
+import { SeletorProdutoScanner, type ProdutoBusca } from '../../../components/SeletorProdutoScanner';
 
 interface Props {
   usuarioId: string;
@@ -10,14 +11,11 @@ interface Props {
 }
 
 export default function NovoRegistroConsumo({ usuarioId, onVoltar, onSalvoSucesso }: Props) {
-  // Todos os hooks declarados incondicionalmente no topo absoluto
   const [etapa, setEtapa] = useState<1 | 2>(1);
   const [localEscolhido, setLocalEscolhido] = useState<string>(LOCAIS_CONSUMO[0]);
   const [finalidadeEscolhida, setFinalidadeEscolhida] = useState<FinalidadeConsumo>('Consumo/Despesa');
 
-  const [termoBusca, setTermoBusca] = useState('');
-  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
-  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoBusca | null>(null);
   const [quantidade, setQuantidade] = useState<number>(1);
   const [observacaoItem, setObservacaoItem] = useState('');
   const [produtoProduzido, setProdutoProduzido] = useState('');
@@ -25,29 +23,9 @@ export default function NovoRegistroConsumo({ usuarioId, onVoltar, onSalvoSucess
   const [itensLote, setItensLote] = useState<ItemConsumoForm[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  const handleBuscarProdutos = async (termo: string) => {
-    setTermoBusca(termo);
-    if (!termo.trim()) {
-      setProdutosEncontrados([]);
-      return;
-    }
-    try {
-      const prods = await consumoLojaService.buscarProdutos(termo);
-      setProdutosEncontrados(prods);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleSelecionarProduto = (p: any) => {
-    setProdutoSelecionado(p);
-    setTermoBusca(`${p.codprod} - ${p.descricao}`);
-    setProdutosEncontrados([]);
-  };
-
   const handleAdicionarItem = () => {
     if (!produtoSelecionado) {
-      alert('Selecione um produto da lista.');
+      alert('Selecione um produto da lista ou realize a leitura por código de barras.');
       return;
     }
     if (quantidade <= 0) {
@@ -79,7 +57,6 @@ export default function NovoRegistroConsumo({ usuarioId, onVoltar, onSalvoSucess
 
     setItensLote((prev) => [...prev, novoItem]);
     setProdutoSelecionado(null);
-    setTermoBusca('');
     setQuantidade(1);
     setObservacaoItem('');
     setProdutoProduzido('');
@@ -250,43 +227,13 @@ export default function NovoRegistroConsumo({ usuarioId, onVoltar, onSalvoSucess
           </div>
 
           <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 flex flex-col gap-4 shadow-xs">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-700">
-              Adicionar Produto ao Lote
-            </span>
-
-            <div className="relative">
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                Pesquisar Produto (Cód, Barras ou Descrição %)
-              </label>
-              <input
-                type="text"
-                value={termoBusca}
-                onChange={(e) => handleBuscarProdutos(e.target.value)}
-                placeholder="Digite para pesquisar..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#09797a]"
-              />
-
-              {produtosEncontrados.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto z-20 flex flex-col">
-                  {produtosEncontrados.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleSelecionarProduto(p)}
-                      className="p-2.5 text-left border-b border-slate-100 hover:bg-teal-50 flex items-center justify-between text-xs cursor-pointer"
-                    >
-                      <div>
-                        <span className="font-black text-slate-800">{p.descricao}</span>
-                        <span className="text-[10px] text-slate-400 ml-2">Cód: {p.codprod}</span>
-                      </div>
-                      <span className="font-mono text-[11px] font-bold text-teal-800">
-                        R$ {Number(p.custoreal || 0).toFixed(2).replace('.', ',')}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* SELETOR DE PRODUTO COM BIPAGEM */}
+            <SeletorProdutoScanner
+              produtoSelecionadoId={produtoSelecionado?.id}
+              onSelecionarProduto={(p) => setProdutoSelecionado(p)}
+              tituloCard="LOCALIZAR PRODUTO PARA CONSUMO (BIPAGEM / BUSCA)"
+              placeholder="Bipe o código de barras ou digite descrição/código..."
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -331,7 +278,7 @@ export default function NovoRegistroConsumo({ usuarioId, onVoltar, onSalvoSucess
             {finalidadeEscolhida === 'Uso na Produção/Transformação' ? (
               <div>
                 <label className="text-[10px] font-black uppercase text-amber-700 block mb-1">
-                  * Qual Produto será Produzido? (Obrigatório)
+                  Qual Produto será Produzido? (Obrigatório)
                 </label>
                 <input
                   type="text"
@@ -358,8 +305,9 @@ export default function NovoRegistroConsumo({ usuarioId, onVoltar, onSalvoSucess
 
             <button
               type="button"
+              disabled={!produtoSelecionado}
               onClick={handleAdicionarItem}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
             >
               + Adicionar Item à Lista
             </button>
