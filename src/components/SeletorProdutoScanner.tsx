@@ -112,7 +112,7 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
     setDropdownAberto(false);
   };
 
-  // Quando a câmera bipar um código de barras
+  // Quando a câmera bipar um código de barras com sucesso
   const handleBarcodeDetectado = async (barcode: string) => {
     setScannerAberto(false);
     const code = barcode.trim();
@@ -222,14 +222,11 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Modal BarcodeScanner original do módulo de Ruptura */}
+      {/* Modal BarcodeScanner com os nomes de props corretos */}
       {scannerAberto && (
         <BarcodeScannerModal
-          {...({
-            onFechar: () => setScannerAberto(false),
-            onClose: () => setScannerAberto(false),
-            onDetected: handleBarcodeDetectado
-          } as any)}
+          onScanSuccess={handleBarcodeDetectado}
+          onFechar={() => setScannerAberto(false)}
         />
       )}
     </div>
