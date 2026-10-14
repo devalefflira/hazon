@@ -10,6 +10,165 @@ import {
   type RetomarTemporizadorPayload
 } from '../types/recebimento.types';
 
+export interface ParametrosListagemFluxos {
+  statusGeral: StatusGeralFluxo;
+  faseAtual?: number;
+  dataInicio?: string;
+  dataFim?: string;
+  termoFornecedor?: string;
+  termoDocumento?: string;
+}
+
+interface FiltroResolvido {
+  statusGeral: StatusGeralFluxo;
+  faseAtual?: number;
+  dataInicio?: string;
+  dataFim?: string;
+  orFornecedor?: string;
+  orDocumento?: string;
+}
+
+// Colunas usadas na listagem da esteira (sem fotos: elas são carregadas sob demanda)
+const COLUNAS_LISTAGEM_FLUXOS = `
+  *,
+  criador:usuarios!recebimento_fluxos_criador_fkey(nome),
+  fornecedor:fornecedores(razao_social, nome_fantasia),
+  recebimento_fases(
+    id,
+    fluxo_id,
+    ordem_fase,
+    nome_fase,
+    status,
+    usuario_id,
+    iniciado_em,
+    finalizado_em,
+    tempo_limite_minutos,
+    tempo_restante_segundos,
+    link_relatorio,
+    observacoes,
+    usuario:usuarios(nome)
+  )
+`;
+
+// Remove caracteres que quebram a sintaxe de filtros do PostgREST (.or)
+function limparTermo(termo?: string): string {
+  return (termo || '').trim().replace(/[,()*%]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Resolve os termos de busca (fornecedor e documento) em condições de filtro
+async function resolverFiltros(p: ParametrosListagemFluxos): Promise<FiltroResolvido> {
+  let orFornecedor: string | undefined;
+  const termoForn = limparTermo(p.termoFornecedor);
+
+  if (termoForn) {
+    const { data, error } = await supabase
+      .from('fornecedores')
+      .select('id')
+      .or(`razao_social.ilike.%${termoForn}%,nome_fantasia.ilike.%${termoForn}%`)
+      .limit(500);
+
+    if (error) throw error;
+
+    const ids: string[] = (data || []).map((f: { id: string }) => f.id);
+    const condicoes: string[] = [];
+    if (ids.length > 0) condicoes.push(`fornecedor_id.in.(${ids.join(',')})`);
+    condicoes.push(`fornecedor_nome_manual.ilike.%${termoForn}%`);
+    orFornecedor = condicoes.join(',');
+  }
+
+  const termoDoc = limparTermo(p.termoDocumento);
+
+  return {
+    statusGeral: p.statusGeral,
+    faseAtual: p.faseAtual,
+    dataInicio: p.dataInicio,
+    dataFim: p.dataFim,
+    orFornecedor,
+    orDocumento: termoDoc
+      ? `numero_documento.ilike.%${termoDoc}%,codigo_customizado.ilike.%${termoDoc}%`
+      : undefined
+  };
+}
+
+// Monta a consulta base de fluxos com todos os filtros aplicados
+function montarQuery(colunas: string, f: FiltroResolvido, comContagem: boolean) {
+  let query = supabase
+    .from('recebimento_fluxos')
+    .select(colunas, comContagem ? { count: 'exact' as const } : undefined)
+    .eq('status_geral', f.statusGeral);
+
+  if (f.faseAtual !== undefined) {
+    query = query.eq('fase_atual', f.faseAtual);
+  }
+  if (f.dataInicio) {
+    query = query.gte('data_registro', f.dataInicio);
+  }
+  if (f.dataFim) {
+    query = query.lte('data_registro', f.dataFim);
+  }
+  if (f.orFornecedor) {
+    query = query.or(f.orFornecedor);
+  }
+  if (f.orDocumento) {
+    query = query.or(f.orDocumento);
+  }
+
+  return query;
+}
+
+// Converte a linha do banco no formato usado pela tela
+function mapearFluxoView(row: any): RecebimentoFluxoView {
+  const forn = Array.isArray(row.fornecedor) ? row.fornecedor[0] : row.fornecedor;
+  const criador = Array.isArray(row.criador) ? row.criador[0] : row.criador;
+
+  const nomeFornecedorFinal = 
+    forn?.nome_fantasia || 
+    forn?.razao_social || 
+    row.fornecedor_nome_manual || 
+    (row.tipo_documento === 'Caminhão da Casa' ? `Caminhão ${row.cor_veiculo || ''}` : 'Não informado');
+
+  const fasesOrdenadas = (row.recebimento_fases || [])
+    .sort((a: any, b: any) => a.ordem_fase - b.ordem_fase)
+    .map((f: any) => {
+      const userFase = Array.isArray(f.usuario) ? f.usuario[0] : f.usuario;
+      return {
+        id: f.id,
+        fluxo_id: f.fluxo_id,
+        ordem_fase: f.ordem_fase,
+        nome_fase: f.nome_fase,
+        status: f.status,
+        usuario_id: f.usuario_id,
+        usuario_nome: userFase?.nome || 'Operador',
+        iniciado_em: f.iniciado_em,
+        finalizado_em: f.finalizado_em,
+        tempo_limite_minutos: f.tempo_limite_minutos,
+        tempo_restante_segundos: f.tempo_restante_segundos,
+        link_relatorio: f.link_relatorio,
+        observacoes: f.observacoes
+      };
+    });
+
+  return {
+    id: row.id,
+    codigo_customizado: row.codigo_customizado,
+    tipo_documento: row.tipo_documento,
+    numero_documento: row.numero_documento,
+    is_numero_gerado: row.is_numero_gerado,
+    fornecedor_id: row.fornecedor_id,
+    fornecedor_nome: nomeFornecedorFinal,
+    cor_veiculo: row.cor_veiculo,
+    nome_motorista: row.nome_motorista,
+    fase_atual: row.fase_atual,
+    status_geral: row.status_geral,
+    criador_id: row.criador_id,
+    criador_nome: criador?.nome || 'Conferente',
+    data_registro: row.data_registro,
+    hora_registro: row.hora_registro,
+    fases: fasesOrdenadas,
+    fotos: []
+  };
+}
+
 export const recebimentoService = {
   // 1. Busca preditiva de fornecedores
   async buscarFornecedores(termo: string) {
@@ -91,97 +250,64 @@ export const recebimentoService = {
     return fluxo.id;
   },
 
-  // 3. Listar fluxos com suporte a filtro de período
+  // 3. Listar fluxos (sem paginação) — mantido para compatibilidade
   async listarFluxos(
     statusAba: StatusGeralFluxo,
     filtros?: { dataInicio?: string; dataFim?: string }
   ): Promise<RecebimentoFluxoView[]> {
-    let query = supabase
-      .from('recebimento_fluxos')
-      .select(`
-        *,
-        criador:usuarios!recebimento_fluxos_criador_fkey(nome),
-        fornecedor:fornecedores(razao_social, nome_fantasia),
-        recebimento_fases(
-          id,
-          fluxo_id,
-          ordem_fase,
-          nome_fase,
-          status,
-          usuario_id,
-          iniciado_em,
-          finalizado_em,
-          tempo_limite_minutos,
-          tempo_restante_segundos,
-          link_relatorio,
-          observacoes,
-          usuario:usuarios(nome)
-        )
-      `)
-      .eq('status_geral', statusAba);
+    const filtro = await resolverFiltros({
+      statusGeral: statusAba,
+      dataInicio: filtros?.dataInicio,
+      dataFim: filtros?.dataFim
+    });
 
-    if (filtros?.dataInicio) {
-      query = query.gte('data_registro', filtros.dataInicio);
-    }
-    if (filtros?.dataFim) {
-      query = query.lte('data_registro', filtros.dataFim);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await montarQuery(COLUNAS_LISTAGEM_FLUXOS, filtro, false)
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    return (data || []).map((row: any) => {
-      const forn = Array.isArray(row.fornecedor) ? row.fornecedor[0] : row.fornecedor;
-      const criador = Array.isArray(row.criador) ? row.criador[0] : row.criador;
+    return (data || []).map(mapearFluxoView);
+  },
 
-      const nomeFornecedorFinal = 
-        forn?.nome_fantasia || 
-        forn?.razao_social || 
-        row.fornecedor_nome_manual || 
-        (row.tipo_documento === 'Caminhão da Casa' ? `Caminhão ${row.cor_veiculo || ''}` : 'Não informado');
+  // 3b. Listar fluxos paginados, com filtro de fase, fornecedor, documento e período
+  async listarFluxosPaginados(
+    parametros: ParametrosListagemFluxos,
+    pagina: number,
+    porPagina: number
+  ): Promise<{ dados: RecebimentoFluxoView[]; total: number }> {
+    const filtro = await resolverFiltros(parametros);
+    const de = (pagina - 1) * porPagina;
+    const ate = de + porPagina - 1;
 
-      const fasesOrdenadas = (row.recebimento_fases || [])
-        .sort((a: any, b: any) => a.ordem_fase - b.ordem_fase)
-        .map((f: any) => {
-          const userFase = Array.isArray(f.usuario) ? f.usuario[0] : f.usuario;
-          return {
-            id: f.id,
-            fluxo_id: f.fluxo_id,
-            ordem_fase: f.ordem_fase,
-            nome_fase: f.nome_fase,
-            status: f.status,
-            usuario_id: f.usuario_id,
-            usuario_nome: userFase?.nome || 'Operador',
-            iniciado_em: f.iniciado_em,
-            finalizado_em: f.finalizado_em,
-            tempo_limite_minutos: f.tempo_limite_minutos,
-            tempo_restante_segundos: f.tempo_restante_segundos,
-            link_relatorio: f.link_relatorio,
-            observacoes: f.observacoes
-          };
-        });
+    const { data, error, count } = await montarQuery(COLUNAS_LISTAGEM_FLUXOS, filtro, true)
+      .order('created_at', { ascending: false })
+      .range(de, ate);
 
-      return {
-        id: row.id,
-        codigo_customizado: row.codigo_customizado,
-        tipo_documento: row.tipo_documento,
-        numero_documento: row.numero_documento,
-        is_numero_gerado: row.is_numero_gerado,
-        fornecedor_id: row.fornecedor_id,
-        fornecedor_nome: nomeFornecedorFinal,
-        cor_veiculo: row.cor_veiculo,
-        nome_motorista: row.nome_motorista,
-        fase_atual: row.fase_atual,
-        status_geral: row.status_geral,
-        criador_id: row.criador_id,
-        criador_nome: criador?.nome || 'Conferente',
-        data_registro: row.data_registro,
-        hora_registro: row.hora_registro,
-        fases: fasesOrdenadas,
-        fotos: []
-      };
+    if (error) throw error;
+
+    return {
+      dados: (data || []).map(mapearFluxoView),
+      total: count ?? 0
+    };
+  },
+
+  // 3c. Contar fluxos por fase atual (alimenta os contadores das sub-abas)
+  async contarFluxosPorFase(
+    parametros: Omit<ParametrosListagemFluxos, 'faseAtual'>
+  ): Promise<Record<number, number>> {
+    const filtro = await resolverFiltros(parametros);
+
+    const { data, error } = await montarQuery('fase_atual', filtro, false);
+
+    if (error) throw error;
+
+    const contagem: Record<number, number> = {};
+    const linhas = (data || []) as unknown as { fase_atual: number }[];
+    linhas.forEach((r) => {
+      contagem[r.fase_atual] = (contagem[r.fase_atual] || 0) + 1;
     });
+
+    return contagem;
   },
 
   // 4. Listar documentos prontos para Lançamento
