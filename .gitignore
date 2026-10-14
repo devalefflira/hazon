@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Variáveis de ambiente (segredos)
+.env
+
+# Migração local: senhas, chaves, dumps e backups (não versionar)
+migracao-local/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
