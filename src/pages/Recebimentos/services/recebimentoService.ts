@@ -116,12 +116,6 @@ export const recebimentoService = {
           link_relatorio,
           observacoes,
           usuario:usuarios(nome)
-        ),
-        recebimento_fotos(
-          id,
-          tipo_foto,
-          foto_url,
-          descricao
         )
       `)
       .eq('status_geral', statusAba);
@@ -185,7 +179,7 @@ export const recebimentoService = {
         data_registro: row.data_registro,
         hora_registro: row.hora_registro,
         fases: fasesOrdenadas,
-        fotos: row.recebimento_fotos || []
+        fotos: []
       };
     });
   },
