@@ -1,6 +1,7 @@
 // src/pages/Login/index.tsx
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { carregarSessaoDoUsuario } from '../../lib/sessao/carregarSessao';
 import { ShieldCheck } from 'lucide-react';
 
 import iconUser from '../../assets/icones/icon-user.svg';
@@ -22,44 +23,45 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setErro('');
 
     try {
-      // Busca no banco trazendo o usuário e o nome do perfil vinculado
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select(`
-          id, 
-          nome, 
-          senha_hash,
-          perfis ( nome )
-        `)
-        .eq('email', email.trim())
-        .single();
+      // A validação da senha é feita pelo Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-      if (error || !data) {
-        setErro('E-mail não encontrado ou incorreto.');
-        setLoading(false);
+      if (error) {
+        if (error.status === 429) {
+          setErro('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
+        } else if (error.message === 'Invalid login credentials') {
+          setErro('E-mail ou senha incorretos.');
+        } else if (!error.status) {
+          setErro('Falha na conexão com o servidor.');
+        } else {
+          setErro('Não foi possível entrar. Tente novamente.');
+        }
         return;
       }
 
-      // Validação de senha
-      if (data.senha_hash !== password) {
-        setErro('Senha incorreta. Tente novamente.');
-        setLoading(false);
+      const userId = data.user?.id;
+      if (!userId) {
+        setErro('Não foi possível entrar. Tente novamente.');
         return;
       }
 
-      // Extração do perfil
-      const perfilNome = Array.isArray(data.perfis) 
-        ? data.perfis[0]?.nome 
-        : (data.perfis as any)?.nome || 'Operacional';
+      const sessao = await carregarSessaoDoUsuario(userId);
+      if (!sessao) {
+        await supabase.auth.signOut();
+        setErro('Esta conta não tem cadastro no sistema. Fale com o administrador.');
+        return;
+      }
 
       // Comunica o App.tsx com os dados do usuário autenticado
       onLoginSuccess({
-        id: data.id,
-        nome: data.nome,
-        perfil: perfilNome
+        id: sessao.usuario.id,
+        nome: sessao.usuario.nome,
+        perfil: sessao.usuario.perfil,
       });
-
-    } catch (err) {
+    } catch {
       setErro('Falha na conexão com o servidor.');
     } finally {
       setLoading(false);
@@ -69,7 +71,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-sans select-none">
       <div className="w-full max-w-95 bg-white rounded-4xl shadow-xl flex flex-col items-center px-8 py-12">
-        
+
         {/* ÁREA DO SÍMBOLO DE ESCUDO / CONTROLE + NOME DA MARCA */}
         <div className="mb-10 flex flex-col justify-center items-center w-full">
           <div className="w-28 h-28 rounded-full border-4 border-[#09797a] bg-teal-50/50 flex items-center justify-center shadow-inner transition-all">
@@ -89,12 +91,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         {/* FORMULÁRIO DE LOGIN */}
         <form onSubmit={handleLogin} className="w-full flex flex-col items-center">
-          
+
           {/* Campo de E-mail */}
           <div className="w-full flex items-center bg-white border border-[#b4b4b4] rounded-[20px] px-4 h-14 mb-5 focus-within:border-[#09797a] focus-within:border-2 transition-all">
             <img src={iconUser} alt="Usuário" className="w-5 h-5 mr-3 select-none" />
-            <input 
-              type="email" 
+            <input
+              type="email"
               placeholder="Digite seu e-mail"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -107,8 +109,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           {/* Campo de Senha */}
           <div className="w-full flex items-center bg-white border border-[#b4b4b4] rounded-[20px] px-4 h-14 mb-10 focus-within:border-[#09797a] focus-within:border-2 transition-all">
             <img src={iconPassword} alt="Senha" className="w-5 h-5 mr-3 select-none" />
-            <input 
-              type="password" 
+            <input
+              type="password"
               placeholder="Digite sua senha"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -119,7 +121,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
 
           {/* Botão Entrar */}
-          <button 
+          <button
             type="submit"
             disabled={loading}
             className="w-[65%] h-12 bg-[#09797a] text-white font-bold text-lg rounded-[30px] hover:bg-[#075f60] active:scale-95 transition-all shadow-md flex justify-center items-center disabled:bg-gray-400"

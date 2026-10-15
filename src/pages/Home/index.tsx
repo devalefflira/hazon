@@ -1,6 +1,8 @@
 // src/pages/Home/index.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { ThemeToggle } from '../../components/ui/ThemeToggle';
+import { BotaoBuscaGlobal } from '../../components/ui/BotaoBuscaGlobal';
 
 interface HomeProps {
   onNavegar?: (tela: string) => void;
@@ -327,6 +329,8 @@ export default function Home(props: HomeProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            <BotaoBuscaGlobal />
+            <ThemeToggle />
             {onLogout && (
               <button
                 onClick={onLogout}

@@ -1,6 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+/* Modo escuro baseado na classe .dark no <html> (controlado pelo ThemeProvider) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tokens institucionais — fonte única de verdade para cores e fonte */
+@theme {
+  --font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #f0fafa;
+  --color-brand-100: #d5eeee;
+  --color-brand-600: #09797a;
+  --color-brand-700: #075f60;
+
+  --color-surface: #f1f5f9;
+  --color-card: #ffffff;
+}
+
+/* Base */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* iOS Safari dá zoom automático em campos com fonte menor que 16px.
+   Em telas pequenas os campos passam a 16px para evitar o zoom indesejado. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
 
 /* Animações dos Launchpads e Cards da Home */
 @keyframes launchpadFadeDown {
@@ -16,4 +54,95 @@
 
 .animate-stagger-card {
   animation: launchpadFadeDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-stagger-card,
+  .animate-pulse,
+  .animate-spin {
+    animation: none;
+  }
+}
+
+/* ===== Modo escuro =====
+   Remapeia as cores utilitárias já usadas nas telas existentes, sem precisar
+   reescrever cada módulo. Módulos novos devem usar a variante dark: diretamente. */
+.dark {
+  color-scheme: dark;
+  scrollbar-color: #334155 #0b1417;
+}
+
+.dark body {
+  background-color: #0b1417;
+  color: #e2e8f0;
+}
+
+.dark .bg-white {
+  background-color: #0f1a1e;
+}
+
+.dark .bg-white\/90,
+.dark .bg-white\/95 {
+  background-color: rgb(15 26 30 / 0.92);
+}
+
+.dark .bg-slate-50 {
+  background-color: #0f1a1e;
+}
+
+.dark .bg-slate-100 {
+  background-color: #0b1417;
+}
+
+.dark .bg-slate-200 {
+  background-color: #1b2b31;
+}
+
+.dark .bg-teal-50 {
+  background-color: rgb(9 121 122 / 0.14);
+}
+
+.dark .hover\:bg-teal-50\/50:hover,
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover {
+  background-color: rgb(148 163 184 / 0.1);
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700 {
+  color: #e2e8f0;
+}
+
+.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: #94a3b8;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-200\/90,
+.dark .border-slate-300 {
+  border-color: #1f3137;
+}
+
+.dark .divide-slate-100 > :not(:last-child) {
+  border-color: #1f3137;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #0f1a1e;
+  color: #e2e8f0;
+  border-color: #1f3137;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b;
 }

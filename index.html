@@ -1,10 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>hazon</title>
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#09797a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>Hazon ERP</title>
+    <!-- Aplica o tema salvo antes da primeira pintura, evitando piscar a tela clara no modo escuro -->
+    <script>
+      (function () {
+        try {
+          var salvo = localStorage.getItem('hazon_tema');
+          var escuro = salvo ? salvo === 'escuro' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (escuro) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0b1417');
+          }
+        } catch (e) {
+          /* storage indisponível: segue o tema claro padrão */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

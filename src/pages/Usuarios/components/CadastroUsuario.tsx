@@ -56,7 +56,7 @@ export default function CadastroUsuario({
         perfil_id: perfilId
       };
 
-      if (!usuarioEdicao) {
+      if (!usuarioEdicao || senha.trim() !== '') {
         payload.senha_hash = senha;
       }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, X, Check } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { useToast } from './ui/useToast';
 import { BarcodeScannerModal } from '../pages/RupturaGondola/components/BarcodeScannerModal';
 
 export interface ProdutoBusca {
@@ -37,6 +38,7 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
   const [scannerAberto, setScannerAberto] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const { mostrarAviso } = useToast();
 
   // Carregar dados se já vier um ID selecionado previamente
   useEffect(() => {
@@ -143,7 +145,7 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
         setSugestoes(parciais);
         setDropdownAberto(true);
       } else {
-        alert(`Produto com código de barras "${code}" não foi localizado no cadastro.`);
+        mostrarAviso(`Produto com código de barras "${code}" não foi localizado no cadastro.`, 'aviso');
       }
     } catch (err) {
       console.error('Erro na leitura de código de barras:', err);

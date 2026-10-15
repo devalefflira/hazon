@@ -1,6 +1,21 @@
 import { supabase } from '../../../lib/supabaseClient';
 import type { PedidoMestreDTO, PedidoItemDTO, EnviarPedidoVendedorPayload } from '../types/pedidos.types';
 
+// Retorno da função pública pedido_publico_obter (acesso só por token)
+export interface PedidoPublico {
+  id: string;
+  codigo_customizado: string;
+  status: string;
+  fornecedor_nome: string;
+  itens: {
+    id: string;
+    produto_descricao: string;
+    produto_unidade_medida: string;
+    preco_unitario: number;
+    quantidade_solicitada: number;
+  }[];
+}
+
 export const pedidosService = {
   // Lista todos os pedidos com contagem de itens acoplada por junção lateral
   async listarPedidos(): Promise<PedidoMestreDTO[]> {
@@ -100,26 +115,19 @@ export const pedidosService = {
     if (errMestre) throw errMestre;
   },
 
-  // Etapa 2 -> Etapa 3: Vendedor valida externamente e encerra o ciclo de vida
+  // Link público do pedido: dados obtidos pela função segura, só pelo token
+  async obterPedidoPublicoPorToken(token: string): Promise<PedidoPublico> {
+    if (!token) throw new Error('Link de pedido inválido ou inexistente.');
+
+    const { data, error } = await supabase.rpc('pedido_publico_obter', { p_token: token });
+    if (error) throw new Error(error.message);
+
+    return data as unknown as PedidoPublico;
+  },
+
+  // Etapa 2 -> Etapa 3: Vendedor valida externamente e encerra o ciclo de vida (validação no banco)
   async formalizarPedidoViaToken(token: string): Promise<void> {
-    const { data: pedido, error: errBusca } = await supabase
-      .from('pedidos_mestre')
-      .select('id, status')
-      .eq('token_acesso', token)
-      .single();
-
-    if (errBusca || !pedido) throw new Error('Link de pedido inválido ou inexistente.');
-    if (pedido.status === 'Pedido Feito') throw new Error('Este pedido já foi formalizado anteriormente.');
-
-    const { error: errAtualizacao } = await supabase
-      .from('pedidos_mestre')
-      .update({
-        status: 'Pedido Feito',
-        formalizado_em: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', pedido.id);
-
-    if (errAtualizacao) throw errAtualizacao;
+    const { error } = await supabase.rpc('pedido_publico_formalizar', { p_token: token });
+    if (error) throw new Error(error.message);
   }
 };

@@ -1,6 +1,5 @@
 // Arquivo: src/pages/Pedidos/FormalizarPedidoExterno.tsx
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabaseClient';
 import { pedidosService } from './services/pedidosService';
 
 interface FormalizarPedidoExternoProps {
@@ -18,22 +17,22 @@ export function FormalizarPedidoExterno({ token }: FormalizarPedidoExternoProps)
     async function carregarDadosPedido() {
       try {
         setLoading(true);
-        const { data: mestre, error: errMestre } = await supabase
-          .from('pedidos_mestre')
-          .select(`id, codigo_customizado, status, fornecedores:fornecedor_id ( nome_fantasia )`)
-          .eq('token_acesso', token)
-          .single();
+        // Dados obtidos pela função segura do banco (valida o token)
+        const dados = await pedidosService.obterPedidoPublicoPorToken(token);
 
-        if (errMestre || !mestre) throw new Error('Ordem de Compra inativa ou inexistente.');
-        setPedidoMestre(mestre);
+        setPedidoMestre({
+          id: dados.id,
+          codigo_customizado: dados.codigo_customizado,
+          status: dados.status,
+          fornecedores: { nome_fantasia: dados.fornecedor_nome }
+        });
 
-        if (mestre.status === 'Pedido Feito') {
+        if (dados.status === 'Pedido Feito') {
           setSucesso(true);
           return;
         }
 
-        const dadosItens = await pedidosService.obterDetalhesPedido(mestre.id);
-        setItens(dadosItens);
+        setItens(dados.itens);
       } catch (err: any) {
         console.error(err);
         alert(err.message || 'Erro ao carregar caderno de pedido.');

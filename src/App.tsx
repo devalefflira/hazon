@@ -1,423 +1,381 @@
 // src/App.tsx
-import { useState, useEffect } from 'react';
-import { supabase } from './lib/supabaseClient';
+import { lazy, Suspense, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Login from './pages/Login';
-import { nativePushService } from './services/nativePushService';
 import Home from './pages/Home';
-import CategoriasHub from './pages/Categorias';
-import Usuarios from './pages/Usuarios';
-import Permissoes from './pages/Permissoes';
-import Fornecedores from './pages/Fornecedores';
-import Vendedores from './pages/Vendedores';
-import Produtos from './pages/Produtos';
-import Inventario from './pages/Inventario';
-import NotaFalta from './pages/NotaFalta';
-import { Cotacoes } from './pages/Cotacoes';
-import { ResponderCotacao } from './pages/Cotacoes/ResponderCotacao';
-import { Pedidos } from './pages/Pedidos';
-import { FormalizarPedidoExterno } from './pages/Pedidos/FormalizarPedidoExterno';
-import { Tarefas } from './pages/Tarefas';
-import Avarias from './pages/Avarias';
-import ConsumoLoja from './pages/ConsumoLoja';
-import ConfCega from './pages/ConfCega';
-import Relatorios from './pages/Relatorios';
-import Temperatura from './pages/Temperatura';
-import Orcamentos from './pages/Orcamentos';
-import Clientes from './pages/Clientes';
-import Ofertas from './pages/Ofertas';
-import Vencimentos from './pages/Vencimentos';
-import Notificacoes from './pages/Notificacoes';
-import Trocas from './pages/Trocas';
-import PesquisaPrecos from './pages/PesquisaPrecos';
-import Encartes from './pages/Encartes';
-import Solicitacoes from './pages/Solicitacoes';
-import Recebimentos from './pages/Recebimentos';
-import Mensagens from './pages/Mensagens';
-import Dashboard from './pages/Dashboard';
-import RupturaGondola from './pages/RupturaGondola';
-import { AlmoxarifadoPage } from './pages/Almoxarifado';
+import { LoadingScreen } from './components/ui/LoadingScreen';
+import { PaletaBuscaGlobal } from './components/ui/PaletaBuscaGlobal';
+import { useToast } from './components/ui/useToast';
+import { ShellAutenticado } from './components/layout/AppShell';
+import { temAcesso } from './lib/navegacao/permissoes';
+import { useSessao } from './lib/sessao/useSessao';
+import type { UsuarioLogado } from './lib/sessao/sessaoContext';
 
-interface UsuarioLogado {
-  id: string;
-  nome: string;
-  perfil: string;
-  setor?: string;
+// Telas carregadas sob demanda (lazy): o bundle inicial traz só Login e Home.
+const CategoriasHub = lazy(() => import('./pages/Categorias'));
+const Usuarios = lazy(() => import('./pages/Usuarios'));
+const Permissoes = lazy(() => import('./pages/Permissoes'));
+const Fornecedores = lazy(() => import('./pages/Fornecedores'));
+const Vendedores = lazy(() => import('./pages/Vendedores'));
+const Produtos = lazy(() => import('./pages/Produtos'));
+const Inventario = lazy(() => import('./pages/Inventario'));
+const NotaFalta = lazy(() => import('./pages/NotaFalta'));
+const Cotacoes = lazy(() => import('./pages/Cotacoes').then((m) => ({ default: m.Cotacoes })));
+const ResponderCotacao = lazy(() =>
+  import('./pages/Cotacoes/ResponderCotacao').then((m) => ({ default: m.ResponderCotacao }))
+);
+const Pedidos = lazy(() => import('./pages/Pedidos').then((m) => ({ default: m.Pedidos })));
+const FormalizarPedidoExterno = lazy(() =>
+  import('./pages/Pedidos/FormalizarPedidoExterno').then((m) => ({ default: m.FormalizarPedidoExterno }))
+);
+const Tarefas = lazy(() => import('./pages/Tarefas').then((m) => ({ default: m.Tarefas })));
+const Avarias = lazy(() => import('./pages/Avarias'));
+const ConsumoLoja = lazy(() => import('./pages/ConsumoLoja'));
+const ConfCega = lazy(() => import('./pages/ConfCega'));
+const Relatorios = lazy(() => import('./pages/Relatorios'));
+const Temperatura = lazy(() => import('./pages/Temperatura'));
+const Orcamentos = lazy(() => import('./pages/Orcamentos'));
+const Clientes = lazy(() => import('./pages/Clientes'));
+const Ofertas = lazy(() => import('./pages/Ofertas'));
+const Vencimentos = lazy(() => import('./pages/Vencimentos'));
+const Notificacoes = lazy(() => import('./pages/Notificacoes'));
+const Trocas = lazy(() => import('./pages/Trocas'));
+const PesquisaPrecos = lazy(() => import('./pages/PesquisaPrecos'));
+const Encartes = lazy(() => import('./pages/Encartes'));
+const Solicitacoes = lazy(() => import('./pages/Solicitacoes'));
+const Recebimentos = lazy(() => import('./pages/Recebimentos'));
+const Mensagens = lazy(() => import('./pages/Mensagens'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const RupturaGondola = lazy(() => import('./pages/RupturaGondola'));
+const AlmoxarifadoPage = lazy(() =>
+  import('./pages/Almoxarifado').then((m) => ({ default: m.AlmoxarifadoPage }))
+);
+
+/**
+ * Exige usuário logado. Sem sessão, redireciona para /login.
+ * Recebe o usuário por função para manter as props tipadas como UsuarioLogado.
+ */
+function RotaProtegida({ children }: { children: (usuario: UsuarioLogado) => ReactNode }) {
+  const { usuario, permissoes, carregando } = useSessao();
+  const { pathname } = useLocation();
+
+  if (carregando) return <LoadingScreen />;
+  if (!usuario) return <Navigate to="/login" replace />;
+  if (!temAcesso(pathname, permissoes)) return <AcessoNegado />;
+  return <>{children(usuario)}</>;
 }
 
-type TelaAtiva =
-  | 'login'
-  | 'home'
-  | 'ruptura-gondola'
-  | 'dashboard'
-  | 'categorias'
-  | 'usuarios'
-  | 'permissoes'
-  | 'fornecedores'
-  | 'vendedores'
-  | 'produtos'
-  | 'inventario'
-  | 'nota-falta'
-  | 'cotacoes'
-  | 'responder_cotacao'
-  | 'pedidos'
-  | 'formalizar_pedido_externo'
-  | 'tarefas'
-  | 'avarias'
-  | 'consumo-loja'
-  | 'conf-cega'
-  | 'relatorios'
-  | 'temperatura'
-  | 'orcamentos'
-  | 'clientes'
-  | 'ofertas'
-  | 'vencimentos'
-  | 'notificacoes'
-  | 'trocas'
-  | 'pesquisa-precos'
-  | 'encartes'
-  | 'solicitacoes'
-  | 'recebimentos'
-  | 'mensagens'
-  | 'almoxarifado';
+/** Avisa que o módulo não está liberado e devolve o usuário para a Home. */
+function AcessoNegado() {
+  const { mostrarAviso } = useToast();
+  const avisado = useRef(false);
+
+  useEffect(() => {
+    if (avisado.current) return;
+    avisado.current = true;
+    mostrarAviso('Você não tem acesso a este módulo.', 'aviso');
+  }, [mostrarAviso]);
+
+  return <Navigate to="/home" replace />;
+}
+
+/**
+ * Raiz do site. Mantém os links externos existentes:
+ * ?token= (responder cotação) e ?pedidoToken= (formalizar pedido).
+ */
+function RaizRota() {
+  const [parametros] = useSearchParams();
+  const { usuario, carregando } = useSessao();
+  const tokenCotacao = parametros.get('token');
+  const tokenPedido = parametros.get('pedidoToken');
+
+  if (tokenCotacao) return <ResponderCotacao token={tokenCotacao} />;
+  if (tokenPedido) return <FormalizarPedidoExterno token={tokenPedido} />;
+  if (carregando) return <LoadingScreen />;
+
+  return <Navigate to={usuario ? '/home' : '/login'} replace />;
+}
+
+function LoginRota() {
+  const { usuario, entrar, carregando } = useSessao();
+  if (carregando) return <LoadingScreen />;
+  if (usuario) return <Navigate to="/home" replace />;
+  return <Login onLoginSuccess={(novo: UsuarioLogado) => entrar(novo)} />;
+}
+
+function RotasHazon() {
+  const navigate = useNavigate();
+  const { usuario, permissoes, sair } = useSessao();
+
+  const voltarParaHome = () => navigate('/home');
+
+  const sairEIrParaLogin = async () => {
+    await sair();
+    navigate('/login', { replace: true });
+  };
+
+  return (
+    <Routes>
+      <Route path="/" element={<RaizRota />} />
+      <Route path="/login" element={<LoginRota />} />
+
+      <Route
+        path="/home"
+        element={
+          <RotaProtegida>
+            {(u) => (
+              <Home
+                nomeUsuario={u.nome}
+                perfilUsuario={u.perfil}
+                usuarioLogadoId={u.id}
+                permissoesDoUsuario={permissoes}
+                onLogout={sairEIrParaLogin}
+                onNavegar={(tela: string) => navigate(`/${tela}`)}
+              />
+            )}
+          </RotaProtegida>
+        }
+      />
+
+      <Route element={<ShellAutenticado />}>
+      <Route
+        path="/dashboard"
+        element={<RotaProtegida>{() => <Dashboard onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/ruptura-gondola"
+        element={
+          <RotaProtegida>
+            {(u) => <RupturaGondola usuarioLogadoId={u.id} onVoltarParaHome={voltarParaHome} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/clientes"
+        element={<RotaProtegida>{() => <Clientes onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/ofertas"
+        element={
+          <RotaProtegida>
+            {(u) => <Ofertas onVoltarParaHome={voltarParaHome} usuarioLogado={u} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/vencimentos"
+        element={
+          <RotaProtegida>
+            {(u) => (
+              <Vencimentos
+                onVoltarParaHome={voltarParaHome}
+                usuarioLogado={u}
+                onDirecionarParaAvaria={() => navigate('/avarias')}
+              />
+            )}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/trocas"
+        element={
+          <RotaProtegida>
+            {(u) => <Trocas onVoltarParaHome={voltarParaHome} usuarioLogado={u} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/pesquisa-precos"
+        element={
+          <RotaProtegida>
+            {(u) => (
+              <PesquisaPrecos
+                onVoltarParaHome={voltarParaHome}
+                usuarioLogado={u}
+                usuarioLogadoId={u.id}
+                onNavegarParaOfertas={() => navigate('/ofertas')}
+              />
+            )}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/notificacoes"
+        element={
+          <RotaProtegida>
+            {(u) => (
+              <Notificacoes
+                onVoltarParaHome={voltarParaHome}
+                onNavegarParaVencimentos={() => navigate('/vencimentos')}
+                usuarioLogado={u}
+              />
+            )}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/almoxarifado"
+        element={<RotaProtegida>{() => <AlmoxarifadoPage onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/categorias"
+        element={<RotaProtegida>{() => <CategoriasHub onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/usuarios"
+        element={<RotaProtegida>{() => <Usuarios onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/permissoes"
+        element={<RotaProtegida>{() => <Permissoes onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/fornecedores"
+        element={<RotaProtegida>{() => <Fornecedores onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/vendedores"
+        element={<RotaProtegida>{() => <Vendedores onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/produtos"
+        element={<RotaProtegida>{() => <Produtos onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/orcamentos"
+        element={
+          <RotaProtegida>
+            {(u) => <Orcamentos usuarioLogadoId={u.id} onVoltarParaHome={voltarParaHome} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/cotacoes"
+        element={
+          <RotaProtegida>
+            {(u) => <Cotacoes usuarioLogadoId={u.id} onVoltarParaHome={voltarParaHome} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/pedidos"
+        element={
+          <RotaProtegida>
+            {(u) => <Pedidos usuarioLogadoId={u.id} onVoltarParaHome={voltarParaHome} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/tarefas"
+        element={
+          <RotaProtegida>
+            {(u) => <Tarefas usuarioLogadoId={u.id} onVoltarParaHome={voltarParaHome} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/avarias"
+        element={
+          <RotaProtegida>
+            {(u) => (
+              <Avarias onVoltarParaHome={voltarParaHome} usuarioLogado={u} usuarioLogadoId={u.id} />
+            )}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/consumo-loja"
+        element={
+          <RotaProtegida>
+            {(u) => (
+              <ConsumoLoja onVoltarParaHome={voltarParaHome} usuarioLogado={u} usuarioLogadoId={u.id} />
+            )}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/conf-cega"
+        element={
+          <RotaProtegida>
+            {(u) => <ConfCega usuarioLogadoId={u.id} onVoltarParaHome={voltarParaHome} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/relatorios"
+        element={<RotaProtegida>{() => <Relatorios onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/temperatura"
+        element={
+          <RotaProtegida>
+            {(u) => <Temperatura usuarioLogadoId={u.id} onVoltarParaHome={voltarParaHome} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/inventario"
+        element={
+          <RotaProtegida>
+            {(u) => <Inventario onVoltarParaHome={voltarParaHome} usuarioLogado={u} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/encartes"
+        element={
+          <RotaProtegida>
+            {(u) => <Encartes onVoltarParaHome={voltarParaHome} usuarioLogado={u} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/solicitacoes"
+        element={
+          <RotaProtegida>
+            {(u) => (
+              <Solicitacoes onVoltarParaHome={voltarParaHome} usuarioLogado={u} usuarioLogadoId={u.id} />
+            )}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/recebimentos"
+        element={
+          <RotaProtegida>
+            {(u) => <Recebimentos onVoltarParaHome={voltarParaHome} usuarioLogadoId={u.id} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/mensagens"
+        element={
+          <RotaProtegida>
+            {(u) => <Mensagens onVoltarParaHome={voltarParaHome} usuarioLogadoId={u.id} />}
+          </RotaProtegida>
+        }
+      />
+      {/* Nota de Falta não exige sessão na versão atual, mantido igual ao comportamento anterior */}
+      <Route
+        path="/nota-falta"
+        element={<NotaFalta onVoltarParaHome={voltarParaHome} usuarioLogado={usuario} />}
+      />
+
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
 export default function App() {
-  const [usuario, setUsuario] = useState<UsuarioLogado | null>(() => {
-    try {
-      const salvo = localStorage.getItem('hazon_user');
-      return salvo ? JSON.parse(salvo) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const [permissoesUsuario, setPermissoesUsuario] = useState<string[]>(() => {
-    try {
-      const salvas = localStorage.getItem('hazon_permissoes');
-      return salvas ? JSON.parse(salvas) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>(() => {
-    try {
-      const userSalvo = localStorage.getItem('hazon_user');
-      const telaSalva = localStorage.getItem('hazon_tela_ativa') as TelaAtiva;
-      if (userSalvo && telaSalva && telaSalva !== 'login') {
-        return telaSalva;
-      }
-      return userSalvo ? 'home' : 'login';
-    } catch {
-      return 'login';
-    }
-  });
-
-  const [tokenAcesso, setTokenAcesso] = useState<string | null>(null);
-
-  const mudarTela = (novaTela: TelaAtiva) => {
-    setTelaAtiva(novaTela);
-    localStorage.setItem('hazon_tela_ativa', novaTela);
-  };
-
-  // Inicialização do Service Worker nativo para Push
-  useEffect(() => {
-    const registrarPush = async () => {
-      if (usuario?.id) {
-        await nativePushService.registrarServiceWorker();
-      }
-    };
-
-    registrarPush();
-  }, [usuario?.id]);
-
-  // Processar tokens de link externo (Cotação / Pedido)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tokenCotacao = params.get('token');
-    const tokenPedido = params.get('pedidoToken');
-
-    if (tokenCotacao) {
-      setTokenAcesso(tokenCotacao);
-      mudarTela('responder_cotacao');
-    } else if (tokenPedido) {
-      setTokenAcesso(tokenPedido);
-      mudarTela('formalizar_pedido_externo');
-    }
-  }, []);
-
-  const handleLoginSuccess = async (usuarioLogado: UsuarioLogado) => {
-    setUsuario(usuarioLogado);
-    localStorage.setItem('hazon_user', JSON.stringify(usuarioLogado));
-
-    // Solicita permissão do navegador e salva o token no Supabase
-    try {
-      await nativePushService.solicitarPermissaoESalvar(usuarioLogado.id);
-    } catch (e) {
-      console.warn('Aviso push:', e);
-    }
-
-    try {
-      const { data } = await supabase
-        .from('usuario_permissoes')
-        .select('modulo_nome')
-        .eq('usuario_id', usuarioLogado.id)
-        .eq('permitido', true);
-
-      const liberados = (data || []).map((p: { modulo_nome: string }) => p.modulo_nome);
-      setPermissoesUsuario(liberados);
-      localStorage.setItem('hazon_permissoes', JSON.stringify(liberados));
-    } catch (err) {
-      console.error('Erro ao buscar permissões do usuário:', err);
-      setPermissoesUsuario([]);
-    }
-
-    mudarTela('home');
-  };
-
-  const handleLogout = async () => {
-    if (usuario?.id) {
-      await nativePushService.desinscrever(usuario.id);
-    }
-
-    setUsuario(null);
-    setPermissoesUsuario([]);
-    localStorage.removeItem('hazon_user');
-    localStorage.removeItem('hazon_permissoes');
-    localStorage.removeItem('hazon_tela_ativa');
-    mudarTela('login');
-  };
-
-  if (telaAtiva === 'responder_cotacao' && tokenAcesso) {
-    return <ResponderCotacao token={tokenAcesso} />;
-  }
-
-  if (telaAtiva === 'dashboard') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Dashboard onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'ruptura-gondola') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <RupturaGondola
-        usuarioLogadoId={usuario.id}
-        onVoltarParaHome={() => mudarTela('home')}
-      />
-    );
-  }
-
-  if (telaAtiva === 'formalizar_pedido_externo' && tokenAcesso) {
-    return <FormalizarPedidoExterno token={tokenAcesso} />;
-  }
-
-  if (telaAtiva === 'clientes') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Clientes onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'ofertas') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Ofertas onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
-  }
-
-  if (telaAtiva === 'vencimentos') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <Vencimentos
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogado={usuario}
-        onDirecionarParaAvaria={() => mudarTela('avarias')}
-      />
-    );
-  }
-
-  if (telaAtiva === 'trocas') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Trocas onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
-  }
-
-  if (telaAtiva === 'pesquisa-precos') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <PesquisaPrecos
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogado={usuario}
-        usuarioLogadoId={usuario.id}
-        onNavegarParaOfertas={() => mudarTela('ofertas')}
-      />
-    );
-  }
-
-  if (telaAtiva === 'notificacoes') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <Notificacoes
-        onVoltarParaHome={() => mudarTela('home')}
-        onNavegarParaVencimentos={() => mudarTela('vencimentos')}
-        usuarioLogado={usuario}
-      />
-    );
-  }
-
-  if (usuario && telaAtiva === 'home') {
-    return (
-      <Home
-        nomeUsuario={usuario.nome}
-        perfilUsuario={usuario.perfil}
-        usuarioLogadoId={usuario.id}
-        permissoesDoUsuario={permissoesUsuario}
-        onLogout={handleLogout}
-        onNavegar={(tela: string) => mudarTela(tela as TelaAtiva)}
-        onNavegarParaDashboard={() => mudarTela('dashboard')}
-        onNavegarParaCategorias={() => mudarTela('categorias')}
-        onNavegarParaUsuarios={() => mudarTela('usuarios')}
-        onNavegarParaPermissoes={() => mudarTela('permissoes')}
-        onNavegarParaFornecedores={() => mudarTela('fornecedores')}
-        onNavegarParaVendedores={() => mudarTela('vendedores')}
-        onNavegarParaProdutos={() => mudarTela('produtos')}
-        onNavegarParaInventario={() => mudarTela('inventario')}
-        onNavegarParaNotaFalta={() => mudarTela('nota-falta')}
-        onNavegarParaCotacoes={() => mudarTela('cotacoes')}
-        onNavegarParaPedidos={() => mudarTela('pedidos')}
-        onNavegarParaTarefas={() => mudarTela('tarefas')}
-        onNavegarParaAvarias={() => mudarTela('avarias')}
-        onNavegarParaConsumoLoja={() => mudarTela('consumo-loja')}
-        onNavegarParaConfCega={() => mudarTela('conf-cega')}
-        onNavegarParaRelatorios={() => mudarTela('relatorios')}
-        onNavegarParaTemperatura={() => mudarTela('temperatura')}
-        onNavegarParaOrcamentos={() => mudarTela('orcamentos')}
-        onNavegarParaClientes={() => mudarTela('clientes')}
-        onNavegarParaOfertas={() => mudarTela('ofertas')}
-        onNavegarParaVencimentos={() => mudarTela('vencimentos')}
-        onNavegarParaTrocas={() => mudarTela('trocas')}
-        onNavegarParaPesquisaPrecos={() => mudarTela('pesquisa-precos')}
-        onNavegarParaEncartes={() => mudarTela('encartes')}
-        onNavegarParaSolicitacoes={() => mudarTela('solicitacoes')}
-        onNavegarParaRecebimentos={() => mudarTela('recebimentos')}
-        onNavegarParaMensagens={() => mudarTela('mensagens')}
-        onNavegarParaRupturaGondola={() => mudarTela('ruptura-gondola')}
-        onNavegarParaAlmoxarifado={() => mudarTela('almoxarifado')}
-      />
-    );
-  }
-
-  if (usuario && telaAtiva === 'almoxarifado') {
-    return <AlmoxarifadoPage onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (usuario && telaAtiva === 'categorias') return <CategoriasHub onVoltarParaHome={() => mudarTela('home')} />;
-  if (usuario && telaAtiva === 'usuarios') return <Usuarios onVoltarParaHome={() => mudarTela('home')} />;
-  if (usuario && telaAtiva === 'permissoes') return <Permissoes onVoltarParaHome={() => mudarTela('home')} />;
-  if (usuario && telaAtiva === 'fornecedores') return <Fornecedores onVoltarParaHome={() => mudarTela('home')} />;
-  if (usuario && telaAtiva === 'vendedores') return <Vendedores onVoltarParaHome={() => mudarTela('home')} />;
-  if (usuario && telaAtiva === 'produtos') return <Produtos onVoltarParaHome={() => mudarTela('home')} />;
-
-  if (telaAtiva === 'orcamentos') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Orcamentos usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'cotacoes') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Cotacoes usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'pedidos') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Pedidos usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'tarefas') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Tarefas usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'avarias') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <Avarias
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogado={usuario}
-        usuarioLogadoId={usuario.id}
-      />
-    );
-  }
-
-  if (telaAtiva === 'consumo-loja') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <ConsumoLoja
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogado={usuario}
-        usuarioLogadoId={usuario.id}
-      />
-    );
-  }
-
-  if (telaAtiva === 'conf-cega') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <ConfCega usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'relatorios') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Relatorios onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'temperatura') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Temperatura usuarioLogadoId={usuario.id} onVoltarParaHome={() => mudarTela('home')} />;
-  }
-
-  if (telaAtiva === 'inventario') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return <Inventario onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
-  }
-
-  if (telaAtiva === 'encartes') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <Encartes
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogado={usuario}
-      />
-    );
-  }
-
-  if (telaAtiva === 'solicitacoes') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <Solicitacoes
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogado={usuario}
-        usuarioLogadoId={usuario.id}
-      />
-    );
-  }
-
-  if (telaAtiva === 'recebimentos') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <Recebimentos
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogadoId={usuario.id}
-      />
-    );
-  }
-
-  if (telaAtiva === 'mensagens') {
-    if (!usuario) return <Login onLoginSuccess={handleLoginSuccess} />;
-    return (
-      <Mensagens
-        onVoltarParaHome={() => mudarTela('home')}
-        usuarioLogadoId={usuario.id}
-      />
-    );
-  }
-
-  if (telaAtiva === 'nota-falta') {
-    return <NotaFalta onVoltarParaHome={() => mudarTela('home')} usuarioLogado={usuario} />;
-  }
-
-  return <Login onLoginSuccess={handleLoginSuccess} />;
+  return (
+    <>
+      <Suspense fallback={<LoadingScreen />}>
+        <RotasHazon />
+      </Suspense>
+      <PaletaBuscaGlobal />
+    </>
+  );
 }

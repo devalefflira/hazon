@@ -2,13 +2,16 @@
 import { supabase } from '../../../lib/supabaseClient';
 import { permissoesService } from '../../Permissoes/services/permissoesService';
 
+// Colunas expostas ao front-end. senha_hash nunca é lido pelo navegador (S3).
+const COLUNAS_USUARIO = 'id, nome, email, setor, perfil_id, updated_at';
+
 export const usuariosService = {
   // Listar usuários com o nome do perfil
   async listarUsuarios(): Promise<any[]> {
     const { data, error } = await supabase
       .from('usuarios')
       .select(`
-        *,
+        ${COLUNAS_USUARIO},
         perfis ( id, nome )
       `)
       .order('nome', { ascending: true });
@@ -42,7 +45,7 @@ export const usuariosService = {
     const { data, error } = await supabase
       .from('usuarios')
       .insert([dadosUsuario])
-      .select()
+      .select(COLUNAS_USUARIO)
       .single();
 
     if (error) throw error;

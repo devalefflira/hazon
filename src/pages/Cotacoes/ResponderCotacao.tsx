@@ -37,7 +37,7 @@ export function ResponderCotacao({ token }: ResponderCotacaoProps) {
 
         setFornecedorNome(dados.fornecedor_nome);
         setPrazoEntrega(dados.prazo_entrega_dias ? String(dados.prazo_entrega_dias) : '');
-        setCondicoesPagamento(dados.condicoes_pagamento);
+        setCondicoesPagamento(dados.condicoes_pagamento || '');
 
         const itensIniciais = dados.itens.map((item: any) => ({
           id: item.id,

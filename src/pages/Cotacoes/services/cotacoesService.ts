@@ -8,6 +8,15 @@ import type {
   CotacaoMestreRegistro
 } from '../types/cotacoes.types';
 
+// Retorno da função pública cotacao_publica_obter (acesso só por token)
+interface DetalheCotacaoPublica {
+  fornecedor_nome: string;
+  respondido_em: string | null;
+  prazo_entrega_dias: number | null;
+  condicoes_pagamento: string | null;
+  itens: { id: string; descricao: string; codigo_barras: string | null; unidade_medida: string }[];
+}
+
 export const cotacoesService = {
   async listarFaltasPendentes(): Promise<ItemFaltaCotacaoDTO[]> {
     const { data, error } = await supabase
@@ -122,98 +131,28 @@ export const cotacoesService = {
     if (errFalta) throw errFalta;
   },
 
-  async obterDetalhesCotacaoPorToken(token: string) {
+  // Link público do fornecedor: dados obtidos pela função segura (sem acesso direto às tabelas)
+  async obterDetalhesCotacaoPorToken(token: string): Promise<DetalheCotacaoPublica> {
     if (!token) throw new Error('Token inválido.');
-    
-    const { data: vinculos, error: errVinculo } = await supabase
-      .from('cotacoes_fornecedores_vinculados')
-      .select(`
-        id, 
-        cotacao_mestre_id, 
-        prazo_entrega_dias, 
-        condicoes_pagamento, 
-        respondido_em,
-        fornecedor_id
-      `)
-      .eq('token_acesso', token);
 
-    if (errVinculo || !vinculos || vinculos.length === 0) {
-      throw new Error('Link comercial inativo ou expirado.');
-    }
+    const { data, error } = await supabase.rpc('cotacao_publica_obter', { p_token: token });
+    if (error) throw new Error(error.message);
 
-    const vinculo = vinculos[0];
-
-    // Busca o nome do fornecedor de forma isolada e segura
-    const { data: fornData } = await supabase
-      .from('fornecedores')
-      .select('razao_social, nome_fantasia')
-      .eq('id', vinculo.fornecedor_id)
-      .single();
-
-    // Busca os itens vinculados à cotação mestre resolvendo a descrição do produto
-    const { data: itensVinculados, error: errItens } = await supabase
-      .from('cotacoes_itens_vinculados')
-      .select(`
-        nota_falta_id,
-        notas_falta:nota_falta_id (
-          id,
-          produto_id,
-          produtos:produto_id (
-            id, 
-            descricao, 
-            codigo_barras,
-            unidades_medida:unidade_medida_id ( sigla )
-          )
-        )
-      `)
-      .eq('cotacao_mestre_id', vinculo.cotacao_mestre_id);
-
-    if (errItens) throw errItens;
-
-    const itensFormatados = (itensVinculados || []).map((iv: any) => {
-      const prod = iv.notas_falta?.produtos;
-      return {
-        id: String(prod?.id || ''),
-        descricao: String(prod?.descricao || 'Produto não identificado'),
-        codigo_barras: prod?.codigo_barras ? String(prod.codigo_barras) : null,
-        unidade_medida: String(prod?.unidades_medida?.sigla || 'UN')
-      };
-    }).filter(item => item.id !== '');
-
-    return {
-      vinculo_id: vinculo.id,
-      cotacao_mestre_id: vinculo.cotacao_mestre_id,
-      respondido_em: vinculo.respondido_em,
-      prazo_entrega_dias: vinculo.prazo_entrega_dias || '',
-      condicoes_pagamento: vinculo.condicoes_pagamento || '',
-      fornecedor_nome: fornData?.nome_fantasia || fornData?.razao_social || 'Fornecedor',
-      itens: itensFormatados
-    };
+    return data as unknown as DetalheCotacaoPublica;
   },
 
+  // Link público do fornecedor: a validação de token, prazo e duplicidade acontece no banco
   async registrarRespostaFornecedor(payload: SubmeterRespostaFornecedorPayload): Promise<void> {
-    const vinculo = await this.obterDetalhesCotacaoPorToken(payload.token_acesso);
-    if (vinculo.respondido_em) throw new Error('Esta rodada já foi respondida por sua empresa.');
-
-    const respostasPayload = payload.respostas.map(r => ({
-      cotacao_fornecedor_id: vinculo.vinculo_id,
-      produto_id: r.produto_id,
-      preco_ofertado: r.preco_ofertado
-    }));
-
-    const { error: errResp } = await supabase.from('cotacoes_respostas_itens').insert(respostasPayload);
-    if (errResp) throw errResp;
-
-    const { error: errVinculo } = await supabase
-      .from('cotacoes_fornecedores_vinculados')
-      .update({
-        prazo_entrega_dias: payload.prazo_entrega_dias,
-        condicoes_pagamento: payload.condicoes_pagamento,
-        respondido_em: new Date().toISOString()
-      })
-      .eq('id', vinculo.vinculo_id);
-
-    if (errVinculo) throw errVinculo;
+    const { error } = await supabase.rpc('cotacao_publica_responder', {
+      p_token: payload.token_acesso,
+      p_prazo_entrega_dias: payload.prazo_entrega_dias,
+      p_condicoes_pagamento: payload.condicoes_pagamento,
+      p_respostas: payload.respostas.map(r => ({
+        produto_id: r.produto_id,
+        preco_ofertado: r.preco_ofertado
+      }))
+    });
+    if (error) throw new Error(error.message);
   },
 
   async listarHistoricoCotacoes(): Promise<CotacaoMestreRegistro[]> {
@@ -356,4 +295,4 @@ export const cotacoesService = {
 
     return true;
   }
-}
+};
