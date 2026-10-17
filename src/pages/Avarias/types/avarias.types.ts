@@ -34,6 +34,13 @@ export interface AvariaRecord {
   };
 }
 
+export interface AtualizarAvariaPayload {
+  motivo_avaria_id: string;
+  quantidade: number;
+  destinacao: string;
+  observacao?: string;
+}
+
 export interface FiltrosAvariaPayload {
   motivo_id?: string;
   destinacao?: string;

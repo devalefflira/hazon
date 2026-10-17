@@ -1,6 +1,6 @@
 // src/pages/Avarias/services/avariasService.ts
 import { supabase } from '../../../lib/supabaseClient';
-import type { AvariaRecord, FiltrosAvariaPayload, NovaAvariaPayload } from '../types/avarias.types';
+import type { AtualizarAvariaPayload, AvariaRecord, FiltrosAvariaPayload, NovaAvariaPayload } from '../types/avarias.types';
 import { dispararNotificacaoTelegram } from '../../../services/telegramNotificationService';
 
 export const avariasService = {
@@ -291,6 +291,24 @@ export const avariasService = {
 
   async cadastrarAvaria(payload: NovaAvariaPayload): Promise<void> {
     return this.registrarAvaria(payload);
+  },
+
+  // Atualizar Registro de Avaria existente (motivo, quantidade, destinação e observação)
+  async atualizarAvaria(id: string, payload: AtualizarAvariaPayload): Promise<void> {
+    const { error } = await supabase
+      .from('avarias')
+      .update({
+        motivo_avaria_id: payload.motivo_avaria_id,
+        quantidade: payload.quantidade,
+        destinacao: payload.destinacao,
+        observacao: payload.observacao || null
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao atualizar avaria:', error);
+      throw error;
+    }
   },
 
   // 6. Registrar Múltiplas Avarias em Lote (+ Notificação Telegram Consolidada)

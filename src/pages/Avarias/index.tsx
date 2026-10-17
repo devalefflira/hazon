@@ -3,6 +3,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { avariasService } from './services/avariasService';
 import RegistrarAvariaModal from './components/RegistrarAvariaModal';
 import RegistrarAvariaLote from './components/RegistrarAvariaLote';
+import EditarAvariaModal from './components/EditarAvariaModal';
+import type { AvariaRecord } from './types/avarias.types';
+import { Pencil } from 'lucide-react';
 
 interface AvariasProps {
   onVoltarParaHome?: () => void;
@@ -18,7 +21,10 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
   const [loading, setLoading] = useState(false);
   
   // Controle de Visualização: 'LISTAGEM' | 'REGISTRAR' | 'LOTE' (Todas em Tela Cheia)
-  const [telaAtiva, setTelaAtiva] = useState<'LISTAGEM' | 'REGISTRAR' | 'LOTE'>('LISTAGEM');
+  const [telaAtiva, setTelaAtiva] = useState<'LISTAGEM' | 'REGISTRAR' | 'LOTE' | 'EDITAR'>('LISTAGEM');
+
+  // Registro selecionado para edição (usado quando telaAtiva === 'EDITAR')
+  const [avariaEmEdicao, setAvariaEmEdicao] = useState<AvariaRecord | null>(null);
 
   // Filtros Avançados: retraído por padrão
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
@@ -259,6 +265,29 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
               carregarDados();
             }}
             usuarioLogadoId={idUsuarioAtivo}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // VISÃO 3: EDIÇÃO DE REGISTRO EM TELA CHEIA
+  if (telaAtiva === 'EDITAR' && avariaEmEdicao) {
+    const voltarParaListagem = () => {
+      setAvariaEmEdicao(null);
+      setTelaAtiva('LISTAGEM');
+    };
+
+    return (
+      <div className="min-h-screen bg-slate-100 p-3 sm:p-6 flex flex-col items-center select-none font-sans">
+        <div className="w-full max-w-lg bg-white rounded-3xl sm:rounded-4xl shadow-xl p-4 sm:p-6 flex flex-col gap-4 min-h-[calc(100vh-24px)]">
+          <EditarAvariaModal
+            avaria={avariaEmEdicao}
+            onVoltar={voltarParaListagem}
+            onSucesso={() => {
+              voltarParaListagem();
+              carregarDados();
+            }}
           />
         </div>
       </div>
@@ -562,6 +591,17 @@ export default function Avarias({ onVoltarParaHome, usuarioLogado, usuarioLogado
                         {prod.departamento}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvariaEmEdicao(av);
+                        setTelaAtiva('EDITAR');
+                      }}
+                      className="ml-auto flex items-center gap-1 text-[10px] font-black uppercase text-[#09797a] bg-teal-50 hover:bg-teal-100 border border-teal-200/80 px-2.5 py-1 rounded-lg cursor-pointer whitespace-nowrap transition-all"
+                    >
+                      <Pencil size={12} />
+                      Editar
+                    </button>
                   </div>
 
                   <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase leading-snug">
