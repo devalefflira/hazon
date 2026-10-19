@@ -1,11 +1,16 @@
 // Arquivo: src/pages/Inventario/components/CapturaItem.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
+import { SeletorProdutoScanner } from '../../../components/SeletorProdutoScanner';
+import type { ProdutoBusca } from '../../../components/SeletorProdutoScanner';
+import type { EscopoInventario } from '../services/inventarioService';
+import { descreverEscopo, validarProdutoNoEscopo } from '../utils/escopoInventario';
 
 interface CapturaItemProps {
   inventarioId: string;
   localCapturaId: string;
   localNome?: string;
+  escopo?: EscopoInventario | null;
   somenteConsulta?: boolean;
   onTrocarLocal?: () => void;
   onConcluir?: () => void;
@@ -15,14 +20,16 @@ export default function CapturaItem({
   inventarioId,
   localCapturaId,
   localNome = 'Geral',
+  escopo = null,
   somenteConsulta = false,
   onTrocarLocal,
   onConcluir
 }: CapturaItemProps) {
   const [itens, setItens] = useState<any[]>([]);
-  const [termoBusca, setTermoBusca] = useState('');
-  const [produtosEncontrados, setProdutosEncontrados] = useState<any[]>([]);
-  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoBusca | null>(null);
+  const [erroEscopo, setErroEscopo] = useState('');
+  // Incrementar a key limpa o campo de bipagem/busca do SeletorProdutoScanner
+  const [scannerKey, setScannerKey] = useState(0);
 
   const [quantidade, setQuantidade] = useState<number | ''>(1);
   const [lote, setLote] = useState('');
@@ -59,35 +66,32 @@ export default function CapturaItem({
     carregarItens();
   }, [inventarioId, localCapturaId]);
 
-  // Autocomplete de Produto
-  useEffect(() => {
-    if (!termoBusca.trim() || produtoSelecionado) {
-      setProdutosEncontrados([]);
+  // Recebe o produto escolhido (bipado, digitado ou selecionado na lista) e valida o escopo
+  const handleSelecionarProduto = (produto: ProdutoBusca) => {
+    const resultado = validarProdutoNoEscopo(produto, escopo);
+
+    if (!resultado.valido) {
+      setProdutoSelecionado(null);
+      setErroEscopo(resultado.motivo);
+      setScannerKey((k) => k + 1);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      try {
-        const { data, error } = await supabase
-          .from('produtos')
-          .select('id, codprod, codbarra, descricao, unidade')
-          .or(`codbarra.ilike.%${termoBusca}%,codprod.ilike.%${termoBusca}%,descricao.ilike.%${termoBusca}%`)
-          .limit(10);
-
-        if (error) throw error;
-        setProdutosEncontrados(data || []);
-      } catch (err) {
-        console.error(err);
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [termoBusca, produtoSelecionado]);
+    setErroEscopo('');
+    setProdutoSelecionado(produto);
+  };
 
   const handleSalvarItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!produtoSelecionado) {
       alert('Selecione um produto.');
+      return;
+    }
+
+    // Guarda final: nunca grava produto fora do escopo da coleta
+    const conferencia = validarProdutoNoEscopo(produtoSelecionado, escopo);
+    if (!conferencia.valido) {
+      setErroEscopo(conferencia.motivo);
       return;
     }
 
@@ -107,7 +111,8 @@ export default function CapturaItem({
       if (error) throw error;
 
       setProdutoSelecionado(null);
-      setTermoBusca('');
+      setErroEscopo('');
+      setScannerKey((k) => k + 1);
       setQuantidade(1);
       setLote('');
       setDataValidade('');
@@ -152,6 +157,11 @@ export default function CapturaItem({
             <p className="text-[11px] text-gray-400 font-bold mt-1">
               Local: <strong className="text-gray-700">{localNome}</strong>
             </p>
+            {escopo && (
+              <p className="text-[11px] text-gray-400 font-bold">
+                Escopo: <strong className="text-[#09797a]">{descreverEscopo(escopo)}</strong>
+              </p>
+            )}
           </div>
         </div>
 
@@ -171,40 +181,22 @@ export default function CapturaItem({
         <form onSubmit={handleSalvarItem} className="bg-gray-50 border border-gray-200 p-4 rounded-3xl flex flex-col gap-3">
           <span className="text-[10px] font-black text-gray-400 uppercase px-1">Registrar Item</span>
 
-          <div className="flex flex-col gap-1 relative">
-            <label className="text-[10px] font-bold text-gray-500 uppercase px-1">EAN, Código ou Descrição *</label>
-            <input
-              type="text"
-              required
-              placeholder="Bipe ou digite para buscar..."
-              value={termoBusca}
-              onChange={(e) => {
-                setTermoBusca(e.target.value);
-                setProdutoSelecionado(null);
-              }}
-              className="w-full h-11 text-xs bg-white border border-[#09797a] px-3 rounded-xl font-bold text-gray-800"
-            />
+          <SeletorProdutoScanner
+            key={scannerKey}
+            onSelecionarProduto={handleSelecionarProduto}
+            tituloCard="EAN, código ou descrição"
+            placeholder="Bipe, ou digite descrição (total/parcial), código ou EAN..."
+          />
 
-            {produtosEncontrados.length > 0 && !produtoSelecionado && (
-              <div className="absolute top-16 left-0 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-40 overflow-y-auto z-30 divide-y divide-gray-100">
-                {produtosEncontrados.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setProdutoSelecionado(p);
-                      setTermoBusca(`${p.codprod} - ${p.descricao}`);
-                      setProdutosEncontrados([]);
-                    }}
-                    className="w-full text-left p-3 hover:bg-emerald-50/50 flex flex-col text-xs font-bold text-gray-800 uppercase"
-                  >
-                    <span>{p.codprod} - {p.descricao}</span>
-                    <span className="text-[10px] text-gray-400 font-mono">EAN: {p.codbarra || 'S/EAN'}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {erroEscopo && (
+            <div
+              role="alert"
+              className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-3 py-2.5 flex gap-2 items-start"
+            >
+              <span>⛔</span>
+              <span>{erroEscopo}</span>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2">
             <div className="flex flex-col gap-1">

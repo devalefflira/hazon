@@ -1,8 +1,21 @@
 import { supabase } from '../../../lib/supabaseClient';
+import { normalizarChaveEscopo } from '../utils/escopoInventario';
 
 export interface LocalCaptura {
   id: string;
   nome: string;
+}
+
+export interface EscopoInventario {
+  departamento: string;
+  secao: string;
+  categoria: string | null;
+}
+
+export interface HierarquiaProduto {
+  departamento: string;
+  secao: string;
+  categoria: string | null;
 }
 
 export interface InventarioAtivo {
@@ -13,6 +26,9 @@ export interface InventarioAtivo {
   hora_registro: string;
   usuario_id: string;
   usuarios?: { nome: string };
+  departamento?: string | null;
+  secao?: string | null;
+  categoria?: string | null;
 }
 
 export interface ItemInventariado {
@@ -30,7 +46,7 @@ export interface ItemInventariado {
 }
 
 export const inventarioService = {
-  // 1. Lista todos os inventários trazendo dados do usuário e os locais dos itens vinculados
+  // 1. Lista todos os inventários trazendo dados do usuário, escopo e os locais dos itens vinculados
   async listarInventarios(): Promise<InventarioAtivo[]> {
     const { data, error } = await supabase
       .from('inventarios')
@@ -41,6 +57,9 @@ export const inventarioService = {
         data_registro,
         hora_registro,
         usuario_id,
+        departamento,
+        secao,
+        categoria,
         usuarios:usuario_id ( nome ),
         inventario_itens (
           local_captura_id,
@@ -65,7 +84,7 @@ export const inventarioService = {
           status: 'Em Andamento'
         }
       ])
-      .select('id, codigo_customizado, status, data_registro, hora_registro, usuario_id')
+      .select('id, codigo_customizado, status, data_registro, hora_registro, usuario_id, departamento, secao, categoria')
       .single();
 
     if (error) throw error;
@@ -159,5 +178,60 @@ export const inventarioService = {
 
     if (error) throw error;
     return data;
+  },
+
+  // 9. Lista a hierarquia Departamento > Seção > Categoria existente no cadastro de produtos
+  //    (paginada, pois o PostgREST limita cada consulta a 1000 linhas)
+  async listarHierarquiaProdutos(): Promise<HierarquiaProduto[]> {
+    const TAMANHO_PAGINA = 1000;
+    const mapa = new Map<string, HierarquiaProduto>();
+    let inicio = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('id, departamento, secao, categoria')
+        .order('id', { ascending: true })
+        .range(inicio, inicio + TAMANHO_PAGINA - 1);
+
+      if (error) throw error;
+
+      const linhas = data || [];
+      for (const linha of linhas) {
+        const departamento = (linha.departamento ?? '').trim();
+        const secao = (linha.secao ?? '').trim();
+        const categoria = (linha.categoria ?? '').trim();
+        if (!departamento || !secao) continue;
+
+        const chave = [
+          normalizarChaveEscopo(departamento),
+          normalizarChaveEscopo(secao),
+          normalizarChaveEscopo(categoria)
+        ].join('|');
+
+        if (!mapa.has(chave)) {
+          mapa.set(chave, { departamento, secao, categoria: categoria || null });
+        }
+      }
+
+      if (linhas.length < TAMANHO_PAGINA) break;
+      inicio += TAMANHO_PAGINA;
+    }
+
+    return Array.from(mapa.values());
+  },
+
+  // 10. Grava o escopo (Departamento / Seção / Categoria) na sessão de inventário
+  async definirEscopoInventario(inventarioId: string, escopo: EscopoInventario) {
+    const { error } = await supabase
+      .from('inventarios')
+      .update({
+        departamento: escopo.departamento,
+        secao: escopo.secao,
+        categoria: escopo.categoria
+      })
+      .eq('id', inventarioId);
+
+    if (error) throw error;
   }
 };

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { inventarioService } from './services/inventarioService';
-import type { LocalCaptura } from './services/inventarioService';
+import type { EscopoInventario, LocalCaptura } from './services/inventarioService';
 import CapturaItem from './components/CapturaItem';
+import SelecionarEscopo from './components/SelecionarEscopo';
 
 interface UsuarioLogado {
   id: string;
@@ -14,7 +15,7 @@ interface InventarioProps {
   usuarioLogado: UsuarioLogado | null;
 }
 
-type SubTela = 'dashboard' | 'selecionar_local' | 'contagem';
+type SubTela = 'dashboard' | 'selecionar_local' | 'selecionar_escopo' | 'contagem';
 
 export default function Inventario({ onVoltarParaHome, usuarioLogado }: InventarioProps) {
   const [subTela, setSubTela] = useState<SubTela>('dashboard');
@@ -86,6 +87,15 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     // Recupera o primeiro local associado à sessão se houver, ou deixa pronto para escolha
     const primeiroLocal = inventario.inventario_itens?.[0]?.local_captura_id || '';
     setLocalSelecionado(primeiroLocal);
+
+    const possuiEscopo = Boolean(inventario.departamento && inventario.secao);
+
+    // Coleta em andamento sem escopo (criada antes desta etapa): completa o fluxo antes de contar
+    if (inventario.status !== 'Finalizado' && !possuiEscopo) {
+      setSubTela(primeiroLocal ? 'selecionar_escopo' : 'selecionar_local');
+      return;
+    }
+
     setSubTela('contagem');
   };
 
@@ -93,10 +103,31 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     if (subTela === 'contagem' && sessaoAtiva?.status === 'Em Andamento') {
       carregarDashboard();
       setSubTela('dashboard');
+    } else if (subTela === 'selecionar_escopo') {
+      setSubTela('selecionar_local');
     } else if (subTela === 'selecionar_local') {
       setSubTela('dashboard');
     } else {
       onVoltarParaHome();
+    }
+  };
+
+  const handleConfirmarEscopo = async (escopo: EscopoInventario) => {
+    if (!sessaoAtiva) return;
+    try {
+      setLoading(true);
+      await inventarioService.definirEscopoInventario(sessaoAtiva.id, escopo);
+      setSessaoAtiva({
+        ...sessaoAtiva,
+        departamento: escopo.departamento,
+        secao: escopo.secao,
+        categoria: escopo.categoria
+      });
+      setSubTela('contagem');
+    } catch (err) {
+      setErro('Falha ao salvar o escopo da coleta.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -163,6 +194,16 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
     });
     return nomes.join(', ');
   };
+
+  // Escopo da sessão atual, repassado à contagem para validar cada bipagem
+  const escopoSessao: EscopoInventario | null =
+    sessaoAtiva?.departamento && sessaoAtiva?.secao
+      ? {
+          departamento: sessaoAtiva.departamento,
+          secao: sessaoAtiva.secao,
+          categoria: sessaoAtiva.categoria ?? null
+        }
+      : null;
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-start p-4 font-sans selection:bg-transparent">
@@ -282,7 +323,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                   value={localSelecionado}
                   onChange={(e) => {
                     setLocalSelecionado(e.target.value);
-                    if (e.target.value) setSubTela('contagem');
+                    if (e.target.value) setSubTela('selecionar_escopo');
                   }}
                   className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 h-12 text-xs font-semibold outline-none focus:border-[#09797a]"
                 >
@@ -290,6 +331,10 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                   {locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                 </select>
               </div>
+            )}
+
+            {subTela === 'selecionar_escopo' && (
+              <SelecionarEscopo onConfirmar={handleConfirmarEscopo} />
             )}
 
             {subTela === 'contagem' && sessaoAtiva && (
@@ -315,6 +360,7 @@ export default function Inventario({ onVoltarParaHome, usuarioLogado }: Inventar
                 <CapturaItem 
                   inventarioId={sessaoAtiva.id}
                   localCapturaId={localSelecionado}
+                  escopo={escopoSessao}
                   somenteConsulta={sessaoAtiva.status === 'Finalizado'}
                 />
               </div>
