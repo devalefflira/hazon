@@ -1,9 +1,9 @@
 // Arquivo: src/pages/Produtos/services/produtosService.ts
 import { supabase } from '../../../lib/supabaseClient';
-import type { ProdutoDTO, CriarProdutoPayload } from '../types/produtos.types';
+import type { ProdutoDTO, CriarProdutoPayload, FiltrosProdutos, ClassificacaoProduto } from '../types/produtos.types';
 
 export const produtosService = {
-  async listarProdutos(page = 0, limit = 50, filtros?: { termo?: string; setorId?: string }): Promise<{ data: ProdutoDTO[]; count: number }> {
+  async listarProdutos(page = 0, limit = 50, filtros?: FiltrosProdutos): Promise<{ data: ProdutoDTO[]; count: number }> {
     let query = supabase
       .from('produtos')
       .select('*', { count: 'exact' });
@@ -14,6 +14,18 @@ export const produtosService = {
 
     if (filtros?.setorId) {
       query = query.eq('departamento', filtros.setorId);
+    }
+
+    if (filtros?.departamento) {
+      query = query.eq('departamento', filtros.departamento);
+    }
+
+    if (filtros?.secao) {
+      query = query.eq('secao', filtros.secao);
+    }
+
+    if (filtros?.categoria) {
+      query = query.eq('categoria', filtros.categoria);
     }
 
     const start = page * limit;
@@ -44,6 +56,40 @@ export const produtosService = {
     });
 
     return { data: dataTratada, count: count || 0 };
+  },
+
+  // Lista as combinações distintas de Departamento / Seção / Categoria já cadastradas
+  // (lê em páginas de 1000 linhas, que é o limite padrão do Supabase por requisição)
+  async listarClassificacoes(): Promise<ClassificacaoProduto[]> {
+    const PAGINA = 1000;
+    const distintos = new Map<string, ClassificacaoProduto>();
+
+    for (let inicio = 0; ; inicio += PAGINA) {
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('departamento, secao, categoria')
+        .order('id', { ascending: true })
+        .range(inicio, inicio + PAGINA - 1);
+
+      if (error) throw error;
+
+      const linhas = (data || []) as ClassificacaoProduto[];
+
+      for (const linha of linhas) {
+        const chave = `${linha.departamento ?? ''}|${linha.secao ?? ''}|${linha.categoria ?? ''}`;
+        if (!distintos.has(chave)) {
+          distintos.set(chave, {
+            departamento: linha.departamento ?? null,
+            secao: linha.secao ?? null,
+            categoria: linha.categoria ?? null
+          });
+        }
+      }
+
+      if (linhas.length < PAGINA) break;
+    }
+
+    return Array.from(distintos.values());
   },
 
   async cadastrarProduto(payload: CriarProdutoPayload): Promise<void> {

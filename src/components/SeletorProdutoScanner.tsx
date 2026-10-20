@@ -22,13 +22,15 @@ interface Props {
   onSelecionarProduto: (produto: ProdutoBusca) => void;
   tituloCard?: string;
   placeholder?: string;
+  onTermoChange?: (termo: string) => void;
 }
 
 export const SeletorProdutoScanner: React.FC<Props> = ({
   produtoSelecionadoId,
   onSelecionarProduto,
   tituloCard = 'LOCALIZAR PRODUTO (BIPAGEM / BUSCA)',
-  placeholder = 'Digite código de barras, codprod ou descrição...'
+  placeholder = 'Digite código de barras, codprod ou descrição...',
+  onTermoChange
 }) => {
   const [termoBusca, setTermoBusca] = useState('');
   const [sugestoes, setSugestoes] = useState<ProdutoBusca[]>([]);
@@ -110,6 +112,7 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
   const handleLimpar = () => {
     setProdutoAtual(null);
     setTermoBusca('');
+    onTermoChange?.('');
     setSugestoes([]);
     setDropdownAberto(false);
   };
@@ -135,6 +138,7 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
 
       // 2. Se não encontrar exato, pesquisa parcial e abre lista
       setTermoBusca(code);
+      onTermoChange?.(code);
       const { data: parciais } = await supabase
         .from('produtos')
         .select('*')
@@ -163,7 +167,10 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
           <input
             type="text"
             value={termoBusca}
-            onChange={(e) => setTermoBusca(e.target.value)}
+            onChange={(e) => {
+              setTermoBusca(e.target.value);
+              onTermoChange?.(e.target.value);
+            }}
             onFocus={() => {
               if (sugestoes.length > 0) setDropdownAberto(true);
             }}

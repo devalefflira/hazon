@@ -1,4 +1,9 @@
 
+[functions.criar-usuario]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/criar-usuario/index.ts"
+
 [functions.enviar-push]
 enabled = true
 verify_jwt = false

@@ -57,7 +57,12 @@ export default function CadastroUsuario({
       };
 
       if (!usuarioEdicao || senha.trim() !== '') {
-        payload.senha_hash = senha;
+        payload.senha = senha;
+      }
+
+      // Na criação, as permissões de módulo seguem junto com o cadastro
+      if (!usuarioEdicao) {
+        payload.modulosPermitidos = modulosPermitidos;
       }
 
       if (onSalvar) {

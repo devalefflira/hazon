@@ -45,3 +45,18 @@ export interface CriarProdutoPayload {
   setor?: string;
   subsetor?: string;
 }
+
+export interface FiltrosProdutos {
+  termo?: string;
+  setorId?: string;
+  departamento?: string;
+  secao?: string;
+  categoria?: string;
+}
+
+// Combinação distinta de Departamento / Seção / Categoria existente nos produtos
+export interface ClassificacaoProduto {
+  departamento: string | null;
+  secao: string | null;
+  categoria: string | null;
+}

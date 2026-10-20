@@ -5,6 +5,29 @@ import { permissoesService } from '../../Permissoes/services/permissoesService';
 // Colunas expostas ao front-end. senha_hash nunca é lido pelo navegador (S3).
 const COLUNAS_USUARIO = 'id, nome, email, setor, perfil_id, updated_at';
 
+// Operações de acesso (Supabase Auth) passam pela Edge Function "criar-usuario",
+// que usa a service role no servidor. A senha nunca é gravada na tabela usuarios.
+async function chamarFuncaoUsuarios(body: Record<string, unknown>): Promise<any> {
+  const { data, error } = await supabase.functions.invoke('criar-usuario', { body });
+
+  if (error) {
+    let mensagem = error.message;
+    try {
+      const contexto = (error as any).context;
+      if (contexto && typeof contexto.json === 'function') {
+        const corpo = await contexto.json();
+        if (corpo?.error) mensagem = corpo.error;
+      }
+    } catch {
+      // mantém a mensagem padrão do erro
+    }
+    throw new Error(mensagem);
+  }
+
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 export const usuariosService = {
   // Listar usuários com o nome do perfil
   async listarUsuarios(): Promise<any[]> {
@@ -31,43 +54,46 @@ export const usuariosService = {
     return data || [];
   },
 
-  // Criar Usuário e atribuir suas permissões aos módulos
+  // Criar Usuário (conta no Auth + cadastro em usuarios) e atribuir permissões aos módulos
   async criarUsuario(payload: {
     nome: string;
     email: string;
-    senha_hash: string;
+    senha: string;
     setor: string;
     perfil_id: string;
     modulosPermitidos?: string[];
   }): Promise<any> {
     const { modulosPermitidos = [], ...dadosUsuario } = payload;
 
-    const { data, error } = await supabase
-      .from('usuarios')
-      .insert([dadosUsuario])
-      .select(COLUNAS_USUARIO)
-      .single();
-
-    if (error) throw error;
+    const resposta = await chamarFuncaoUsuarios({ acao: 'criar', ...dadosUsuario });
+    const novo = resposta?.usuario;
 
     // Persiste as permissões individuais do novo usuário
-    if (data?.id && modulosPermitidos.length > 0) {
-      await permissoesService.salvarPermissoesUsuario(data.id, modulosPermitidos);
+    if (novo?.id && modulosPermitidos.length > 0) {
+      await permissoesService.salvarPermissoesUsuario(novo.id, modulosPermitidos);
     }
 
-    return data;
+    return novo;
   },
 
-  // Atualizar Usuário e suas permissões
+  // Atualizar Usuário, seu acesso (e-mail/senha, se informados) e suas permissões
   async atualizarUsuario(id: string, payload: {
     nome: string;
     email: string;
-    senha_hash?: string;
+    senha?: string;
     setor: string;
     perfil_id: string;
     modulosPermitidos?: string[];
   }): Promise<void> {
-    const { modulosPermitidos, ...dadosUsuario } = payload;
+    const { modulosPermitidos, senha, ...dadosUsuario } = payload;
+
+    // Primeiro sincroniza o acesso no Auth; se falhar, o cadastro não é alterado
+    await chamarFuncaoUsuarios({
+      acao: 'atualizar_acesso',
+      usuario_id: id,
+      email: dadosUsuario.email,
+      senha: senha && senha.trim() !== '' ? senha : undefined,
+    });
 
     const objetoUpdate: Record<string, any> = {
       nome: dadosUsuario.nome,
@@ -76,10 +102,6 @@ export const usuariosService = {
       perfil_id: dadosUsuario.perfil_id,
       updated_at: new Date().toISOString()
     };
-
-    if (dadosUsuario.senha_hash && dadosUsuario.senha_hash.trim() !== '') {
-      objetoUpdate.senha_hash = dadosUsuario.senha_hash;
-    }
 
     const { error } = await supabase
       .from('usuarios')
