@@ -25,7 +25,8 @@ export const LISTA_MODULOS_SISTEMA = [
   'Vencimentos',
   'Trocas',
   'ConsumoLoja',
-  'PesquisaPrecos'
+  'PesquisaPrecos',
+  'Organograma'
 ];
 
 export const permissoesService = {

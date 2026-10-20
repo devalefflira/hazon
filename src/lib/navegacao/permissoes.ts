@@ -33,6 +33,7 @@ export const CHAVE_PERMISSAO_POR_ROTA: Record<string, string | null> = {
   '/permissoes': 'Permissoes',
   '/fornecedores': 'Fornecedores',
   '/categorias': 'Categorias',
+  '/organograma': 'Organograma',
 
   // Módulos sem chave de permissão: liberados para todos (decisão registrada)
   '/almoxarifado': null,

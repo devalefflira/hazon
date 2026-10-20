@@ -58,6 +58,7 @@ export const MODULOS: ModuloNavegacao[] = [
   modulo('permissoes', 'Permissões', 'Matriz de acessos por módulo', 'administracao'),
   modulo('fornecedores', 'Fornecedores', 'Cadastro de parceiros e CNPJs', 'administracao'),
   modulo('categorias', 'Categorias', 'Setores, locais e unidades', 'administracao'),
+  modulo('organograma', 'Organograma', 'Estrutura da equipe por setor e superior', 'administracao'),
   modulo('mensagens', 'Mensagens', 'Chat interno entre setores', 'administracao'),
   modulo('notificacoes', 'Notificações', 'Central de avisos e alertas', 'administracao'),
 ];

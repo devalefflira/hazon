@@ -246,7 +246,8 @@ export default function Home(props: HomeProps) {
         { id: 'usuarios', nome: 'USUÁRIOS', descricao: 'Colaboradores e credenciais', tela: 'usuarios', callbackProp: 'onNavegarParaUsuarios' },
         { id: 'permissoes', nome: 'PERMISSÕES', descricao: 'Matriz de acessos por módulo', tela: 'permissoes', callbackProp: 'onNavegarParaPermissoes' },
         { id: 'fornecedores', nome: 'FORNECEDORES', descricao: 'Cadastro de parceiros e CNPJs', tela: 'fornecedores', callbackProp: 'onNavegarParaFornecedores' },
-        { id: 'categorias', nome: 'CATEGORIAS', descricao: 'Setores, locais e unidades', tela: 'categorias', callbackProp: 'onNavegarParaCategorias' }
+        { id: 'categorias', nome: 'CATEGORIAS', descricao: 'Setores, locais e unidades', tela: 'categorias', callbackProp: 'onNavegarParaCategorias' },
+        { id: 'organograma', nome: 'ORGANOGRAMA', descricao: 'Estrutura da equipe por setor e superior', tela: 'organograma', callbackProp: 'onNavegarParaOrganograma' }
       ]
     }
   };

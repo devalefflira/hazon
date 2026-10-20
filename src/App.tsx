@@ -16,6 +16,7 @@ import type { UsuarioLogado } from './lib/sessao/sessaoContext';
 const CategoriasHub = lazy(() => import('./pages/Categorias'));
 const Usuarios = lazy(() => import('./pages/Usuarios'));
 const Permissoes = lazy(() => import('./pages/Permissoes'));
+const Organograma = lazy(() => import('./pages/Organograma'));
 const Fornecedores = lazy(() => import('./pages/Fornecedores'));
 const Vendedores = lazy(() => import('./pages/Vendedores'));
 const Produtos = lazy(() => import('./pages/Produtos'));
@@ -221,6 +222,10 @@ function RotasHazon() {
       <Route
         path="/categorias"
         element={<RotaProtegida>{() => <CategoriasHub onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
+      />
+      <Route
+        path="/organograma"
+        element={<RotaProtegida>{() => <Organograma onVoltarParaHome={voltarParaHome} />}</RotaProtegida>}
       />
       <Route
         path="/usuarios"
