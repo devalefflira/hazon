@@ -2,10 +2,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarraPaginacao, paginar } from '../../../components/ui/BarraPaginacao';
 import { auditoriaService } from '../services/auditoriaService';
+import { ROTULO_SITUACAO } from '../types/auditoria.types';
 import type { AuditoriaItemRegistro } from '../types/auditoria.types';
+import { gerarPdfEtiquetas } from '../utils/etiquetasPdf';
 
 interface AbaEtiquetasProps {
   onContagemAlterada: (total: number) => void;
+  nomeResponsavel: string;
 }
 
 interface Mensagem {
@@ -13,12 +16,15 @@ interface Mensagem {
   texto: string;
 }
 
+const moeda = (valor: number | null | undefined): string =>
+  valor === null || valor === undefined ? '-' : valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 const dataHora = (iso: string): string => {
   const d = new Date(iso);
   return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
-export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
+export function AbaEtiquetas({ onContagemAlterada, nomeResponsavel }: AbaEtiquetasProps) {
   const [pendentes, setPendentes] = useState<AuditoriaItemRegistro[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [busca, setBusca] = useState('');
@@ -60,13 +66,15 @@ export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
     void carregar();
   }, []);
 
-  const alternarTodosVisiveis = (valor: boolean) => {
+  const selecionarTodos = () => {
     const proximo = { ...selecionados };
     filtrados.forEach((i) => {
-      proximo[i.id] = valor;
+      proximo[i.id] = true;
     });
     setSelecionados(proximo);
   };
+
+  const limparSelecao = () => setSelecionados({});
 
   const copiarTexto = async (texto: string, rotulo: string) => {
     try {
@@ -88,9 +96,14 @@ export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
     void copiarTexto(lista.map((i) => i.codprod).join('\n'), `${lista.length} código(s)`);
   };
 
-  const copiarCodigosVirgula = () => {
+  const abrirPdf = () => {
     const lista = listaParaCopiar();
-    void copiarTexto(lista.map((i) => i.codprod).join(','), `${lista.length} código(s)`);
+    const abriu = gerarPdfEtiquetas(lista, nomeResponsavel);
+    setMensagem(
+      abriu
+        ? { tipo: 'ok', texto: `PDF com ${lista.length} etiqueta(s) aberto em nova aba.` }
+        : { tipo: 'erro', texto: 'O navegador bloqueou a nova aba. Permita pop-ups para este site e tente de novo.' }
+    );
   };
 
   const marcarImpressas = async () => {
@@ -125,7 +138,7 @@ export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
           <div>
             <h2 className="text-sm font-black text-slate-800 uppercase">Etiquetas pendentes</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Produtos sem preço na gôndola. Copie os códigos e cole na rotina de etiquetas do ERP para imprimir de uma só vez.
+              Produtos sem preço na gôndola e produtos com preço incorreto. Gere o PDF ou copie os códigos e cole na rotina de etiquetas do ERP.
             </p>
           </div>
           <span className="text-xs font-black text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-3 py-1.5">
@@ -147,17 +160,19 @@ export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => alternarTodosVisiveis(true)}
-              className="flex-1 px-3 py-2.5 rounded-2xl text-[11px] font-bold bg-slate-100 text-slate-600 active:scale-95 transition-all"
+              disabled={filtrados.length === 0}
+              onClick={selecionarTodos}
+              className="flex-1 px-3 py-2.5 rounded-2xl text-[11px] font-bold bg-slate-100 text-slate-600 active:scale-95 transition-all disabled:opacity-40"
             >
-              Marcar visíveis
+              Selecionar todos
             </button>
             <button
               type="button"
-              onClick={() => setSelecionados({})}
-              className="flex-1 px-3 py-2.5 rounded-2xl text-[11px] font-bold bg-slate-100 text-slate-600 active:scale-95 transition-all"
+              disabled={idsSelecionados.length === 0}
+              onClick={limparSelecao}
+              className="flex-1 px-3 py-2.5 rounded-2xl text-[11px] font-bold bg-slate-100 text-slate-600 active:scale-95 transition-all disabled:opacity-40"
             >
-              Limpar
+              Limpar seleção
             </button>
           </div>
         </div>
@@ -174,10 +189,10 @@ export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
           <button
             type="button"
             disabled={filtrados.length === 0}
-            onClick={copiarCodigosVirgula}
-            className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-teal-50 text-[#09797a] border border-teal-200 active:scale-95 transition-all disabled:opacity-40"
+            onClick={abrirPdf}
+            className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase bg-teal-50 text-[#09797a] border border-teal-200 active:scale-95 transition-all disabled:opacity-40"
           >
-            Copiar códigos (separados por vírgula)
+            Gerar PDF
           </button>
           <button
             type="button"
@@ -189,7 +204,7 @@ export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
           </button>
         </div>
         <p className="text-[10px] text-slate-400">
-          Sem seleção, a cópia usa todos os itens visíveis na busca. Com seleção, copia apenas os selecionados.
+          Sem seleção, cópia e PDF usam todos os itens da busca. Com seleção, usam apenas os selecionados.
         </p>
       </section>
 
@@ -225,11 +240,23 @@ export function AbaEtiquetas({ onContagemAlterada }: AbaEtiquetasProps) {
                   className="mt-1 w-5 h-5 accent-[#09797a] shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <span className="block font-mono text-lg font-black text-[#09797a]">{item.codprod}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="block font-mono text-lg font-black text-[#09797a]">{item.codprod}</span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full border bg-sky-50 text-sky-700 border-sky-200">
+                      {item.situacao === 'INCORRETO' ? 'Preço incorreto' : ROTULO_SITUACAO[item.situacao]}
+                    </span>
+                  </div>
                   <p className="text-sm font-bold text-slate-800 break-words">{item.descricao}</p>
                   <p className="text-[11px] text-slate-500 mt-1">
                     {item.secao_local} • auditado em {dataHora(item.auditado_em)}
+                    {item.usuarios?.nome && <> • por {item.usuarios.nome}</>}
                   </p>
+                  {item.situacao === 'INCORRETO' && item.preco_encontrado !== null && (
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Sistema: <strong className="font-mono">{moeda(Number(item.preco_sistema))}</strong> • Gôndola:{' '}
+                      <strong className="font-mono text-amber-700">{moeda(Number(item.preco_encontrado))}</strong>
+                    </p>
+                  )}
                 </div>
               </label>
             ))}

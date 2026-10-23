@@ -4,8 +4,10 @@ import { BarraPaginacao, paginar } from '../../../components/ui/BarraPaginacao';
 import { auditoriaService } from '../services/auditoriaService';
 import { ROTULO_SITUACAO, SECOES_AUDITORIA, OPCAO_OUTRO } from '../types/auditoria.types';
 import type { AuditoriaItemRegistro, SituacaoItem } from '../types/auditoria.types';
+import { RelatorioAnalises } from './RelatorioAnalises';
 
 type FiltroProblema = 'TODOS' | 'INCORRETO' | 'SEM_PRECO';
+type SubAbaAnalises = 'VISAO' | 'RELATORIOS';
 
 const moeda = (valor: number | null | undefined): string =>
   valor === null || valor === undefined ? '-' : valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -46,7 +48,7 @@ function Kpi({ rotulo, valor, detalhe, classe = 'text-slate-800' }: { rotulo: st
   );
 }
 
-export function AbaAnalises() {
+function VisaoGeral() {
   const [itens, setItens] = useState<AuditoriaItemRegistro[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -55,6 +57,7 @@ export function AbaAnalises() {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [filtroProblema, setFiltroProblema] = useState<FiltroProblema>('TODOS');
+  const [filtroSecaoProblema, setFiltroSecaoProblema] = useState('TODOS');
   const [pagina, setPagina] = useState(1);
   const [tamanho, setTamanho] = useState(20);
 
@@ -70,6 +73,7 @@ export function AbaAnalises() {
             dataFim: dataFim || undefined
           })
         );
+        setFiltroSecaoProblema('TODOS');
         setPagina(1);
       } catch (err) {
         console.error(err);
@@ -90,6 +94,11 @@ export function AbaAnalises() {
     const etiquetasPendentes = itens.filter((i) => i.etiqueta_pendente).length;
     return { total, corretos, incorretos, semPreco, auditorias, etiquetasPendentes };
   }, [itens]);
+
+  const secoesComDivergencia = useMemo(
+    () => Array.from(new Set(itens.filter((i) => i.situacao !== 'CORRETO').map((i) => i.secao_local))).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [itens]
+  );
 
   const porSecao = useMemo<ResumoSecao[]>(() => {
     const mapa = new Map<string, ResumoSecao>();
@@ -112,9 +121,11 @@ export function AbaAnalises() {
     () =>
       itens.filter((i) => {
         if (i.situacao === 'CORRETO') return false;
-        return filtroProblema === 'TODOS' || i.situacao === filtroProblema;
+        if (filtroProblema !== 'TODOS' && i.situacao !== filtroProblema) return false;
+        if (filtroSecaoProblema !== 'TODOS' && i.secao_local !== filtroSecaoProblema) return false;
+        return true;
       }),
-    [itens, filtroProblema]
+    [itens, filtroProblema, filtroSecaoProblema]
   );
 
   const pag = paginar(problemas, pagina, tamanho);
@@ -227,7 +238,7 @@ export function AbaAnalises() {
           <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <h2 className="text-xs font-black text-slate-700 uppercase">Itens com divergência ({problemas.length})</h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {(['TODOS', 'INCORRETO', 'SEM_PRECO'] as FiltroProblema[]).map((f) => (
                   <button
                     key={f}
@@ -243,6 +254,22 @@ export function AbaAnalises() {
                     {f === 'TODOS' ? 'Todos' : ROTULO_SITUACAO[f]}
                   </button>
                 ))}
+                <select
+                  value={filtroSecaoProblema}
+                  onChange={(e) => {
+                    setFiltroSecaoProblema(e.target.value);
+                    setPagina(1);
+                  }}
+                  className="px-3 py-2 rounded-2xl text-[11px] font-black uppercase bg-white text-slate-600 border border-slate-200"
+                  aria-label="Filtrar divergências por seção"
+                >
+                  <option value="TODOS">Seção: TODOS</option>
+                  {secoesComDivergencia.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -260,9 +287,7 @@ export function AbaAnalises() {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
               {pag.itens.map((i) => {
                 const diferenca =
-                  i.situacao === 'INCORRETO' && i.preco_encontrado !== null
-                    ? Number(i.preco_encontrado) - Number(i.preco_sistema)
-                    : null;
+                  i.situacao === 'INCORRETO' && i.preco_encontrado !== null ? Number(i.preco_encontrado) - Number(i.preco_sistema) : null;
                 return (
                   <article key={i.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-3">
@@ -324,6 +349,37 @@ export function AbaAnalises() {
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+export function AbaAnalises() {
+  const [subAba, setSubAba] = useState<SubAbaAnalises>('VISAO');
+
+  const rotulos: Array<{ id: SubAbaAnalises; texto: string }> = [
+    { id: 'VISAO', texto: 'Visão geral' },
+    { id: 'RELATORIOS', texto: 'Relatórios' }
+  ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <nav className="flex gap-2 flex-wrap">
+        {rotulos.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => setSubAba(r.id)}
+            className={`px-4 py-2 rounded-2xl text-[11px] font-black uppercase transition-all active:scale-95 ${
+              subAba === r.id ? 'bg-[#09797a] text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200'
+            }`}
+          >
+            {r.texto}
+          </button>
+        ))}
+      </nav>
+
+      {subAba === 'VISAO' && <VisaoGeral />}
+      {subAba === 'RELATORIOS' && <RelatorioAnalises />}
     </div>
   );
 }

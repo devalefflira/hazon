@@ -22,12 +22,35 @@ export const ROTULO_SITUACAO: Record<SituacaoItem, string> = {
   SEM_PRECO: 'Sem preço'
 };
 
+export type ClassificacaoMargem =
+  | 'MUITO_ABAIXO'
+  | 'ABAIXO'
+  | 'IDEAL'
+  | 'TOLERAVEL'
+  | 'MUITO_ACIMA'
+  | 'SEM_PARAMETRO';
+
+export const ROTULO_CLASSIFICACAO: Record<ClassificacaoMargem, string> = {
+  MUITO_ABAIXO: 'Muito abaixo',
+  ABAIXO: 'Abaixo',
+  IDEAL: 'Ideal',
+  TOLERAVEL: 'Tolerável',
+  MUITO_ACIMA: 'Muito acima',
+  SEM_PARAMETRO: 'Sem parâmetro'
+};
+
+/** Classificações fora da faixa tolerável: entram em "Itens para Corrigir". */
+export const CLASSIFICACOES_FORA_DA_FAIXA: ClassificacaoMargem[] = ['MUITO_ABAIXO', 'ABAIXO', 'MUITO_ACIMA'];
+
+export type StatusCorrecao = 'Pendente' | 'Corrigido';
+
 export interface AuditoriaRegistro {
   id: string;
   codigo_customizado: string;
   usuario_id: string;
   secao: string;
   secao_outro_descricao: string | null;
+  classe: string | null;
   status: 'Em andamento' | 'Finalizada';
   data_inicio: string;
   data_fim: string | null;
@@ -36,6 +59,7 @@ export interface AuditoriaRegistro {
   total_incorretos: number;
   total_sem_preco: number;
   created_at: string;
+  usuarios?: { nome: string | null } | null;
 }
 
 export interface AuditoriaItemRegistro {
@@ -57,8 +81,29 @@ export interface AuditoriaItemRegistro {
   data_auditoria: string;
   etiqueta_pendente: boolean;
   etiqueta_impressa_em: string | null;
+  preco_margem: number | null;
+  margem_real_pct: number | null;
+  margem_meta_pct: number | null;
+  margem_classificacao: ClassificacaoMargem | null;
+  correcao_status: StatusCorrecao | null;
+  corrigido_em: string | null;
   usuario_id: string;
   auditado_em: string;
+  usuarios?: { nome: string | null } | null;
+}
+
+export interface ParametroMargem {
+  id?: string;
+  departamento: string;
+  secao: string;
+  categoria: string;
+  margem_alvo_pct: number;
+}
+
+export interface ConfigMargem {
+  faixa_ideal_pp: number;
+  faixa_tolerancia_pp: number;
+  faixa_muito_pp: number;
 }
 
 export interface ResumoSituacoes {

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { AbaAuditar } from './components/AbaAuditar';
 import { AbaEtiquetas } from './components/AbaEtiquetas';
 import { AbaAnalises } from './components/AbaAnalises';
+import { AbaMargeamento } from './components/AbaMargeamento';
 import { auditoriaService } from './services/auditoriaService';
 
 interface AuditoriaPrecificacaoProps {
@@ -11,10 +12,11 @@ interface AuditoriaPrecificacaoProps {
   usuarioLogadoId?: string;
 }
 
-type AbaPrincipal = 'AUDITAR' | 'ETIQUETAS' | 'ANALISES';
+type AbaPrincipal = 'AUDITAR' | 'ETIQUETAS' | 'ANALISES' | 'MARGEAMENTO';
 
 export default function AuditoriaPrecificacao({ onVoltarParaHome, usuarioLogado, usuarioLogadoId }: AuditoriaPrecificacaoProps) {
   const idUsuario = usuarioLogadoId || usuarioLogado?.id || '';
+  const nomeUsuario: string = usuarioLogado?.nome ?? '';
   const [aba, setAba] = useState<AbaPrincipal>('AUDITAR');
   const [etiquetasPendentes, setEtiquetasPendentes] = useState(0);
 
@@ -29,7 +31,8 @@ export default function AuditoriaPrecificacao({ onVoltarParaHome, usuarioLogado,
   const rotulos: Array<{ id: AbaPrincipal; texto: string }> = [
     { id: 'AUDITAR', texto: 'Auditar' },
     { id: 'ETIQUETAS', texto: `Etiquetas${etiquetasPendentes > 0 ? ` (${etiquetasPendentes})` : ''}` },
-    { id: 'ANALISES', texto: 'Análises' }
+    { id: 'ANALISES', texto: 'Análises' },
+    { id: 'MARGEAMENTO', texto: 'Margeamento' }
   ];
 
   return (
@@ -72,8 +75,9 @@ export default function AuditoriaPrecificacao({ onVoltarParaHome, usuarioLogado,
         {aba === 'AUDITAR' && (
           <AbaAuditar usuarioId={idUsuario} onFinalizada={() => setAba('ANALISES')} />
         )}
-        {aba === 'ETIQUETAS' && <AbaEtiquetas onContagemAlterada={setEtiquetasPendentes} />}
+        {aba === 'ETIQUETAS' && <AbaEtiquetas onContagemAlterada={setEtiquetasPendentes} nomeResponsavel={nomeUsuario} />}
         {aba === 'ANALISES' && <AbaAnalises />}
+        {aba === 'MARGEAMENTO' && <AbaMargeamento />}
       </div>
     </div>
   );

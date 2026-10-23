@@ -1,9 +1,21 @@
 // src/pages/AuditoriaPrecificacao/services/auditoriaService.ts
 import { supabase } from '../../../lib/supabaseClient';
-import type { AuditoriaItemRegistro, AuditoriaRegistro, ResumoSituacoes, SituacaoItem } from '../types/auditoria.types';
+import { CLASSIFICACOES_FORA_DA_FAIXA } from '../types/auditoria.types';
+import type {
+  AuditoriaItemRegistro,
+  AuditoriaRegistro,
+  ClassificacaoMargem,
+  ConfigMargem,
+  ParametroMargem,
+  ResumoSituacoes,
+  SituacaoItem,
+  StatusCorrecao
+} from '../types/auditoria.types';
 
 const TABELA_AUDITORIAS = 'auditorias_precificacao';
 const TABELA_ITENS = 'auditoria_precificacao_itens';
+const TABELA_PARAMETROS = 'auditoria_margem_parametros';
+const TABELA_CONFIG = 'auditoria_margem_config';
 const TAMANHO_LOTE = 200;
 const LIMITE_LEITURA = 5000;
 
@@ -24,6 +36,18 @@ export interface NovoItemAuditoria {
   data_auditoria: string;
   etiqueta_pendente: boolean;
   usuario_id: string;
+  preco_margem: number | null;
+  margem_real_pct: number | null;
+  margem_meta_pct: number | null;
+  margem_classificacao: ClassificacaoMargem | null;
+  correcao_status: StatusCorrecao | null;
+}
+
+/** Combinação de departamento / seção / categoria existente no cadastro de produtos. */
+export interface HierarquiaProduto {
+  departamento: string;
+  secao: string;
+  categoria: string;
 }
 
 /** Data local no formato YYYY-MM-DD. */
@@ -35,8 +59,34 @@ const blocos = <T,>(lista: T[], tamanho: number): T[][] => {
   return resultado;
 };
 
+/** Busca o nome de quem registrou cada linha, sem depender de relacionamento no banco. */
+async function anexarResponsaveis<T extends { usuario_id: string; usuarios?: { nome: string | null } | null }>(lista: T[]): Promise<T[]> {
+  const ids = Array.from(new Set(lista.map((i) => i.usuario_id).filter(Boolean)));
+  if (ids.length === 0) return lista;
+
+  const nomes = new Map<string, string | null>();
+  for (const bloco of blocos(ids, TAMANHO_LOTE)) {
+    const { data, error } = await supabase.from('usuarios').select('id, nome').in('id', bloco);
+    if (error) throw error;
+    (data || []).forEach((u: { id: string; nome: string | null }) => nomes.set(u.id, u.nome));
+  }
+  return lista.map((i) => ({ ...i, usuarios: { nome: nomes.get(i.usuario_id) ?? null } }) as T);
+}
+
+const normalizarParametro = (p: ParametroMargem): ParametroMargem => ({
+  departamento: p.departamento.trim(),
+  secao: p.secao.trim(),
+  categoria: p.categoria.trim(),
+  margem_alvo_pct: Number(p.margem_alvo_pct)
+});
+
 export const auditoriaService = {
-  async criarAuditoria(payload: { usuario_id: string; secao: string; secao_outro_descricao: string | null }): Promise<AuditoriaRegistro> {
+  async criarAuditoria(payload: {
+    usuario_id: string;
+    secao: string;
+    secao_outro_descricao: string | null;
+    classe: string;
+  }): Promise<AuditoriaRegistro> {
     const codigo = `AUD-${Math.floor(100000 + Math.random() * 900000)}`;
     const { data, error } = await supabase
       .from(TABELA_AUDITORIAS)
@@ -55,7 +105,7 @@ export const auditoriaService = {
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) throw error;
-    return (data || []) as AuditoriaRegistro[];
+    return anexarResponsaveis((data || []) as AuditoriaRegistro[]);
   },
 
   async listarItens(auditoriaId: string): Promise<AuditoriaItemRegistro[]> {
@@ -74,7 +124,15 @@ export const auditoriaService = {
     const { data, error } = await supabase
       .from(TABELA_ITENS)
       .upsert(
-        [{ ...item, observacao: null, etiqueta_impressa_em: null, auditado_em: new Date().toISOString() }],
+        [
+          {
+            ...item,
+            observacao: null,
+            etiqueta_impressa_em: null,
+            corrigido_em: null,
+            auditado_em: new Date().toISOString()
+          }
+        ],
         { onConflict: 'auditoria_id,produto_id' }
       )
       .select('*')
@@ -118,6 +176,7 @@ export const auditoriaService = {
     if (error) throw error;
   },
 
+  /** Etiquetas pendentes: itens sem preco na gôndola e itens incorretos que precisam de etiqueta nova. */
   async listarEtiquetasPendentes(): Promise<AuditoriaItemRegistro[]> {
     const { data, error } = await supabase
       .from(TABELA_ITENS)
@@ -126,7 +185,7 @@ export const auditoriaService = {
       .order('auditado_em', { ascending: false })
       .limit(LIMITE_LEITURA);
     if (error) throw error;
-    return (data || []) as AuditoriaItemRegistro[];
+    return anexarResponsaveis((data || []) as AuditoriaItemRegistro[]);
   },
 
   async contarEtiquetasPendentes(): Promise<number> {
@@ -163,5 +222,107 @@ export const auditoriaService = {
     const { data, error } = await consulta.order('data_auditoria', { ascending: false }).limit(LIMITE_LEITURA);
     if (error) throw error;
     return (data || []) as AuditoriaItemRegistro[];
+  },
+
+  async listarParametrosMargem(): Promise<ParametroMargem[]> {
+    const { data, error } = await supabase
+      .from(TABELA_PARAMETROS)
+      .select('*')
+      .order('departamento', { ascending: true })
+      .order('secao', { ascending: true })
+      .order('categoria', { ascending: true })
+      .limit(LIMITE_LEITURA);
+    if (error) throw error;
+    return (data || []) as ParametroMargem[];
+  },
+
+  /** Combinações distintas de departamento / seção / categoria do cadastro de produtos (lidas em páginas). */
+  async listarHierarquiaProdutos(): Promise<HierarquiaProduto[]> {
+    const TAMANHO_PAGINA = 1000;
+    const vistos = new Map<string, HierarquiaProduto>();
+
+    for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('departamento, secao, categoria')
+        .order('codprod', { ascending: true })
+        .range(inicio, inicio + TAMANHO_PAGINA - 1);
+      if (error) throw error;
+
+      const lote = (data || []) as Array<{ departamento: string | null; secao: string | null; categoria: string | null }>;
+      lote.forEach((p) => {
+        const departamento = (p.departamento ?? '').trim();
+        const secao = (p.secao ?? '').trim();
+        const categoria = (p.categoria ?? '').trim();
+        if (!departamento && !secao && !categoria) return;
+        vistos.set(`${departamento}|${secao}|${categoria}`, { departamento, secao, categoria });
+      });
+
+      if (lote.length < TAMANHO_PAGINA) break;
+    }
+
+    return Array.from(vistos.values());
+  },
+
+  async salvarParametroMargem(parametro: ParametroMargem): Promise<void> {
+    const { error } = await supabase
+      .from(TABELA_PARAMETROS)
+      .upsert(
+        [{ ...normalizarParametro(parametro), updated_at: new Date().toISOString() }],
+        { onConflict: 'departamento,secao,categoria' }
+      );
+    if (error) throw error;
+  },
+
+  async removerParametroMargem(id: string): Promise<void> {
+    const { error } = await supabase.from(TABELA_PARAMETROS).delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  async obterConfigMargem(): Promise<ConfigMargem> {
+    const { data, error } = await supabase
+      .from(TABELA_CONFIG)
+      .select('faixa_ideal_pp, faixa_tolerancia_pp, faixa_muito_pp')
+      .eq('id', 'global')
+      .maybeSingle();
+    if (error) throw error;
+    return {
+      faixa_ideal_pp: Number(data?.faixa_ideal_pp ?? 2),
+      faixa_tolerancia_pp: Number(data?.faixa_tolerancia_pp ?? 5),
+      faixa_muito_pp: Number(data?.faixa_muito_pp ?? 10)
+    };
+  },
+
+  async salvarConfigMargem(config: ConfigMargem): Promise<void> {
+    const { error } = await supabase
+      .from(TABELA_CONFIG)
+      .upsert(
+        [{ id: 'global', ...config, updated_at: new Date().toISOString() }],
+        { onConflict: 'id' }
+      );
+    if (error) throw error;
+  },
+
+  /** Itens com margem fora da faixa tolerável, de todas as auditorias. */
+  async listarItensParaCorrigir(): Promise<AuditoriaItemRegistro[]> {
+    const { data, error } = await supabase
+      .from(TABELA_ITENS)
+      .select('*')
+      .in('margem_classificacao', CLASSIFICACOES_FORA_DA_FAIXA)
+      .order('auditado_em', { ascending: false })
+      .limit(LIMITE_LEITURA);
+    if (error) throw error;
+    return (data || []) as AuditoriaItemRegistro[];
+  },
+
+  async marcarCorrigido(itemId: string, corrigido: boolean): Promise<void> {
+    const { error } = await supabase
+      .from(TABELA_ITENS)
+      .update({
+        correcao_status: corrigido ? 'Corrigido' : 'Pendente',
+        corrigido_em: corrigido ? new Date().toISOString() : null
+      })
+      .eq('id', itemId);
+    if (error) throw error;
   }
 };
