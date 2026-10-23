@@ -49,6 +49,12 @@ export function margemPct(preco: number, custo: number): number | null {
   return ((preco - custo) / preco) * 100;
 }
 
+/** Preço que atinge a meta de margem: custo / (1 - meta). */
+export function precoParaMeta(custo: number, metaPct: number | null): number | null {
+  if (metaPct === null || !Number.isFinite(metaPct) || metaPct >= 100) return null;
+  return custo / (1 - metaPct / 100);
+}
+
 /** Preço que vale para a margem: o da gôndola quando incorreto, senão o do sistema. Sem preço => null. */
 export function precoParaMargem(situacao: SituacaoItem, precoSistema: number, precoEncontrado: number | null): number | null {
   if (situacao === 'SEM_PRECO') return null;

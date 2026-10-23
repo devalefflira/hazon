@@ -1,6 +1,7 @@
 // src/pages/AuditoriaPrecificacao/services/auditoriaService.ts
 import { supabase } from '../../../lib/supabaseClient';
 import { CLASSIFICACOES_FORA_DA_FAIXA } from '../types/auditoria.types';
+import type { AtualizacaoMargem } from '../utils/reprocessamento';
 import type {
   AuditoriaItemRegistro,
   AuditoriaRegistro,
@@ -301,6 +302,40 @@ export const auditoriaService = {
         { onConflict: 'id' }
       );
     if (error) throw error;
+  },
+
+  /** Todos os itens com situação Correto ou Incorreto (os "Sem preço" não têm margem), lidos em páginas. */
+  async listarItensParaReprocessar(): Promise<AuditoriaItemRegistro[]> {
+    const TAMANHO_PAGINA = 1000;
+    const todos: AuditoriaItemRegistro[] = [];
+
+    for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
+      const { data, error } = await supabase
+        .from(TABELA_ITENS)
+        .select('*')
+        .neq('situacao', 'SEM_PRECO')
+        .order('id', { ascending: true })
+        .range(inicio, inicio + TAMANHO_PAGINA - 1);
+      if (error) throw error;
+
+      const lote = (data || []) as AuditoriaItemRegistro[];
+      todos.push(...lote);
+      if (lote.length < TAMANHO_PAGINA) break;
+    }
+
+    return todos;
+  },
+
+  /** Grava a margem recalculada de cada item, em pequenos lotes paralelos. */
+  async salvarMargensItens(atualizacoes: AtualizacaoMargem[]): Promise<void> {
+    const TAMANHO_LOTE_ESCRITA = 10;
+    for (const bloco of blocos(atualizacoes, TAMANHO_LOTE_ESCRITA)) {
+      const resultados = await Promise.all(
+        bloco.map((a) => supabase.from(TABELA_ITENS).update(a.dados).eq('id', a.id))
+      );
+      const falha = resultados.find((r) => r.error);
+      if (falha?.error) throw falha.error;
+    }
   },
 
   /** Itens com margem fora da faixa tolerável, de todas as auditorias. */

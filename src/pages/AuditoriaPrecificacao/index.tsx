@@ -77,7 +77,7 @@ export default function AuditoriaPrecificacao({ onVoltarParaHome, usuarioLogado,
         )}
         {aba === 'ETIQUETAS' && <AbaEtiquetas onContagemAlterada={setEtiquetasPendentes} nomeResponsavel={nomeUsuario} />}
         {aba === 'ANALISES' && <AbaAnalises />}
-        {aba === 'MARGEAMENTO' && <AbaMargeamento />}
+        {aba === 'MARGEAMENTO' && <AbaMargeamento nomeResponsavel={nomeUsuario} />}
       </div>
     </div>
   );

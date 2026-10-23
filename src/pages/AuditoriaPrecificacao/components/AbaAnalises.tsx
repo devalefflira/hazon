@@ -5,6 +5,7 @@ import { auditoriaService } from '../services/auditoriaService';
 import { ROTULO_SITUACAO, SECOES_AUDITORIA, OPCAO_OUTRO } from '../types/auditoria.types';
 import type { AuditoriaItemRegistro, SituacaoItem } from '../types/auditoria.types';
 import { RelatorioAnalises } from './RelatorioAnalises';
+import { reprocessarMargens } from '../utils/reprocessamento';
 
 type FiltroProblema = 'TODOS' | 'INCORRETO' | 'SEM_PRECO';
 type SubAbaAnalises = 'VISAO' | 'RELATORIOS';
@@ -355,6 +356,40 @@ function VisaoGeral() {
 
 export function AbaAnalises() {
   const [subAba, setSubAba] = useState<SubAbaAnalises>('VISAO');
+  const [reprocessando, setReprocessando] = useState(false);
+  const [resultadoReprocesso, setResultadoReprocesso] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+  const [versao, setVersao] = useState(0);
+
+  const reprocessar = async () => {
+    if (
+      !window.confirm(
+        'Reprocessar a margem de todos os itens auditados com as metas atuais? Os itens fora da faixa vão para "Itens para corrigir".'
+      )
+    ) {
+      return;
+    }
+    try {
+      setReprocessando(true);
+      setResultadoReprocesso(null);
+      const [itens, parametros, config] = await Promise.all([
+        auditoriaService.listarItensParaReprocessar(),
+        auditoriaService.listarParametrosMargem(),
+        auditoriaService.obterConfigMargem()
+      ]);
+      const { atualizacoes, resumo } = reprocessarMargens(itens, parametros, config);
+      await auditoriaService.salvarMargensItens(atualizacoes);
+      setResultadoReprocesso({
+        tipo: 'ok',
+        texto: `${resumo.analisados} item(ns) analisado(s), ${resumo.alterados} atualizado(s). ${resumo.foraDaFaixa} fora da faixa (${resumo.pendentes} pendente(s) em "Itens para corrigir"). ${resumo.semParametro} sem meta cadastrada.`
+      });
+      setVersao((v) => v + 1);
+    } catch (err) {
+      console.error(err);
+      setResultadoReprocesso({ tipo: 'erro', texto: 'Não foi possível reprocessar a análise. Tente novamente.' });
+    } finally {
+      setReprocessando(false);
+    }
+  };
 
   const rotulos: Array<{ id: SubAbaAnalises; texto: string }> = [
     { id: 'VISAO', texto: 'Visão geral' },
@@ -363,8 +398,9 @@ export function AbaAnalises() {
 
   return (
     <div className="flex flex-col gap-4">
-      <nav className="flex gap-2 flex-wrap">
-        {rotulos.map((r) => (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav className="flex gap-2 flex-wrap">
+          {rotulos.map((r) => (
           <button
             key={r.id}
             type="button"
@@ -376,10 +412,31 @@ export function AbaAnalises() {
             {r.texto}
           </button>
         ))}
-      </nav>
+        </nav>
 
-      {subAba === 'VISAO' && <VisaoGeral />}
-      {subAba === 'RELATORIOS' && <RelatorioAnalises />}
+        <button
+          type="button"
+          disabled={reprocessando}
+          onClick={reprocessar}
+          title="Recalcula a margem dos itens já bipados com as metas atuais"
+          className="px-4 py-2 rounded-2xl text-[11px] font-black uppercase bg-white text-[#09797a] border border-teal-200 hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-40"
+        >
+          {reprocessando ? 'Reprocessando...' : 'Reprocessar análise'}
+        </button>
+      </div>
+
+      {resultadoReprocesso && (
+        <div
+          className={`rounded-2xl p-3 text-xs font-bold border ${
+            resultadoReprocesso.tipo === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}
+        >
+          {resultadoReprocesso.texto}
+        </div>
+      )}
+
+      {subAba === 'VISAO' && <VisaoGeral key={versao} />}
+      {subAba === 'RELATORIOS' && <RelatorioAnalises key={versao} />}
     </div>
   );
 }

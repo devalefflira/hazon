@@ -5,7 +5,11 @@ import { ParametrosMargeamento } from './margeamento/ParametrosMargeamento';
 
 type SubAbaMargeamento = 'PARAMETROS' | 'CORRIGIR';
 
-export function AbaMargeamento() {
+interface AbaMargeamentoProps {
+  nomeResponsavel: string;
+}
+
+export function AbaMargeamento({ nomeResponsavel }: AbaMargeamentoProps) {
   const [subAba, setSubAba] = useState<SubAbaMargeamento>('PARAMETROS');
 
   const rotulos: Array<{ id: SubAbaMargeamento; texto: string }> = [
@@ -31,7 +35,7 @@ export function AbaMargeamento() {
       </nav>
 
       {subAba === 'PARAMETROS' && <ParametrosMargeamento />}
-      {subAba === 'CORRIGIR' && <ItensParaCorrigir />}
+      {subAba === 'CORRIGIR' && <ItensParaCorrigir nomeResponsavel={nomeResponsavel} />}
     </div>
   );
 }

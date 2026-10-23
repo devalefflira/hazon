@@ -4,10 +4,15 @@ import { BarraPaginacao, paginar } from '../../../../components/ui/BarraPaginaca
 import { auditoriaService } from '../../services/auditoriaService';
 import { CLASSIFICACOES_FORA_DA_FAIXA, ROTULO_CLASSIFICACAO, ROTULO_SITUACAO } from '../../types/auditoria.types';
 import type { AuditoriaItemRegistro, ClassificacaoMargem, StatusCorrecao } from '../../types/auditoria.types';
-import { CLASSE_CLASSIFICACAO_MARGEM } from '../../utils/margem';
+import { CLASSE_CLASSIFICACAO_MARGEM, precoParaMeta } from '../../utils/margem';
+import { gerarPdfCorrecaoPrecos } from '../../utils/correcaoPrecosPdf';
 
 type FiltroStatus = 'PENDENTES' | 'CORRIGIDOS' | 'TODOS';
 type FiltroClassificacao = 'TODAS' | ClassificacaoMargem;
+
+interface ItensParaCorrigirProps {
+  nomeResponsavel: string;
+}
 
 interface Mensagem {
   tipo: 'ok' | 'erro';
@@ -20,22 +25,17 @@ const moeda = (valor: number | null | undefined): string =>
 const fmtPct = (valor: number | null | undefined): string =>
   valor === null || valor === undefined ? '-' : `${Number(valor).toFixed(1).replace('.', ',')}%`;
 
-/** Preço que atinge a meta de margem: custo / (1 - meta). */
-const precoParaMeta = (custo: number, metaPct: number | null): number | null => {
-  if (metaPct === null || metaPct >= 100) return null;
-  return custo / (1 - metaPct / 100);
-};
-
 const dataCurta = (iso: string): string => {
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR');
 };
 
-export function ItensParaCorrigir() {
+export function ItensParaCorrigir({ nomeResponsavel }: ItensParaCorrigirProps) {
   const [itens, setItens] = useState<AuditoriaItemRegistro[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<Mensagem | null>(null);
+  const [selecionados, setSelecionados] = useState<Record<string, boolean>>({});
 
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('PENDENTES');
   const [filtroClassificacao, setFiltroClassificacao] = useState<FiltroClassificacao>('TODAS');
@@ -79,7 +79,36 @@ export function ItensParaCorrigir() {
     return { pendentes, corrigidos: itens.length - pendentes };
   }, [itens]);
 
+  const itensSelecionados = useMemo(() => itens.filter((i) => selecionados[i.id]), [itens, selecionados]);
+
   const pag = paginar(filtrados, pagina, tamanho);
+
+  const selecionarTodos = () => {
+    const proximo = { ...selecionados };
+    filtrados.forEach((i) => {
+      proximo[i.id] = true;
+    });
+    setSelecionados(proximo);
+  };
+
+  const limparSelecao = () => setSelecionados({});
+
+  const alternarSelecao = (id: string, marcado: boolean) => {
+    setSelecionados((prev) => ({ ...prev, [id]: marcado }));
+  };
+
+  const exportarPdf = () => {
+    if (itensSelecionados.length === 0) {
+      setMensagem({ tipo: 'erro', texto: 'Selecione ao menos um item para gerar o PDF.' });
+      return;
+    }
+    const abriu = gerarPdfCorrecaoPrecos(itensSelecionados, nomeResponsavel);
+    setMensagem(
+      abriu
+        ? { tipo: 'ok', texto: `PDF com ${itensSelecionados.length} item(ns) aberto em nova aba.` }
+        : { tipo: 'erro', texto: 'O navegador bloqueou a nova aba. Permita pop-ups para este site e tente de novo.' }
+    );
+  };
 
   const alternarCorrecao = async (item: AuditoriaItemRegistro, corrigido: boolean) => {
     try {
@@ -114,7 +143,7 @@ export function ItensParaCorrigir() {
           <div>
             <h2 className="text-sm font-black text-slate-800 uppercase">Itens para corrigir</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Produtos cuja margem ficou fora da faixa tolerável. Ajuste o preço no sistema e marque como corrigido.
+              Produtos cuja margem ficou fora da faixa tolerável. Selecione os itens, gere o PDF para o setor de precificação e marque como corrigido depois da alteração.
             </p>
           </div>
           <span className="text-xs font-black text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
@@ -166,6 +195,35 @@ export function ItensParaCorrigir() {
             ))}
           </div>
         </div>
+
+        {/* SELEÇÃO E PDF */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            disabled={filtrados.length === 0}
+            onClick={selecionarTodos}
+            className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-slate-100 text-slate-600 active:scale-95 transition-all disabled:opacity-40"
+          >
+            Selecionar todos ({filtrados.length})
+          </button>
+          <button
+            type="button"
+            disabled={itensSelecionados.length === 0}
+            onClick={limparSelecao}
+            className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-slate-100 text-slate-600 active:scale-95 transition-all disabled:opacity-40"
+          >
+            Limpar seleção
+          </button>
+          <span className="text-xs font-bold text-slate-500">{itensSelecionados.length} selecionado(s)</span>
+          <button
+            type="button"
+            disabled={itensSelecionados.length === 0}
+            onClick={exportarPdf}
+            className="ml-auto px-5 py-2.5 rounded-2xl text-xs font-black uppercase bg-[#09797a] hover:bg-[#075f60] text-white shadow-md active:scale-95 transition-all disabled:opacity-40"
+          >
+            Gerar PDF ({itensSelecionados.length})
+          </button>
+        </div>
       </section>
 
       {!carregando && filtrados.length === 0 && (
@@ -192,15 +250,23 @@ export function ItensParaCorrigir() {
               const status: StatusCorrecao = i.correcao_status ?? 'Pendente';
               const precoMeta = precoParaMeta(Number(i.custo_sistema), i.margem_meta_pct !== null ? Number(i.margem_meta_pct) : null);
               const classificacao = i.margem_classificacao;
+              const marcado = !!selecionados[i.id];
               return (
                 <article
                   key={i.id}
-                  className={`bg-white rounded-3xl border border-slate-200 border-l-4 shadow-sm p-4 flex flex-col gap-3 ${
+                  className={`bg-white rounded-3xl border border-slate-200 border-l-4 shadow-sm p-4 flex flex-col gap-3 transition-all ${
                     status === 'Corrigido' ? 'border-l-emerald-500 opacity-80' : 'border-l-amber-400'
-                  }`}
+                  } ${marcado ? 'ring-2 ring-[#09797a]/40' : ''}`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={marcado}
+                      onChange={(e) => alternarSelecao(i.id, e.target.checked)}
+                      aria-label={`Selecionar ${i.codprod}`}
+                      className="mt-1 w-5 h-5 accent-[#09797a] shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-[11px] font-black bg-slate-100 text-slate-700 rounded-lg px-2 py-1">{i.codprod}</span>
                         {classificacao && (
