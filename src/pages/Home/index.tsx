@@ -217,6 +217,8 @@ export default function Home(props: HomeProps) {
         { id: 'pesquisa-precos', nome: 'PESQUISA DE PREÇOS', descricao: 'Inteligência e análise concorrencial', tela: 'pesquisa-precos', callbackProp: 'onNavegarParaPesquisaPrecos' },
         { id: 'encartes', nome: 'ENCARTES', descricao: 'Gerador de cartazes e encartes', tela: 'encartes', callbackProp: 'onNavegarParaEncartes' },
         { id: 'ofertas', nome: 'OFERTAS', descricao: 'Campanhas, encartes e placas', tela: 'ofertas', callbackProp: 'onNavegarParaOfertas' },
+        { id: 'assistente-precificacao', nome: 'ASSISTENTE DE PRECIFICAÇÃO', descricao: 'Análise de custos, margens e sugestões de preço', tela: 'assistente-precificacao' },
+        { id: 'auditoria-precificacao', nome: 'AUDITORIA DE PRECIFICAÇÃO', descricao: 'Conferência de preços na gôndola por seção', tela: 'auditoria-precificacao' },
         { id: 'clientes', nome: 'CLIENTES', descricao: 'Cadastro de compradores', tela: 'clientes', callbackProp: 'onNavegarParaClientes' },
         { id: 'vendedores', nome: 'VENDEDORES', descricao: 'Representantes e atendimento', tela: 'vendedores', callbackProp: 'onNavegarParaVendedores' }
       ]

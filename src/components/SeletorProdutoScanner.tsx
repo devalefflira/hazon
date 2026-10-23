@@ -23,6 +23,10 @@ interface Props {
   tituloCard?: string;
   placeholder?: string;
   onTermoChange?: (termo: string) => void;
+  /** Enter no campo executa a leitura exata (EAN/código), como um coletor faz. */
+  selecionarAoEnter?: boolean;
+  /** Foca o campo ao montar, para bipar sem toque extra. */
+  autoFocus?: boolean;
 }
 
 export const SeletorProdutoScanner: React.FC<Props> = ({
@@ -30,7 +34,9 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
   onSelecionarProduto,
   tituloCard = 'LOCALIZAR PRODUTO (BIPAGEM / BUSCA)',
   placeholder = 'Digite código de barras, codprod ou descrição...',
-  onTermoChange
+  onTermoChange,
+  selecionarAoEnter = false,
+  autoFocus = false
 }) => {
   const [termoBusca, setTermoBusca] = useState('');
   const [sugestoes, setSugestoes] = useState<ProdutoBusca[]>([]);
@@ -175,6 +181,13 @@ export const SeletorProdutoScanner: React.FC<Props> = ({
               if (sugestoes.length > 0) setDropdownAberto(true);
             }}
             placeholder={placeholder}
+            autoFocus={autoFocus}
+            onKeyDown={(e) => {
+              if (selecionarAoEnter && e.key === 'Enter') {
+                e.preventDefault();
+                handleBarcodeDetectado(termoBusca);
+              }
+            }}
             className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#09797a]/30 focus:border-[#09797a] transition-all"
           />
 

@@ -39,6 +39,8 @@ export const MODULOS: ModuloNavegacao[] = [
   modulo('pesquisa-precos', 'Pesquisa de Preços', 'Inteligência e análise concorrencial', 'comercial'),
   modulo('encartes', 'Encartes', 'Gerador de cartazes e encartes', 'comercial'),
   modulo('ofertas', 'Ofertas', 'Campanhas, encartes e placas', 'comercial'),
+  modulo('assistente-precificacao', 'Assistente de Precificação', 'Análise de custos, margens e sugestões de preço', 'comercial'),
+  modulo('auditoria-precificacao', 'Auditoria de Precificação', 'Conferência de preços na gôndola por seção', 'comercial'),
   modulo('clientes', 'Clientes', 'Cadastro de compradores', 'comercial'),
   modulo('vendedores', 'Vendedores', 'Representantes e atendimento', 'comercial'),
   modulo('almoxarifado', 'Almoxarifado', 'Controle de insumos, bobinas e escritório', 'estoque'),

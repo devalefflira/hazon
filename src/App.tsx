@@ -43,6 +43,8 @@ const Vencimentos = lazy(() => import('./pages/Vencimentos'));
 const Notificacoes = lazy(() => import('./pages/Notificacoes'));
 const Trocas = lazy(() => import('./pages/Trocas'));
 const PesquisaPrecos = lazy(() => import('./pages/PesquisaPrecos'));
+const AssistentePrecificacao = lazy(() => import('./pages/AssistentePrecificacao'));
+const AuditoriaPrecificacao = lazy(() => import('./pages/AuditoriaPrecificacao'));
 const Encartes = lazy(() => import('./pages/Encartes'));
 const Solicitacoes = lazy(() => import('./pages/Solicitacoes'));
 const Recebimentos = lazy(() => import('./pages/Recebimentos'));
@@ -212,6 +214,22 @@ function RotasHazon() {
                 usuarioLogado={u}
               />
             )}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/assistente-precificacao"
+        element={
+          <RotaProtegida>
+            {(u) => <AssistentePrecificacao onVoltarParaHome={voltarParaHome} usuarioLogadoId={u.id} />}
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/auditoria-precificacao"
+        element={
+          <RotaProtegida>
+            {(u) => <AuditoriaPrecificacao onVoltarParaHome={voltarParaHome} usuarioLogadoId={u.id} />}
           </RotaProtegida>
         }
       />

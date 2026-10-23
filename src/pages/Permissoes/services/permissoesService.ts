@@ -26,6 +26,8 @@ export const LISTA_MODULOS_SISTEMA = [
   'Trocas',
   'ConsumoLoja',
   'PesquisaPrecos',
+  'AssistentePrecificacao',
+  'AuditoriaPrecificacao',
   'Organograma'
 ];
 

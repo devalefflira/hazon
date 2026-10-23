@@ -17,6 +17,8 @@ export const CHAVE_PERMISSAO_POR_ROTA: Record<string, string | null> = {
   '/orcamentos': 'Orcamentos',
   '/cotacoes': 'Cotacoes',
   '/pesquisa-precos': 'PesquisaPrecos',
+  '/assistente-precificacao': 'AssistentePrecificacao',
+  '/auditoria-precificacao': 'AuditoriaPrecificacao',
   '/ofertas': 'Ofertas',
   '/clientes': 'Clientes',
   '/vendedores': 'Vendedores',
