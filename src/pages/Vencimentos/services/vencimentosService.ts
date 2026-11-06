@@ -235,7 +235,9 @@ export const vencimentosService = {
         origem: 'Vencimentos',
         usuario_id: payload.usuario_id || null
       }])
-      .select('*, produtos(*), usuarios(*)')
+      // Colunas explícitas: usuarios.senha_hash não é legível por authenticated (SQL 07),
+      // e pedir usuarios(*) faz o PostgREST recusar (403) e desfazer o insert.
+      .select(`id, codigo_customizado, produtos ( ${CAMPOS_PRODUTO} ), usuarios ( id, nome )`)
       .single();
 
     if (error) {
