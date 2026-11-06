@@ -247,8 +247,11 @@ export const vencimentosService = {
 
     // Disparo Telegram
     try {
-      const prod = itemInserido?.produtos || {};
-      const operador = itemInserido?.usuarios?.nome || 'Operador';
+      // O client tipa as relações como lista; no retorno real (muitos-para-um) vem objeto.
+      const registro: any = itemInserido;
+      const primeiro = (rel: any) => (Array.isArray(rel) ? rel[0] : rel);
+      const prod: any = primeiro(registro?.produtos) || {};
+      const operador: string = primeiro(registro?.usuarios)?.nome || 'Operador';
 
       const diffDias = calcularDiasParaVencer(payload.data_validade);
 
