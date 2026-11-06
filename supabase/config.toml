@@ -1,7 +1,9 @@
 
 [functions.criar-usuario]
 enabled = true
-verify_jwt = true
+# A própria função valida o token e exige perfil Administrador (admin.auth.getUser + perfis).
+# Desligar a checagem do gateway evita falhas de CORS/preflight e com as novas chaves do Supabase.
+verify_jwt = false
 entrypoint = "./functions/criar-usuario/index.ts"
 
 [functions.enviar-push]
