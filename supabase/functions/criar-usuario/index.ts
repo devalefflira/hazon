@@ -29,6 +29,15 @@ function nomePerfil(valor: any): string | undefined {
   return valor.nome;
 }
 
+// Compara sem diferenciar maiúsculas/minúsculas, acentos e espaços ("Administrador" = "ADMINISTRADOR").
+function normalizar(texto: unknown): string {
+  return String(texto ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
 async function criarUsuario(admin: any, body: any): Promise<Response> {
   const nome = String(body.nome ?? "").trim();
   const email = String(body.email ?? "").trim();
@@ -141,14 +150,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // 2. ...e ser Administrador
-    const { data: chamador } = await admin
+    const { data: chamador, error: erroChamador } = await admin
       .from("usuarios")
-      .select("id, perfis ( nome )")
+      .select("id, email, perfis ( nome )")
       .eq("id", sessao.user.id)
       .maybeSingle();
 
-    if (!chamador || nomePerfil(chamador.perfis) !== PERFIL_ADMIN) {
-      return json({ error: "Apenas administradores podem gerenciar usuários." }, 403);
+    if (erroChamador) {
+      console.error("criar-usuario: erro ao ler o perfil do chamador", erroChamador);
+      return json({ error: `Não foi possível verificar o perfil: ${erroChamador.message}` }, 500);
+    }
+
+    if (!chamador) {
+      return json(
+        {
+          error:
+            `Sua conta de acesso (${sessao.user.email}) não tem cadastro em usuarios com o mesmo id ` +
+            `(${sessao.user.id}). Ajuste o cadastro antes de gerenciar usuários.`,
+        },
+        403,
+      );
+    }
+
+    const perfilChamador = nomePerfil(chamador.perfis);
+    if (normalizar(perfilChamador) !== normalizar(PERFIL_ADMIN)) {
+      return json(
+        {
+          error:
+            `Apenas administradores podem gerenciar usuários ` +
+            `(perfil encontrado para ${chamador.email}: "${perfilChamador ?? "nenhum"}").`,
+        },
+        403,
+      );
     }
 
     const body = await req.json();
